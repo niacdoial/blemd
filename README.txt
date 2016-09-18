@@ -2,7 +2,7 @@ welcome to BleMD.
 this project was for goal to import nintendo GC/Wii ".bmd" 3D models,
 using blender (blender.org)
 HOW TO USE:
-first, get a game iso ()
+first, get a game iso (dumping a baught game is THE legal way to proceed: you can use this https://code.google.com/archive/p/cleanrip/downloads to do it(you will need an actual Wii))
 then, extract it in a proper directory (dolphin emulator at dolphin-emu.org does the job just fine,
 but you'll need the 2015 64-bit version of Visual c++ redistribuable microsoft libraries (https://www.microsoft.com/en-us/download/details.aspx?id=48145)
 if you don't want to have to install it using admin rights.
