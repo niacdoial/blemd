@@ -9,7 +9,7 @@ if you don't want to have to install it using admin rights.
 afterwards, extract the .arc/.rarc archives with this: http://www.amnoid.de/gc/szstools.zip (a full program with docs there!)
 
 you will also need the 32 bit system  Microsoft Visual C++ 2005 Redistributable Package (x86).  (http://go.microsoft.com/fwlink/?linkid=65127)
-then, grab blender and unzip it in "<path to blender>/2.XX/scripts/addons_contrib/blemd"
+then, grab blender and unzip this repo's content in "<path to blender>/2.XX/scripts/addons_contrib/blemd"
 from there, you will be able to enable it  in the add-ons tab of the settings(it is in the "testing" category),
 and use it in file->import->nintendo BMD
 
@@ -17,7 +17,7 @@ and use it in file->import->nintendo BMD
 HISTORY:
 His history is long, and incredibly hard to trace.
 
-It started with BMD Vewer and BMDview2, from YAZ0(just where is this guy-s home page?), in C++
+It started with BMD Vewer and BMDview2, from YAZ0 or YAZ0R(just where is this guy-s home page?), in C++
 
 it has a copy on the google code server (http://code.google.com/p/bmdview2/)
 
