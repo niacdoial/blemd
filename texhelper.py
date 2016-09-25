@@ -66,7 +66,7 @@ def showTextureMap(mat):
                 mat.use_textures[num] = True
 
 
-def newUVlayer(mesh, tverts, tfaces, Faces):
+def newUVlayer(mesh, tverts, tfaces, Faces, tv_to_v_f):
     # probably one of the hardest functions to fathom.
     #it's goal is to set the right UV coords to the right UV point.
     # with the fact that most verts had changed index between steps. gah.
@@ -81,29 +81,31 @@ def newUVlayer(mesh, tverts, tfaces, Faces):
     # so are the face of Faces and tFaces
 
     #verts are aligned. are faces too?
-    rf_to_f = []  # blender faces index to loaded faces index
-    for com in mesh.polygons:
-        rf_to_f.append(Faces.index(list(com.vertices)))
-
-    #for f, rf in enumerate(rf_to_f):
+    f_to_rf = [None]*len(mesh.polygons)  # blender faces index to loaded faces index
+    for num, com in enumerate(mesh.polygons):  # will be identity most of the time
+        f_to_rf[Faces.index(list(com.vertices))] = num
+    # -- TODO: should never have undefined texture faces
+    #for f, rf in enumerate(f_to_rf):
     #    f_to_l[f] = rf_to_l[rf]
     #    rf_to_tf[rf] = f  # f_to_tf[f]
         # rf_to_v = [com.vertices for com in mesh.polygons]
-    v_f_to_l = []
+    v_rf_to_l = []
     for com in range(len(mesh.vertices)):
-        v_f_to_l.append({})
+        v_rf_to_l.append({})
     for num, com in enumerate(mesh.polygons):
         for com2 in com.loop_indices:
             l_id = mesh.loops[com2].index
-            v_f_to_l[mesh.loops[com2].vertex_index][num] = l_id
+            v_rf_to_l[mesh.loops[com2].vertex_index][num] = l_id
+
+    # those lines are a new method that is still glitchy.
+    #for num, com in enumerate(tv_to_v_f):
+    #    uvtex.data[v_rf_to_l[com[0]][f_to_rf[com[1]]-1]].uv = mathutils.Vector(tverts[num])
 
     for num, com in enumerate(tfaces):
-        for com2 in Faces:
-            uvtex.data[v_f_to_l[com2[0]] [rf_to_f[num]]].uv = mathutils.Vector((tverts[com[0]][:2]))
-            uvtex.data[v_f_to_l[com2[1]] [rf_to_f[num]]].uv = mathutils.Vector((tverts[com[1]][:2]))
-            uvtex.data[v_f_to_l[com2[2]] [rf_to_f[num]]].uv = mathutils.Vector((tverts[com[2]][:2]))
-
-
+        com2 = Faces[num]
+        uvtex.data[v_rf_to_l[com2[0]] [f_to_rf[num]]].uv = mathutils.Vector((tverts[com[0]][:2]))
+        uvtex.data[v_rf_to_l[com2[1]] [f_to_rf[num]]].uv = mathutils.Vector((tverts[com[1]][:2]))
+        uvtex.data[v_rf_to_l[com2[2]] [f_to_rf[num]]].uv = mathutils.Vector((tverts[com[2]][:2]))
 
     # must make correspond faces and UV faces, so must associate UV_verts to 3D_verts.
     #rf_to_l = []  # blender faces index to loop indexES
@@ -114,7 +116,7 @@ def newUVlayer(mesh, tverts, tfaces, Faces):
     #for com in tfaces:
     #    tf_to_tv.append((com[0], com[1], com[2]))
 
-    ## TODO: check orientation:
+    ##
     #tv_to_v = [-1]*(3*len(tf_to_tv))  # loaded texvert index to loaded vert index (is that identity?)
     #for num, com in enumerate(tf_to_tv):
     #    tv_to_v[com[0]] = Faces[num][0]
@@ -135,7 +137,7 @@ def newUVlayer(mesh, tverts, tfaces, Faces):
     ## ##--meshop.buildMapFaces modelMesh uv
 
     #for i in range(len(tfaces)):  # auto-set by blender. but undefined faces are definite sources of complere chaos in UVs
-    #    if tfaces[i] is not None:  # -- TODO: should never have undefined texture faces
+    #    if tfaces[i] is not None:
     #        pass
     #        #meshop.setMapFace(modelMesh, uv, i, tFaces[i]) # XCX
     #    else:

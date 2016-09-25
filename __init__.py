@@ -5,7 +5,7 @@ IDE_DEBUG = True
 bl_info = {
     "name": "Import gc/wii bmd format (.bmd)",
     "author": "people from the internet. adapted for blender by Niacdoial, from Avatarus-One's version (see github) full explanation in README",
-    "version": (0, 0, 1),
+    "version": (0, 1, 0),
     "blender": (2, 7, 7),
     "location": "File > Import > Nintendo BMD",
     "description": "Import files in the gc/wii BMD format (.bmd)",
@@ -87,21 +87,11 @@ class ImportBmd(Operator, ImportHelper):
         default=5
     )
 
-    UVo = IntProperty(
-        name="DEBUG UV offset",
-        description="DEBUG ONLY!",
-        min=-5,
-        max=5,
-        soft_min=-1,
-        soft_max=1,
-        default=0
-    )
-
     def execute(self, context):
         temp = BModel()
         temp.SetBmdViewExePath('C:\\Users\\Liam\\Bureau\\MaxBMD-multi-texcoords\\')
         temp.Import(self.filepath, self.boneThickness, self.mir_tx, self.frc_cr_bn,
-                    self.sv_anim, self.tx_xp, self.type, self.ic_sc, self.UVo)
+                    self.sv_anim, self.tx_xp, self.type, self.ic_sc)
         return {'FINISHED'}
 
 

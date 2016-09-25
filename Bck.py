@@ -639,7 +639,7 @@ class Bck:
 
                 if (includeScaling):
                     if endFrame not in posBone.scale_kf.keys():
-                        posBone.scale_kf[endFrame] = mathutils.Vector((nan, nan, nan))
+                        bone.scale_kf[endFrame] = mathutils.Vector((nan, nan, nan))
                     bone.scale_kf[endFrame].x = ((anim.scalesX[-1]).value * 100) + delta
                     bone.scale_kf[endFrame].y = ((anim.scalesY[-1]).value * 100) + delta
                     bone.scale_kf[endFrame].z = ((anim.scalesZ[-1]).value * 100) + delta

@@ -121,10 +121,12 @@ class BModel:
 
     def __init__(self):  # GENERATED!
         self.vtx = None
+        self.DEBUGvgroups={}
         self._bmdFilePath = ""
         self._runExtractTexturesCmd= True
         self._currMaterialIndex= 1  # XCX??
         self.tverts= [[],[],[],[],[],[],[],[]]
+        self.tv_to_v_f = [[],[],[],[],[],[],[],[]]  # texVerts to vertices_faces
         self._createBones= True
         self._exportType='XFILE'
         self._boneThickness= 10
@@ -240,7 +242,7 @@ class BModel:
 
         for uv in range(8):
             if len(self.tverts[uv]) and len(self.tFaces[uv]):
-                newUVlayer(modelMesh, self.tverts[uv], self.tFaces[uv], self.faces)
+                newUVlayer(modelMesh, self.tverts[uv], self.tFaces[uv], self.faces, self.tv_to_v_f[uv])
 
         # -- set self.normals [no effect?]
 
@@ -280,7 +282,15 @@ class BModel:
             bpy.context.scene.objects.active = arm_obj
             bpy.ops.object.mode_set(mode='EDIT')
             for bone in self._bones:
-                realbone = arm.edit_bones.new(bone.name.fget())
+                arm.edit_bones.new(bone.name.fget())
+                if isinstance(bone.parent.fget(), Pseudobone):
+                    if bone.parent.fget().name.fget() not in [temp.name.fget() for temp in self._bones]:
+                        tempbone = arm.edit_bones.new(bone.parent.fget().name.fget())
+                        tempbone.parent = arm.edit_bones[bone.parent.fget().parent.fget().name.fget()]
+                        tempbone.head = mathutils.Vector(bone.parent.fget().position)
+                        tempbone.tail = mathutils.Vector(bone.parent.fget().endpoint)
+            for bone in self._bones:
+                realbone = arm.edit_bones[bone.name.fget()]
                 if isinstance(bone.parent.fget(), Pseudobone):
                     realbone.parent = arm.edit_bones[bone.parent.fget().name.fget()]
                 realbone.head = mathutils.Vector(bone.position)  #mathutils.Vector((0,0,0))
@@ -301,8 +311,10 @@ class BModel:
                 # -- Don't use setVertexWeights. Has issues with existing bone weights (mainly root bone)
                 #skinOps.ReplaceVertexWeights(mysk,  i, vertexMultiMatrixEntry[i].indices,
                 #                             vertexMultiMatrixEntry[i].weights)  # XCX
-
-            modelMesh.update()  # XCX
+            for com in self.DEBUGvgroups.keys():  # DEBUG vertex groups to fix UVs
+                vg = modelObject.vertex_groups.new(com)
+                vg.add(self.DEBUGvgroups[com], 1, 'REPLACE')
+            modelMesh.update()
 
 
         # -- freeze model by default
@@ -310,7 +322,7 @@ class BModel:
 
         return modelMesh
 
-    def LoadModel(self, filePath, UVo=0):
+    def LoadModel(self, filePath):
                 
         # -- load model
         br = BinaryReader()
@@ -332,7 +344,7 @@ class BModel:
         iTell = 0
 
         self.inf = Inf1()
-        self.vtx = Vtx1(UVo)
+        self.vtx = Vtx1()
         self.shp = Shp1()
         self.jnt = Jnt1()
         self.evp = Evp1()
@@ -399,6 +411,7 @@ class BModel:
 
     def DrawBatch(self, index, def_):
         currBatch = self.shp.batches[index]
+        batchid = index
 
         if not currBatch.attribs.hasPositions :
             raise ValueError("found batch without positions")
@@ -432,7 +445,7 @@ class BModel:
                         self.tverts[uv].append(None)
                     self.tverts[uv][i_temp] = [tvert.s, -tvert.t+1, 0]  # -- flip uv v element
 
-        for currPacket in currBatch.packets:
+        for packnum, currPacket in enumerate(currBatch.packets):
             for n in range(len(currPacket.matrixTable)):
                 index = currPacket.matrixTable[n]
                 if index != 0xffff:  # -- //this means keep old entry
@@ -501,7 +514,7 @@ class BModel:
             # --otherwise, mat is overwritten later.
             mat = matrixTable[0]  # corrected
             multiMat = multiMatrixTable[0]
-            for currPrimitive in currPacket.primitives:
+            for primnum, currPrimitive in enumerate(currPacket.primitives):
                 for m in range(len(currPrimitive.points)):
                     posIndex = currPrimitive.points[m].posIndex   # fixed
                     # -- TODO: texcoords 1-7, color1 #XCX
@@ -534,6 +547,29 @@ class BModel:
                         posIndex2 = currPrimitive.points[m + 1].posIndex  # fixed
                         posIndex3 = currPrimitive.points[m + 2].posIndex  # fixed
 
+                        # XCX DEBUG (create debug V groups)
+                        tempvg = self.DEBUGvgroups.get(str(batchid), None)
+                        if not tempvg:
+                            tempvg = []
+                            self.DEBUGvgroups[str(batchid)] = tempvg
+                        tempvg.append(posIndex1)
+                        tempvg.append(posIndex2)
+                        tempvg.append(posIndex3)
+                        tempvg = self.DEBUGvgroups.get(str(batchid)+','+str(packnum), None)
+                        if not tempvg:
+                            tempvg = []
+                            self.DEBUGvgroups[str(batchid)+','+str(packnum)] = tempvg
+                        tempvg.append(posIndex1)
+                        tempvg.append(posIndex2)
+                        tempvg.append(posIndex3)
+                        tempvg = self.DEBUGvgroups.get(str(batchid)+','+str(packnum)+','+str(primnum), None)
+                        if not tempvg:
+                            tempvg = []
+                            self.DEBUGvgroups[str(batchid)+','+str(packnum)+','+str(primnum)] = tempvg
+                        tempvg.append(posIndex1)
+                        tempvg.append(posIndex2)
+                        tempvg.append(posIndex3)
+
                         while len(self.faces) <= self.faceIndex:
                             self.faces.append(None)
                         if self.faces[self.faceIndex] is not None:
@@ -556,6 +592,12 @@ class BModel:
                                     self.tFaces[uv][self.faceIndex] = [t1Index , t2Index , t3Index ]
                                 else:
                                     self.tFaces[uv][self.faceIndex] = [t3Index , t2Index , t1Index ] # -- reverse
+                                # XCX new UV method
+                                while len(self.tv_to_v_f[uv]) <= max(t1Index, t2Index, t3Index):
+                                    self.tv_to_v_f[uv].append(None)
+                                self.tv_to_v_f[uv][t1Index] = (posIndex1, self.faceIndex)
+                                self.tv_to_v_f[uv][t2Index] = (posIndex2, self.faceIndex)
+                                self.tv_to_v_f[uv][t3Index] = (posIndex3, self.faceIndex)
                                 while len(self._materialIDS) <= self.faceIndex:
                                     self._materialIDS.append(None)
                                 self._materialIDS[self.faceIndex] = self._currMaterialIndex
@@ -857,8 +899,8 @@ class BModel:
         errMsg = ""
         # max tool zoomextents all  # XCX
         for bone in self._bones:
-            # XCX what is the rest position?
-            bone.setSkinPose()
+            pass# XCX what is the rest position?
+            #bone.setSkinPose()
         #fileProperties.addProperty  custom "exportAnimation" False
         # --self._createBones = True
         if self._createBones and self._loadAnimations:
@@ -965,10 +1007,15 @@ class BModel:
             for com in self._bones:
                 name = com.name.fget()
                 posebone = self.arm_obj.pose.bones[name]
+                bpy.context.scene.frame_current = 0
+                posebone.keyframe_insert('location')
+                posebone.keyframe_insert('rotation_euler')
+                posebone.keyframe_insert('scale')
                 for frame in set(com.position_kf.keys()).union(
                              set(com.rotation_kf.keys())).union(
                              set(com.scale_kf.keys())):
                     bpy.context.scene.frame_current = frame
+
                     if frame in com.position_kf.keys():
                         vct = com.position_kf[frame]
                         if vct.x != math.nan:
@@ -992,7 +1039,7 @@ class BModel:
                             posebone.keyframe_insert('rotation_euler')
                             posebone.rotation_euler[2] = vct.z
                     if frame in com.scale_kf.keys():
-                        vct = com.position_kf[frame]
+                        vct = com.scale_kf[frame]
                         if vct.x != math.nan:
                             posebone.keyframe_insert('scale')
                             posebone.scale[0] = vct.x
@@ -1114,7 +1161,7 @@ class BModel:
         print("</TextureAnimation>", file=fBTP)
         fBTP.close()
 
-    def Import(self, filename, boneThickness, allowTextureMirror, forceCreateBones, loadAnimations, exportTextures, exportType, includeScaling, UVo=0):
+    def Import(self, filename, boneThickness, allowTextureMirror, forceCreateBones, loadAnimations, exportTextures, exportType, includeScaling):
         if exportTextures:
             self._texturePrefix = ""
         else:
@@ -1132,7 +1179,7 @@ class BModel:
         self._loadAnimations = loadAnimations
         self._boneThickness = boneThickness
         print(filename)
-        self.LoadModel(filename, UVo)
+        self.LoadModel(filename)
 
         bmdPath = "".join(OSPath.split(self._bmdFilePath)) + "\\"  # generates dir name from file name?
         try:
