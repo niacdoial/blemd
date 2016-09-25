@@ -49,7 +49,7 @@ class Pseudobone:
             return self._parent
         def _setparent(val):
             if (self.parent.fget() is not None) and (self in self.parent.fget().children):
-                self.parent.children.remove(self)
+                self.parent.fget().children.remove(self)
             self._parent = val
             if val is None or isinstance(val, mathutils.Vector):
                 return
@@ -66,6 +66,7 @@ class Pseudobone:
 
     def recalculate_transform(self):
         pass  # procrastinating here too.
+
 
 
 def getBoneByName(name):

@@ -67,6 +67,7 @@ class FrameNode:
         self.startPoint = mathutils.Vector((0,0,0))
         self.name = ''
         self.f = None
+        self._bone = None
         self.parentFrameNode = None
         self._dummyHelper = None
 
@@ -119,18 +120,19 @@ class FrameNode:
         # --local parentBone = self_bone"""
         
         for child in self.children:
-            if self._bone is not None :                                
+            if self._bone is not None:
                 childBone = child._bone
 
                 d = Pseudobone(mathutils.Vector((0,0,0)),
                                mathutils.Vector((1,0,0)),
                                mathutils.Vector((0,0,1)))
-                d.name.fset(childBone.name + "_dummy")
+                d.name.fset(childBone.name.fget() + "_dummy")
 
                 
                 d.rotation_euler = self._bone.rotation_euler # -- not rotation
                 d.scale = self._bone.scale
                 d.position = childBone.position  # -- end points should match parent direction? Watch out for multi child bones e.g. back -> 2 shoulders (back shouldn't scale)
+                d.endpoint = childBone.position + mathutils.Vector((0,0,boneThickness))
                 d.recalculate_transform()
                 
                 # -- in coordsys world (d.position.x = child.position.x) -- only move along x axis?
