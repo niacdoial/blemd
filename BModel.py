@@ -21,6 +21,7 @@ import math
 from .texhelper import newtex, getTexImage, showTextureMap, getTexSlot, newUVlayer, addforcedname
 import mathutils
 from .materialhelper import add_vcolor, add_material
+from time import time
 
 
 class BModel:
@@ -123,10 +124,10 @@ class BModel:
         self.vtx = None
         self.DEBUGvgroups={}
         self._bmdFilePath = ""
-        self._runExtractTexturesCmd= True
-        self._currMaterialIndex= 1  # XCX??
+        self._runExtractTexturesCmd = True
+        self._currMaterialIndex = 0
         self.tverts= [[],[],[],[],[],[],[],[]]
-        self.tv_to_v_f = [[],[],[],[],[],[],[],[]]  # texVerts to vertices_faces
+        self.tv_to_f_v = [[], [], [], [], [], [], [], []]  # texVerts to vertices_faces
         self._createBones= True
         self._exportType='XFILE'
         self._boneThickness= 10
@@ -145,7 +146,7 @@ class BModel:
         self._allowTextureMirror= False
         self.normals = []
         self.vcFaces = []
-        self._forceCreateBones= False
+        self._forceCreateBones = False
         self._subMaterials = []
         self._iconSize = 100
 
@@ -189,7 +190,7 @@ class BModel:
         rev = []
         i = len(inputArray)
         while i > 0:
-            rev.append(inputArray[i-1]) # corrected!
+            rev.append(inputArray[i-1])  # corrected!
             i -= 1
         # -- inputArray = rev doesn't work
         return rev
@@ -197,12 +198,19 @@ class BModel:
     def BuildSingleMesh(self):
         # -----------------------------------------------------------------
         # -- mesh
+        print('BuildSMesh : ', time())
         if self._reverseFaces:
             self.faces = self.ReverseArray(self.faces)
             self._materialIDS = self.ReverseArray(self._materialIDS)
             for uv in range(8):
                 self.tFaces[uv] = self.ReverseArray(self.tFaces[uv])
+                for num, com in enumerate(self.tv_to_f_v[uv]):
+                    for num2, com2 in enumerate(com):
+                        com2 = (len(self.faces)-1-com2[0], com2[1])
+                        com[num2] = com2
+                    self.tv_to_f_v[uv][num] = com
             self.vcFaces = self.ReverseArray(self.vcFaces)
+
 
         # -- TODO: should never have undefined materials
         for i in range(len(self._materialIDS)):
@@ -221,12 +229,22 @@ class BModel:
         modelMesh.from_pydata(self.vertices, [], self.faces)
         modelMesh.update()
         modelObject = bpy.data.objects.new(getFilenameFile(self._bmdFilePath), modelMesh)
+        #while modelObject.material_slots[0].material is None:
+        #    tempbk = bpy.context.scene.objects.active  # remove empty material slot
+        #    bpy.context.scene.objects.active = modelObject
+        #    modelObject.active_material_index = 0
+        #    bpy.ops.object.material_slot_remove()
+        #    bpy.context.scene.objects.active = tempbk
+        #    del tempbk
         bpy.context.scene.objects.link(modelObject)
         bm_to_pm = []  # index shifter: enter bmd mat index, get blender mat index
         for i in range(len(self._subMaterials)):
             bm_to_pm.append(add_material(modelObject, self._subMaterials[i]))
+        f_to_rf = [None]*len(self.faces)
+        for num, com in enumerate([type(())(temp.vertices) for temp in modelMesh.polygons]):
+            f_to_rf[self.faces.index(com)] = num
         for num, com in enumerate(self._materialIDS):  # assign materials to faces
-            modelMesh.polygons[num].material_index = bm_to_pm[com -1]
+            modelMesh.polygons[f_to_rf[num]].material_index = bm_to_pm[com]
         #for com in self._materialIDS:
         #    add_material(modelObject, com)
 
@@ -242,7 +260,7 @@ class BModel:
 
         for uv in range(8):
             if len(self.tverts[uv]) and len(self.tFaces[uv]):
-                newUVlayer(modelMesh, self.tverts[uv], self.tFaces[uv], self.faces, self.tv_to_v_f[uv])
+                newUVlayer(modelMesh, self.tverts[uv], self.tFaces[uv], self.faces, self.tv_to_f_v[uv])
 
         # -- set self.normals [no effect?]
 
@@ -323,7 +341,8 @@ class BModel:
         return modelMesh
 
     def LoadModel(self, filePath):
-                
+
+        print("Load : ",time())
         # -- load model
         br = BinaryReader()
         br.Open(filePath)
@@ -540,90 +559,85 @@ class BModel:
                     newPos = mat.MultiplyVector(self.vtx.positions[posIndex])
                     while len(self.vertices) <= posIndex:
                         self.vertices.append(None)
-                    self.vertices[posIndex] = [newPos.x, -newPos.z, newPos.y] # -- flip order
+                    self.vertices[posIndex] = [newPos.x, -newPos.z, newPos.y]  # -- flip order
                 if currPrimitive.type == 0x98:  # - strip
-                    for m in range(len(currPrimitive.points)-2):
-                        posIndex1 = currPrimitive.points[m].posIndex  # fixed
-                        posIndex2 = currPrimitive.points[m + 1].posIndex  # fixed
-                        posIndex3 = currPrimitive.points[m + 2].posIndex  # fixed
-
-                        # XCX DEBUG (create debug V groups)
-                        tempvg = self.DEBUGvgroups.get(str(batchid), None)
-                        if not tempvg:
-                            tempvg = []
-                            self.DEBUGvgroups[str(batchid)] = tempvg
-                        tempvg.append(posIndex1)
-                        tempvg.append(posIndex2)
-                        tempvg.append(posIndex3)
-                        tempvg = self.DEBUGvgroups.get(str(batchid)+','+str(packnum), None)
-                        if not tempvg:
-                            tempvg = []
-                            self.DEBUGvgroups[str(batchid)+','+str(packnum)] = tempvg
-                        tempvg.append(posIndex1)
-                        tempvg.append(posIndex2)
-                        tempvg.append(posIndex3)
-                        tempvg = self.DEBUGvgroups.get(str(batchid)+','+str(packnum)+','+str(primnum), None)
-                        if not tempvg:
-                            tempvg = []
-                            self.DEBUGvgroups[str(batchid)+','+str(packnum)+','+str(primnum)] = tempvg
-                        tempvg.append(posIndex1)
-                        tempvg.append(posIndex2)
-                        tempvg.append(posIndex3)
-
-                        while len(self.faces) <= self.faceIndex:
-                            self.faces.append(None)
-                        if self.faces[self.faceIndex] is not None:
-                            pass
-                        if m % 2 == 0:  # -- even
-                            self.faces[self.faceIndex] = [posIndex1, posIndex2, posIndex3]
-                        else:
-                            self.faces[self.faceIndex] = [posIndex3, posIndex2, posIndex1] # -- reverse
-
-                        for uv in range(8):
-                            if len(self.tFaces) <= uv:
-                                self.tFaces.append([])
-                            if currBatch.attribs.hasTexCoords[uv]:
-                                t1Index = currPrimitive.points[m].texCoordIndex[uv]  # fixed
-                                t2Index = currPrimitive.points[m + 1].texCoordIndex[uv]  # fixed
-                                t3Index = currPrimitive.points[m + 2].texCoordIndex[uv]  # fixed
-                                while len(self.tFaces[uv]) <= self.faceIndex:
-                                    self.tFaces[uv].append(None)
-                                if m % 2 == 0:  # -- even
-                                    self.tFaces[uv][self.faceIndex] = [t1Index , t2Index , t3Index ]
-                                else:
-                                    self.tFaces[uv][self.faceIndex] = [t3Index , t2Index , t1Index ] # -- reverse
-                                # XCX new UV method
-                                while len(self.tv_to_v_f[uv]) <= max(t1Index, t2Index, t3Index):
-                                    self.tv_to_v_f[uv].append(None)
-                                self.tv_to_v_f[uv][t1Index] = (posIndex1, self.faceIndex)
-                                self.tv_to_v_f[uv][t2Index] = (posIndex2, self.faceIndex)
-                                self.tv_to_v_f[uv][t3Index] = (posIndex3, self.faceIndex)
-                                while len(self._materialIDS) <= self.faceIndex:
-                                    self._materialIDS.append(None)
-                                self._materialIDS[self.faceIndex] = self._currMaterialIndex
-
-                        # -- vertex colors
-                        while len(self.vcFaces) <= self.faceIndex:
-                            self.vcFaces.append(None)
-                        if currBatch.attribs.hasColors[0]:  # fixed
-                            c1Index = currPrimitive.points[m].colorIndex[0]  # fixed x2
-                            c2Index = currPrimitive.points[m + 1].colorIndex[0]  # fixed x2
-                            c3Index = currPrimitive.points[m + 2].colorIndex[0]  # fixed x2
-
-                            if m % 2 == 0:  # -- even
-                                self.vcFaces[self.faceIndex] = [c1Index, c2Index , c3Index ]
-                            else:
-                                self.vcFaces[self.faceIndex] = [c3Index, c2Index , c1Index ] # -- reverse
-                        else:
-                            self.vcFaces[self.faceIndex] = None
-                        self.faceIndex += 1
+                    iterator = StripIterator(currPrimitive.points)
                 # -- GL_TRIANGLE_STRIP:
-
                 elif currPrimitive.type == 0xa0:
-                    MessageBox("NYI: fan")
+                    iterator = FanIterator(currPrimitive.points)
                 # -- GL_TRIANGLE_FAN
                 else:
-                    MessageBox("unknown primitive type")
+                    raise ValueError("unknown primitive type")
+                for p1, p2, p3 in iterator:
+                    posIndex1 = p1.posIndex  # fixed
+                    posIndex2 = p2.posIndex  # fixed
+                    posIndex3 = p3.posIndex  # fixed
+
+                    # XCX DEBUG (create debug V groups)
+                    tempvg = self.DEBUGvgroups.get(str(batchid), None)
+                    if not tempvg:
+                        tempvg = []
+                        self.DEBUGvgroups[str(batchid)] = tempvg
+                    tempvg.append(posIndex1)
+                    tempvg.append(posIndex2)
+                    tempvg.append(posIndex3)
+                    tempvg = self.DEBUGvgroups.get(str(batchid)+','+str(packnum), None)
+                    if not tempvg:
+                        tempvg = []
+                        self.DEBUGvgroups[str(batchid)+','+str(packnum)] = tempvg
+                    tempvg.append(posIndex1)
+                    tempvg.append(posIndex2)
+                    tempvg.append(posIndex3)
+                    tempvg = self.DEBUGvgroups.get(str(batchid)+','+str(packnum)+','+str(primnum), None)
+                    if not tempvg:
+                        tempvg = []
+                        self.DEBUGvgroups[str(batchid)+','+str(packnum)+','+str(primnum)] = tempvg
+                    tempvg.append(posIndex1)
+                    tempvg.append(posIndex2)
+                    tempvg.append(posIndex3)
+
+                    while len(self.faces) <= self.faceIndex:
+                        self.faces.append(None)
+                    if self.faces[self.faceIndex] is not None:
+                        pass
+
+                    self.faces[self.faceIndex] = (posIndex1, posIndex2, posIndex3)
+
+                    for uv in range(8):
+                        if len(self.tFaces) <= uv:
+                            self.tFaces.append([])
+                        if currBatch.attribs.hasTexCoords[uv]:
+                            t1Index = p1.texCoordIndex[uv]  # fixed
+                            t2Index = p2.texCoordIndex[uv]  # fixed
+                            t3Index = p3.texCoordIndex[uv]  # fixed
+                            while len(self.tFaces[uv]) <= self.faceIndex:
+                                self.tFaces[uv].append([None, None, None])
+                            self.tFaces[uv][self.faceIndex] = (t1Index, t2Index, t3Index)
+                            # XCX new UV method
+                            while len(self.tv_to_f_v[uv]) <= max(t1Index, t2Index, t3Index):
+                                self.tv_to_f_v[uv].append([])
+                            self.tv_to_f_v[uv][t1Index].append((self.faceIndex, posIndex1))
+                            self.tv_to_f_v[uv][t2Index].append((self.faceIndex, posIndex2))
+                            self.tv_to_f_v[uv][t3Index].append((self.faceIndex, posIndex3))
+
+                            while len(self._materialIDS) <= self.faceIndex:
+                                self._materialIDS.append(None)
+                            self._materialIDS[self.faceIndex] = self._currMaterialIndex-1
+                            # _currMaterialIndex is incremented "too soon"
+
+                    # -- vertex colors
+                    while len(self.vcFaces) <= self.faceIndex:
+                        self.vcFaces.append(None)
+                    if currBatch.attribs.hasColors[0]:  # fixed
+                        c1Index = p1.colorIndex[0]  # fixed x2
+                        c2Index = p2.colorIndex[0]  # fixed x2
+                        c3Index = p3.colorIndex[0]  # fixed x2
+
+                        self.vcFaces[self.faceIndex] = [c1Index, c2Index, c3Index]
+                    else:
+                        self.vcFaces[self.faceIndex] = None
+                    self.faceIndex += 1
+
                 # -- end if currPrimitive.type == 0x98 then -- strip
             # -- end for currPrimitive in currPacket.primitives do
          # -- end for currPacket in currBatch.packets do
@@ -761,6 +775,7 @@ class BModel:
                         #self._currMaterial.twoSided = True # -- anything with alpha is always two sided?
                         newtex(fileName, 'ALPHA', self._currMaterial)
 
+
                     showTextureMap(self._currMaterial)  # -- display self.texture in view
                     self._currMaterial.name = matName
 
@@ -840,11 +855,13 @@ class BModel:
 
     def DrawScene(self):  # XCX create armature here
         # delete $* XCX
+        print("DrawScene : ",time())
         m = Matrix44()
         _frameMatrix = m.GetIdentity()
         rootFrameNode = FrameNode()
         identity = m.GetIdentity()
         self.CreateFrameNodes(0, 0, identity, rootFrameNode)
+        print("frame node created", time())
         # -- FIX: Force create bone option allows to generate bones independently of their count
         if len(rootFrameNode.children) == 1 and len(rootFrameNode.children[0].children) == 0:  # fixed
             self._createBones = False
@@ -876,6 +893,7 @@ class BModel:
                 #	self.inf.scenegraph = revList
         # -----------------------------------
 
+        print("animations: ", time())
         self.DrawScenegraph(0, 0, i)
         modelMesh = self.BuildSingleMesh()
 
@@ -1192,5 +1210,6 @@ class BModel:
             pass
 
         if (not exportTextures) or (exportTextures and self.ExtractImages()):
+            print("draw scene2", time())
             self.DrawScene()
         self.CreateBTPDataFile()

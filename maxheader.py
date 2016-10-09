@@ -57,7 +57,7 @@ def getFiles(wc_name):
                             replace('*', '.*').\
                             replace('(', '\\(').\
                             replace(')', '\\)')
-        if re.match(rematcher, os.path.join(path, com)):
+        if re.match(rematcher, os.path.join(path.replace('/', '\\'), com)):
             returnable.append(os.path.join(path, com))
     return returnable
 

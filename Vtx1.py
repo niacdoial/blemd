@@ -367,3 +367,19 @@ class Vtx1:
                 else:
                     self.ReadVertexArray(f, len, br, (vtx1Offset+header.offsets[i]))
                 j += 1
+
+
+# small iter-generators to iterate numbers for  GL_strips and GL_fans.
+def StripIterator(lst):
+    flip = False  # odd faces are in reversed index
+    for com in range(len(lst)-2):
+        if flip:
+            yield (lst[com+2], lst[com+1], lst[com])
+        else:
+            yield (lst[com], lst[com+1], lst[com+2])
+        flip = not flip
+
+
+def FanIterator(lst):
+    for com in range(1, len(lst)-1):
+        yield (lst[0], lst[com], lst[com+1])
