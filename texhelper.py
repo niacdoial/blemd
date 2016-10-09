@@ -54,6 +54,9 @@ def newtex(fname, type, mat):
     elif type == ALPHA:
         matslot.alpha_factor = 1
         matslot.use_map_alpha = True
+        mat.use_transparency = True
+        mat.alpha = 0
+        mat.transparency_method = "MASK"
     elif type == SPECULAR:
         matslot.specular_color_factor = 1
         matslot.use_map_color_spec = True
@@ -66,10 +69,12 @@ def showTextureMap(mat):
                 mat.use_textures[num] = True
 
 
-def newUVlayer(mesh, tverts, tfaces, Faces, tv_to_v_f):
+def newUVlayer(mesh, tverts, tfaces, Faces, tv_to_f_v):
     # probably one of the hardest functions to fathom.
     #it's goal is to set the right UV coords to the right UV point.
     # with the fact that most verts had changed index between steps. gah.
+
+    tulpe = type(())
 
     num = len(mesh.uv_textures)
     mesh.uv_textures.new()
@@ -83,7 +88,7 @@ def newUVlayer(mesh, tverts, tfaces, Faces, tv_to_v_f):
     #verts are aligned. are faces too?
     f_to_rf = [None]*len(mesh.polygons)  # blender faces index to loaded faces index
     for num, com in enumerate(mesh.polygons):  # will be identity most of the time
-        f_to_rf[Faces.index(list(com.vertices))] = num
+        f_to_rf[Faces.index(tulpe(com.vertices))] = num
     # -- TODO: should never have undefined texture faces
     #for f, rf in enumerate(f_to_rf):
     #    f_to_l[f] = rf_to_l[rf]
@@ -98,14 +103,20 @@ def newUVlayer(mesh, tverts, tfaces, Faces, tv_to_v_f):
             v_rf_to_l[mesh.loops[com2].vertex_index][num] = l_id
 
     # those lines are a new method that is still glitchy.
-    #for num, com in enumerate(tv_to_v_f):
-    #    uvtex.data[v_rf_to_l[com[0]][f_to_rf[com[1]]-1]].uv = mathutils.Vector(tverts[num])
+    for num, com0 in enumerate(tv_to_f_v):
+        for com in com0:
+            for com2 in mesh.polygons[f_to_rf[com[0]]].loop_indices:
+                if mesh.loops[com2].vertex_index == com[1]:
+                    uvtex.data[com2].uv = mathutils.Vector(tverts[num][:2])
 
-    for num, com in enumerate(tfaces):
-        com2 = Faces[num]
-        uvtex.data[v_rf_to_l[com2[0]] [f_to_rf[num]]].uv = mathutils.Vector((tverts[com[0]][:2]))
-        uvtex.data[v_rf_to_l[com2[1]] [f_to_rf[num]]].uv = mathutils.Vector((tverts[com[1]][:2]))
-        uvtex.data[v_rf_to_l[com2[2]] [f_to_rf[num]]].uv = mathutils.Vector((tverts[com[2]][:2]))
+    # STABLE version (but less precise)
+    #for num, com in enumerate(tfaces):
+    #    com2 = Faces[num]
+    #    uvtex.data[v_rf_to_l[com2[0]] [f_to_rf[num]]].uv = mathutils.Vector((tverts[com[0]][:2]))
+    #    uvtex.data[v_rf_to_l[com2[1]] [f_to_rf[num]]].uv = mathutils.Vector((tverts[com[1]][:2]))
+    #    uvtex.data[v_rf_to_l[com2[2]] [f_to_rf[num]]].uv = mathutils.Vector((tverts[com[2]][:2]))
+
+    # OLD version from now.
 
     # must make correspond faces and UV faces, so must associate UV_verts to 3D_verts.
     #rf_to_l = []  # blender faces index to loop indexES
