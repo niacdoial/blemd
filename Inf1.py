@@ -57,6 +57,12 @@ class Inf1Entry:
         self.index = br.ReadWORD()
 
 
+class SceneGraph:
+    def __init__(self):
+        self.type=0
+        self.index=0
+        self.children=[]
+
 class Inf1:
     # <variable numVertices>
     # -- int no idea what's this good for ;-)

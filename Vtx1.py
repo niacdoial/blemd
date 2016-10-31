@@ -1,5 +1,6 @@
 #! /usr/bin/python3
 from .Vector3 import Vector3
+from mathutils import Color
 from .maxheader import MessageBox
 
 
@@ -133,10 +134,11 @@ class Vtx1:
 
     def GetColor(self, ri, gi, bi, ai):
                 
-        r = (ri + 0.5)
-        g = (gi + 0.5)
-        b = (bi + 0.5)
-        a = (ai + 0.5)
+        #r = (ri + 0.5)
+        #g = (gi + 0.5)
+        #b = (bi + 0.5)
+        #a = (ai + 0.5)
+        return (ri/255, gi/255, bi/255, ai/255)
         # return color r g b a # XCX need color format
   
 

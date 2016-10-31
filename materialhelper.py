@@ -1,4 +1,5 @@
 import bpy
+import mathutils
 
 
 def add_material(obj, mat):
@@ -21,20 +22,40 @@ def add_material(obj, mat):
     #mat_slot.material = mat
     #bpy.context.scene.objects.active = act_bk
 
+def add_err_material(obj):
+    mat = bpy.data.materials.new("ERROR MATERIAL")
+    mat.diffuse_color = mathutils.Color((0,0,1))
+    mat.specular_color = mathutils.Color((1,1,1))
+    mat.diffuse_intensity = 1
+    add_material(obj, mat)
+    return mat
 
-def add_vcolor(mesh, color_layer):
-    return  # XCX debug that later
-    #num = len(mesh.vertex_colors)
-    #act_bk = bpy.context.active_object
-    #bpy.context.scene.objects.active = mesh
-    #bpy.ops.mesh.vertex_color_add()
-    #vx_layer = mesh.vertex_colors[num]
-    #bpy.context.scene.objects.active = act_bk
+
+def add_vcolor(mesh, color_layer, cv_to_f_v, Faces, uvlayer):
+    #return  # XCX debug that later
+    tulpe = type(())
+
     vx_layer = mesh.vertex_colors.new("v_color_"+str(len(mesh.vertex_colors)))
+    alpimg = bpy.data.images.new(mesh.name+'_vcol_alpha_'+str(len(mesh.vertex_colors)), 256, 256)
 
     l_to_v = []
     for com in mesh.loops:
         l_to_v.append(com.vertex_index)
+
+    # verts in Faces and mesh.polygons are aligned
+    # so are the face of Faces and tFaces
+
+    #verts are aligned. are faces too?
+    f_to_rf = [None]*len(mesh.polygons)  # blender faces index to loaded faces index
+    for num, com in enumerate(mesh.polygons):  # will be identity most of the time
+        f_to_rf[Faces.index(tulpe(com.vertices))] = num
+    v_rf_to_l = []
+    for com in range(len(mesh.vertices)):
+        v_rf_to_l.append({})
+    for num, com in enumerate(mesh.polygons):
+        for com2 in com.loop_indices:
+            l_id = mesh.loops[com2].index
+            v_rf_to_l[mesh.loops[com2].vertex_index][num] = l_id
 
     # --if (self.vtx.colors.count > 1) then
     # --	raise ValueError(("self.vtx.colors.count = " + (self.vtx.colors[1].count as string))
@@ -42,14 +63,45 @@ def add_vcolor(mesh, color_layer):
     # --if (self.vtx.colors[1].count > 1) then
     # --	raise ValueError(("self.vtx.colors[1].count = " + (self.vtx.colors[1].count as string))
     # --setNumCPVVerts mesh self.vtx.colors[1].count
-    #meshop.setNumMapVerts(mesh, 0, len(color_layer))  #XCX
-    #meshop.setNumMapVerts(mesh, -2, len(color_layer))  #XCX
+    # meshop.setNumMapVerts(mesh, 0, len(color_layer))  #XCX
+    # meshop.setNumMapVerts(mesh, -2, len(color_layer))  #XCX
 
-    for i in range(len(l_to_v)):  # fixed
-        # --setVertColor mesh i vtx.colors[1][i]
-        vx_layer[i].data.color = color_layer[l_to_v[i]]  # XCX
-        # meshop.setVertAlpha(mesh, -2, i, color_layer[i].a)  # XCX
 
+    for num, com0 in enumerate(cv_to_f_v):
+        for com in com0:
+            for com2 in mesh.polygons[f_to_rf[com[0]]].loop_indices:
+                if mesh.loops[com2].vertex_index == com[1]:
+                    DBG_temp = [list(color_layer[num])[3]]*3
+                    vx_layer.data[com2].color = mathutils.Color(DBG_temp)
+
+    for face in range(len(mesh.polygons)):
+        uvlayer.data[face].image = alpimg
+    mesh.update()
+    #for i in range(len(l_to_v)):  # fixed
+    #    DBG_temp = list(color_layer[l_to_v[i]])[0]
+    #    vx_layer.data[i].color = mathutils.Color(DBG_temp*3)  # use alpha to override everything
+    #    # meshop.setVertAlpha(mesh, -2, i, color_layer[i].a)  # XCX
+
+    # baking VC alpha to UV texture
+
+    bpy.context.scene.render.bake_type = 'VERTEX_COLORS'
+    bpy.context.scene.render.use_bake_to_vertex_color = False
+    alpimg.pack(as_png=True)
+    #bpy.ops.object.bake_image()  # forget this yet. XCX crashes
+    alpimg.pack(as_png=True)
+
+    ## RE-setting the correct Vcols
+    for num, com0 in enumerate(cv_to_f_v):
+        for com in com0:
+            for com2 in mesh.polygons[f_to_rf[com[0]]].loop_indices:
+                if mesh.loops[com2].vertex_index == com[1]:
+                    DBG_temp = list(color_layer[num])[:3]
+                    vx_layer.data[com2].color = mathutils.Color(DBG_temp)
+    #for i in range(len(l_to_v)):  # fixed
+    #    vx_layer.data[i].color = mathutils.Color(list(color_layer[l_to_v[i]])[:3])  # remove alpha(supported earlier in this file)
+
+
+    return alpimg
 
     # --buildVCFaces mesh False
     # meshop.buildMapFaces(mesh, 0)  # XCX
@@ -66,4 +118,4 @@ def add_vcolor(mesh, color_layer):
     #        meshop.setMapFace(mesh, -2, i, [vcFaces[i][0], vcFaces[i][1], vcFaces[i][2]]) # XCX
 
 
-    # modelMesh.showVertexColors = True # -- display verself.tex shading  # XCX
+    # modelMesh.showVertexColors = True # -- display vertex shading  # XCX

@@ -102,7 +102,7 @@ def newUVlayer(mesh, tverts, tfaces, Faces, tv_to_f_v):
             l_id = mesh.loops[com2].index
             v_rf_to_l[mesh.loops[com2].vertex_index][num] = l_id
 
-    # those lines are a new method that is still glitchy.
+    # those lines are a new method.
     for num, com0 in enumerate(tv_to_f_v):
         for com in com0:
             for com2 in mesh.polygons[f_to_rf[com[0]]].loop_indices:

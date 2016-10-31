@@ -5,11 +5,12 @@ IDE_DEBUG = True
 bl_info = {
     "name": "Import gc/wii bmd format (.bmd)",
     "author": "people from the internet. adapted for blender by Niacdoial, from Avatarus-One's version (see github) full explanation in README",
-    "version": (0, 1, 0),
-    "blender": (2, 7, 7),
+    "version": (0, 5, 0),
+    "blender": (2, 77, 0),
     "location": "File > Import > Nintendo BMD",
     "description": "Import files in the gc/wii BMD format (.bmd)",
     "wiki_url": "https://github.com/niacdoial",
+    "warning": "still in devlopement",
     "tracker_url": "???",
     "category": "Import-Export",
 }
@@ -69,6 +70,12 @@ class ImportBmd(Operator, ImportHelper):
         default=False
         )
 
+    dvg = BoolProperty(
+        name="DEBUG vertex groups",
+        description="DEBUG option. create Vgroups to show the original BMD structure",
+        default=False
+        )
+
     type = EnumProperty(
         name="Import Type",
         description="Choose between two items",
@@ -91,7 +98,7 @@ class ImportBmd(Operator, ImportHelper):
         temp = BModel()
         temp.SetBmdViewExePath('C:\\Users\\Liam\\Bureau\\MaxBMD-multi-texcoords\\')
         temp.Import(self.filepath, self.boneThickness, self.mir_tx, self.frc_cr_bn,
-                    self.sv_anim, self.tx_xp, self.type, self.ic_sc)
+                    self.sv_anim, self.tx_xp, self.type, self.ic_sc, self.dvg)
         return {'FINISHED'}
 
 

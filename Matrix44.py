@@ -53,6 +53,14 @@ class Matrix44:
                     return False
         return True
 
+    def copy(self):
+        ret = Matrix44()
+        ret.SetValues(*([0]*16))
+        for i in range(4):
+            for j in range(4):
+                ret.m[i][j] = self.m[i][j]
+        return ret
+
     def SetValues(self, v00, v01, v02, v03, v10, v11, v12, v13, v20, v21, v22, v23, v30, v31, v32, v33):
         self.m = []
         self.m.append([v00, v01, v02, v03])
