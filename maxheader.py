@@ -27,7 +27,7 @@ def HiddenDOSCommand(cmd, startpath=os.getcwd()):
 def DosCommand(cmd):
     if not os.path.isabs(cmd):
         cmd = os.path.abspath(cmd)
-    subprocess.check_output(cmd)
+    print(subprocess.check_output(cmd,stderr=subprocess.STDOUT))
 
 
 def getFilenamePath(path):
@@ -57,7 +57,7 @@ def getFiles(wc_name):
                             replace('*', '.*').\
                             replace('(', '\\(').\
                             replace(')', '\\)')
-        if re.match(rematcher, os.path.join(path.replace('/', '\\'), com)):
+        if re.match(rematcher, path.replace('/', '\\')+ '\\' + com):
             returnable.append(os.path.join(path, com))
     return returnable
 

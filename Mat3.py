@@ -148,6 +148,7 @@ class MatEntry:
 
     def LoadData(self, br, isMat2):
         for _ in range(8): self.unk.append(br.GetByte())
+        self.flag=self.unk[0]
         for _ in range(2): self.color1.append(br.ReadWORD())
         for _ in range(4): self.chanControls.append(br.ReadWORD())
         # --these two fields are only in mat3 headers, not in mat2
@@ -200,7 +201,7 @@ class Mat3:
         self.indexToMatIndex= []
 
     def LoadData(self, br):
-                
+
         # -- "Mat3 section support is very incomplete"
 
         mat3Offset = br.Position()
@@ -267,14 +268,13 @@ class Mat3:
         initData = []
         # -- vector<bmd::MatInit> initData(maxIndex + 1)
 
-
         for _ in range(maxIndex +1):  #UNcorrected deliberately  # for(i = 0; i <= maxIndex; ++i)
             init = MatInit()
             init.LoadData(br)
             initData.append(init)
 
         # -- read self.texTable
-        br.SeekSet(mat3Offset + h.offsets[15]) # corrected  # --  fseek(f, mat3Offset + h.offsets[15], SEEK_SET);
+        br.SeekSet(mat3Offset + h.offsets[15])  # corrected  # --  fseek(f, mat3Offset + h.offsets[15], SEEK_SET);
 
         texLength = lengths[15]  # corrected
         tempTexTable = []
@@ -286,27 +286,25 @@ class Mat3:
             self.texTable.append(index)
             self.texStageIndexToTextureIndex.append(index)
 
-            # if (index > maxTexIndex)
-            # -- messageBox (self.texTable as string)
-            #		for i = 1 to tempTexTable.count do
-            #		  (
-            #				index = br.ReadWORD()
-            #			  self.texTable[i] = tempTexTable[i]
-            #			  
-            #			 -- if (index > maxTexIndex) then
-            #			--	maxTexIndex = index
-            #		  )        
+            # if index > maxTexIndex:
+            #    messageBox (str(self.texTable))
+            #    for i in range(len(tempTexTable)):
+            #        index = br.ReadWORD()
+            #        self.texTable[i] = tempTexTable[i]
+            #
+            #        #if index > maxTexIndex:
+            #        #    maxTexIndex = index
 
-                     #
-            #		  messageBox (initData[1].texStages.count as string)
-            #		  for i = 1 to h.count do
-            #		  (
-            #				stage =  initData[indexToInitData[i] + 1].texStages[1] 
-            #				if (stage != 0xffff) then
-            #				  self.texTable[i] = self.texTable[stage + 1]
-            #				else
-            #				  self.texTable[i] = 0xffff
-            #		  )        
-  
+            #
+            #    messageBox (str(len(initData[0].texStages)))
+        #temptable = self.texTable.copy()
+        #for i in range(h.count):
+        #    stage = initData[indexToInitData[i]].texStages[0]
+        #    if stage != 0xffff:
+        #        self.texTable[i] = temptable[stage]
+        #    else:
+        #        self.texTable[i] = 0xffff
+        print("", end='')  # breakpoint dummy
+
 
 

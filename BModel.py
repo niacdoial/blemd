@@ -20,7 +20,7 @@ from .maxheader import *
 import math
 from .texhelper import newtex, getTexImage, showTextureMap, getTexSlot, newUVlayer, addforcedname
 import mathutils
-from .materialhelper import add_vcolor, add_material
+from .materialhelper import add_vcolor, add_material, add_err_material
 from time import time
 
 
@@ -145,7 +145,8 @@ class BModel:
         self.vertexMultiMatrixEntry= []
         self._allowTextureMirror= False
         self.normals = []
-        self.vcFaces = []
+        self.vcFaces = [[], []]
+        self.cv_to_f_v = [[], []]
         self._forceCreateBones = False
         self._subMaterials = []
         self._iconSize = 100
@@ -202,6 +203,8 @@ class BModel:
         if self._reverseFaces:
             self.faces = self.ReverseArray(self.faces)
             self._materialIDS = self.ReverseArray(self._materialIDS)
+            #for com in range(len(self._materialIDS)):
+            #    self._materialIDS[com] = len(self._subMaterials)-1-self._materialIDS[com]
             for uv in range(8):
                 self.tFaces[uv] = self.ReverseArray(self.tFaces[uv])
                 for num, com in enumerate(self.tv_to_f_v[uv]):
@@ -209,19 +212,26 @@ class BModel:
                         com2 = (len(self.faces)-1-com2[0], com2[1])
                         com[num2] = com2
                     self.tv_to_f_v[uv][num] = com
-            self.vcFaces = self.ReverseArray(self.vcFaces)
+            # vertex colors are now similar to uv textures
+            for cv in range(2):
+                self.vcFaces[cv] = self.ReverseArray(self.vcFaces[cv])
+                for num, com in enumerate(self.cv_to_f_v[cv]):
+                    for num2, com2 in enumerate(com):
+                        com2 = (len(self.faces)-1-com2[0], com2[1])
+                        com[num2] = com2
+                    self.cv_to_f_v[cv][num] = com
 
 
         # -- TODO: should never have undefined materials
         for i in range(len(self._materialIDS)):
             if self._materialIDS[i] is None:
-                self._materialIDS[i] = -1  # -- not found index
+                pass #self._materialIDS[i] = -1  # -- not found index
 
         # -- FIX: Fill missing material IDs
 
         if len(self._materialIDS) > 0:
             for i in range(len(self._materialIDS), len(self.faces)):
-                self._materialIDS.append(-1)
+                self._materialIDS.append(None)  # -1)
         else:
             self._materialIDS = [-1] * len(self.faces)
 
@@ -237,14 +247,22 @@ class BModel:
         #    bpy.context.scene.objects.active = tempbk
         #    del tempbk
         bpy.context.scene.objects.link(modelObject)
-        bm_to_pm = []  # index shifter: enter bmd mat index, get blender mat index
+        bm_to_pm = {}  # index shifter: material, get mat index
         for i in range(len(self._subMaterials)):
-            bm_to_pm.append(add_material(modelObject, self._subMaterials[i]))
+            add_material(modelObject, self._subMaterials[i])
+        errmat = add_err_material(modelObject)
+        for num, com in enumerate(modelObject.material_slots):
+            bm_to_pm[com.material] = num
         f_to_rf = [None]*len(self.faces)
         for num, com in enumerate([type(())(temp.vertices) for temp in modelMesh.polygons]):
             f_to_rf[self.faces.index(com)] = num
         for num, com in enumerate(self._materialIDS):  # assign materials to faces
-            modelMesh.polygons[f_to_rf[num]].material_index = bm_to_pm[com]
+            # DEBUG reversed index
+            if f_to_rf is not None:
+                if com is not None:
+                    modelMesh.polygons[f_to_rf[num]].material_index = com  # bm_to_pm[com]
+                else:
+                    modelMesh.polygons[f_to_rf[num]].material_index = bm_to_pm[errmat]
         #for com in self._materialIDS:
         #    add_material(modelObject, com)
 
@@ -258,9 +276,19 @@ class BModel:
             pass
             # buildTVFaces(modelMesh, False) # XCX
 
+        active_uv = None
+
         for uv in range(8):
             if len(self.tverts[uv]) and len(self.tFaces[uv]):
                 newUVlayer(modelMesh, self.tverts[uv], self.tFaces[uv], self.faces, self.tv_to_f_v[uv])
+                active_uv = modelMesh.uv_textures[0]
+
+        act_bk = bpy.context.scene.objects.active
+        bpy.context.scene.objects.active = modelObject
+        if not active_uv:
+            bpy.ops.paint.add_simple_uvs()
+            active_uv = modelMesh.uv_textures[0]
+
 
         # -- set self.normals [no effect?]
 
@@ -275,16 +303,19 @@ class BModel:
         modelMesh.update()  # XCX
 
         if len(self.vtx.colors) and len(self.vtx.colors[0]):  #- has colors? fixed.
-            add_vcolor(modelMesh, self.vtx.colors[0])
+            alpha_image = add_vcolor(modelMesh, self.vtx.colors[0], self.cv_to_f_v[0], self.faces, active_uv)
             if len(self.vtx.colors) > 1 and len(self.vtx.colors[1]):  # fixed
-                add_vcolor(modelMesh, self.vtx.colors[1])  # fixed
+                add_vcolor(modelMesh, self.vtx.colors[1], self.cv_to_f_v[1], self.faces, active_uv)  # fixed
 
+            #add alpha_image to materials!
+
+        bpy.context.scene.objects.active = act_bk
         # update(modelMesh) # XCX
 
         # -----------------------------------------------------------------
         # -- skin
 
-        if self._createBones:
+        if self._createBones or self.DEBUGVG:
             # update modelMesh
             # max modify mode
             act_bk = bpy.context.active_object
@@ -315,23 +346,34 @@ class BModel:
                 realbone.tail = mathutils.Vector(bone.endpoint)  #mathutils.Vector((0,0,1))
                 modelObject.vertex_groups.new(bone.name.fget())
                 # skinOps.addBone(mysk, bone, 0) # XCX DONE?
-            bpy.context.scene.update()
-            bpy.ops.object.mode_set(mode='OBJECT')
-            bpy.context.scene.objects.active = act_bk
 
             if len(self.vertexMultiMatrixEntry) != len(self.vertices):
                 MessageBox("Invalid skin")
                 raise ValueError("E")
-
-            for i in range(len(self.vertices)):
-                for num, vg_id in enumerate(self.vertexMultiMatrixEntry[i].indices):
-                    modelObject.vertex_groups[vg_id-1].add([i], self.vertexMultiMatrixEntry[i].weights[num], 'REPLACE')
-                # -- Don't use setVertexWeights. Has issues with existing bone weights (mainly root bone)
-                #skinOps.ReplaceVertexWeights(mysk,  i, vertexMultiMatrixEntry[i].indices,
-                #                             vertexMultiMatrixEntry[i].weights)  # XCX
+            if self._createBones:
+                for i in range(len(self.vertices)):
+                    for num, vg_id in enumerate(self.vertexMultiMatrixEntry[i].indices):
+                        modelObject.vertex_groups[vg_id].add([i], self.vertexMultiMatrixEntry[i].weights[num], 'REPLACE')
+                    # -- Don't use setVertexWeights. Has issues with existing bone weights (mainly root bone)
+                    #skinOps.ReplaceVertexWeights(mysk,  i, vertexMultiMatrixEntry[i].indices,
+                    #                             vertexMultiMatrixEntry[i].weights)  # XCX
+                for bone in self._bones:
+                    realbone = arm.edit_bones[bone.name.fget()]
+                    vec = realbone.head
+                    grp = modelObject.vertex_groups[bone.name.fget()]
+                    for num in range(len(self.vertices)):
+                        try:
+                            tmp = grp.weight(num)
+                        except RuntimeError:  # vert not in group
+                            tmp = 0
+                        modelMesh.vertices[num].co += (vec*tmp)
             for com in self.DEBUGvgroups.keys():  # DEBUG vertex groups to fix UVs
                 vg = modelObject.vertex_groups.new(com)
                 vg.add(self.DEBUGvgroups[com], 1, 'REPLACE')
+
+            bpy.context.scene.update()
+            bpy.ops.object.mode_set(mode='OBJECT')
+            bpy.context.scene.objects.active = act_bk
             modelMesh.update()
 
 
@@ -428,13 +470,12 @@ class BModel:
         return self.jnt.matrices[i]  # -- this looks better with vf_064l.bdl (from zelda)
         # return bm.jnt1.matrices[i]*s   # -- this looks a bit better with mario's bottle_in animation
 
-    def DrawBatch(self, index, def_):
+    def DrawBatch(self, index, def_, matIndex):
         currBatch = self.shp.batches[index]
         batchid = index
 
-        if not currBatch.attribs.hasPositions :
+        if not currBatch.attribs.hasPositions:
             raise ValueError("found batch without positions")
-
 
         # --firstTextCoordIndex = 1
 
@@ -536,7 +577,6 @@ class BModel:
             for primnum, currPrimitive in enumerate(currPacket.primitives):
                 for m in range(len(currPrimitive.points)):
                     posIndex = currPrimitive.points[m].posIndex   # fixed
-                    # -- TODO: texcoords 1-7, color1 #XCX
                     if currBatch.attribs.hasMatrixIndices:
                         mat = matrixTable[(currPrimitive.points[m].matrixIndex//3)]  # fixed
                         if currPrimitive.points[m].matrixIndex % 3:
@@ -551,7 +591,7 @@ class BModel:
                         #    normal.setXYZ(0,0,-1) # easy to spot errors afterwards
                         while len(self.normals) <= posIndex:
                             self.normals.append(None)
-                        self.normals[posIndex] = normal.ToMaxScriptPos()
+                        self.normals[posIndex] = normal.ToMaxScriptPosFlip()
 
                     while len(self.vertexMultiMatrixEntry) <= posIndex:
                         self.vertexMultiMatrixEntry.append(None)
@@ -574,27 +614,28 @@ class BModel:
                     posIndex3 = p3.posIndex  # fixed
 
                     # XCX DEBUG (create debug V groups)
-                    tempvg = self.DEBUGvgroups.get(str(batchid), None)
-                    if not tempvg:
-                        tempvg = []
-                        self.DEBUGvgroups[str(batchid)] = tempvg
-                    tempvg.append(posIndex1)
-                    tempvg.append(posIndex2)
-                    tempvg.append(posIndex3)
-                    tempvg = self.DEBUGvgroups.get(str(batchid)+','+str(packnum), None)
-                    if not tempvg:
-                        tempvg = []
-                        self.DEBUGvgroups[str(batchid)+','+str(packnum)] = tempvg
-                    tempvg.append(posIndex1)
-                    tempvg.append(posIndex2)
-                    tempvg.append(posIndex3)
-                    tempvg = self.DEBUGvgroups.get(str(batchid)+','+str(packnum)+','+str(primnum), None)
-                    if not tempvg:
-                        tempvg = []
-                        self.DEBUGvgroups[str(batchid)+','+str(packnum)+','+str(primnum)] = tempvg
-                    tempvg.append(posIndex1)
-                    tempvg.append(posIndex2)
-                    tempvg.append(posIndex3)
+                    if self.DEBUGVG:
+                        tempvg = self.DEBUGvgroups.get(str(batchid), None)
+                        if not tempvg:
+                            tempvg = []
+                            self.DEBUGvgroups[str(batchid)] = tempvg
+                        tempvg.append(posIndex1)
+                        tempvg.append(posIndex2)
+                        tempvg.append(posIndex3)
+                        tempvg = self.DEBUGvgroups.get(str(batchid)+','+str(packnum), None)
+                        if not tempvg:
+                            tempvg = []
+                            self.DEBUGvgroups[str(batchid)+','+str(packnum)] = tempvg
+                        tempvg.append(posIndex1)
+                        tempvg.append(posIndex2)
+                        tempvg.append(posIndex3)
+                        tempvg = self.DEBUGvgroups.get(str(batchid)+','+str(packnum)+','+str(primnum), None)
+                        if not tempvg:
+                            tempvg = []
+                            self.DEBUGvgroups[str(batchid)+','+str(packnum)+','+str(primnum)] = tempvg
+                        tempvg.append(posIndex1)
+                        tempvg.append(posIndex2)
+                        tempvg.append(posIndex3)
 
                     while len(self.faces) <= self.faceIndex:
                         self.faces.append(None)
@@ -620,22 +661,30 @@ class BModel:
                             self.tv_to_f_v[uv][t2Index].append((self.faceIndex, posIndex2))
                             self.tv_to_f_v[uv][t3Index].append((self.faceIndex, posIndex3))
 
-                            while len(self._materialIDS) <= self.faceIndex:
-                                self._materialIDS.append(None)
-                            self._materialIDS[self.faceIndex] = self._currMaterialIndex-1
-                            # _currMaterialIndex is incremented "too soon"
+                    # materials
+
+                    while len(self._materialIDS) <= self.faceIndex:
+                        self._materialIDS.append(None)
+                    self._materialIDS[self.faceIndex] = matIndex
+                    #self._materialIDS[self.faceIndex] = self._currMaterial
+                    # _currMaterialIndex is incremented "too soon"
 
                     # -- vertex colors
-                    while len(self.vcFaces) <= self.faceIndex:
-                        self.vcFaces.append(None)
-                    if currBatch.attribs.hasColors[0]:  # fixed
-                        c1Index = p1.colorIndex[0]  # fixed x2
-                        c2Index = p2.colorIndex[0]  # fixed x2
-                        c3Index = p3.colorIndex[0]  # fixed x2
-
-                        self.vcFaces[self.faceIndex] = [c1Index, c2Index, c3Index]
-                    else:
-                        self.vcFaces[self.faceIndex] = None
+                    for vc in (0, 1):
+                        while len(self.vcFaces[vc]) <= self.faceIndex:
+                            self.vcFaces[vc].append(None)
+                        if currBatch.attribs.hasColors[vc]:  # fixed
+                            c1Index = p1.colorIndex[vc]  # fixed x2
+                            c2Index = p2.colorIndex[vc]  # fixed x2
+                            c3Index = p3.colorIndex[vc]  # fixed x2
+                            while len(self.cv_to_f_v[vc]) <= max(c1Index, c2Index, c3Index):
+                                self.cv_to_f_v[vc].append([])
+                            self.cv_to_f_v[vc][c1Index].append((self.faceIndex, posIndex1))
+                            self.cv_to_f_v[vc][c2Index].append((self.faceIndex, posIndex2))
+                            self.cv_to_f_v[vc][c3Index].append((self.faceIndex, posIndex3))
+                            self.vcFaces[vc][self.faceIndex] = [c1Index, c2Index, c3Index]
+                        else:
+                            self.vcFaces[vc][self.faceIndex] = None
                     self.faceIndex += 1
 
                 # -- end if currPrimitive.type == 0x98 then -- strip
@@ -685,7 +734,7 @@ class BModel:
                 fNode.f = f
                 fNode.name = f.name
 
-                fNode.startPoint = (parentMatrix.MultiplyVector(f.t)).ToMaxScriptPos()
+                fNode.startPoint = (parentMatrix.MultiplyVector(f.t)).ToMaxScriptPosFlip()
                 fNode.parentFrameNode = parentFrameNode
                 fNode.effP = effP
                 # --fNode.name = self._bmdFileName + "_" + f.name	-- FIX: DO NOT ADD FILENAME PREFIX TO BONES
@@ -719,120 +768,149 @@ class BModel:
         #assemblyMgr.Open(chr)
         return chr
 
-    def DrawScenegraph(self, j, call_depth, parentMatrix):
-
-        b1 = False
-        effP = parentMatrix  # --.Copy()
-        i = j
-        while i < len(self.inf.scenegraph):
-            n = self.inf.scenegraph[i]
-            # --print (n.type as string)
-            if n.type != 1 and b1:
-                b1 = False
-                effP = parentMatrix  # --.Copy() -- prevents fixed chain
-
-            if n.type == 0x10:  # -joint
-                effP = self.jnt.matrices[n.index]  # -- setup during CreateBones # corrected
-                b1 = True
-            elif n.type == 0x11:
-                matName = self._mat1.stringtable[n.index]  # correced
-                mat = self._mat1.materials[self._mat1.indexToMatIndex[n.index]]  # corrected *2
-                stage = mat.texStages[0]  # corrected
-                self.textureName = ""
-                if stage != 0xffff:
-                    v2 = self._mat1.texStageIndexToTextureIndex[stage]  # -- undefined if stage = 0xffff
-                else:
-                    v2 = None
-
-                if stage != 0xffff:
-                    # -- v2 used latter. value is undefined if stage == 0xffff
-                    self.textureName = self.tex.stringtable[v2]
-
-                    # --self.textureName = matName
-                    fileName = self._texturePath + self._texturePrefix + self.textureName + ".tga"
-                    bmpFound = OSPath.exists(fileName) or OSPath.exists(fileName[:-4]+'.dds')  # two image types!
-
-                    # -- messageBox fileName
-                    self._currMaterial = bpy.data.materials.new("temp_name_whatsoever")  #name will be erased afterwards, in a subcall
-                    newtex(fileName, 'DIFFUSE', self._currMaterial)
-                    img = getTexImage(self._currMaterial, fileName)
-
-                    # --gc()
-                    bmp = None
-                    hasAlpha = False
-                    if bmpFound:
-                        alp = 0
-                        for p in range(0, len(img.pixels), 4):  # pixels stored as individual channels
-                            if img.pixels[p+3] != 1:  # only get alpha
-                                alp = img.pixels[p+3]
-                                hasAlpha = True
-                                break
-                    else:
-                        # -- make it easier to see invalid self.textures
-                        self._currMaterial.diffuse_color = mathutils.Color((1,0,0))
-
-                    if hasAlpha:
-                        #self._currMaterial.twoSided = True # -- anything with alpha is always two sided?
-                        newtex(fileName, 'ALPHA', self._currMaterial)
-
-
-                    showTextureMap(self._currMaterial)  # -- display self.texture in view
-                    self._currMaterial.name = matName
-
-                    while self._currMaterialIndex >= len(self._subMaterials):  # create one more slot
-                        self._subMaterials.append(None)
-                    self._subMaterials[self._currMaterialIndex] = self._currMaterial
-
-                    # -- display in material editor?
-                    # -- meditMaterials[self.self._currMaterialIndex + 1] = self._currMaterial
-                    self._currMaterialIndex += 1
-
-                    # -- messageBox (matName + (self.tex.self.texHeaders[v2].wrapS as string) + "+" + (self.tex.self.texHeaders[v2].wrapT as string))
-                    # -- NOTE: check ash.bmd for case when wrapS=2 and wrap=2. u_offset = 0.5 and V_offset = -0.5 [note negative on v]
-
-                    if bmpFound:
-                        if self.tex.texHeaders[v2].wrapS == 0:#- clamp to edge? Needs testing. Cannot use .U_Mirror = False and .U_Tile = False. If WrapS == 0 then has Alpha?
-                            pass
-                        elif self.tex.texHeaders[v2].wrapS == 1:  #- repeat (default)
-                            pass
-                        elif self.tex.texHeaders[v2].wrapS == 2:
-                            self._currMaterial.name += "_U" # -- add suffix to let the modeler know where mirror should be used
-                            if self._allowTextureMirror:
-                                getTexSlot(self._currMaterial, fileName).scale[0] = -1
-                                # self._currMaterial.diffusemap.coords.U_Tile = False
-                                #self._currMaterial.diffusemap.coords.U_offset = 0.5
-                                #self._currMaterial.diffusemap.coords.U_Tiling = 0.5
-                        else:
-                            raise ValueError("Unknown wrapS "+ str(self.tex.texHeaders[v2].wrapS))
-                        if self.tex.texHeaders[v2].wrapT == 0:  # - clamp to edge? Needs testing
-                            pass
-                        elif self.tex.texHeaders[v2].wrapT == 1 :  #- repeat (default)
-                            pass
-                            #					self._currMaterial.diffusemap.coords.V_Mirror = False
-                            #					self._currMaterial.diffusemap.coords.V_Tile = True
-                            #
-                            #					if (hasAlpha) then
-                            #					(
-                            #						self._currMaterial.opacityMap.coords.V_Mirror = False
-                            #						self._currMaterial.opacityMap.coords.V_Tile = True
-                            #					)
-                        elif self.tex.texHeaders[v2].wrapT == 2:
-                            self._currMaterial.name += "_V" # -- add suffix to let the modeler know where mirror should be used
-                            if self._allowTextureMirror:
-                                getTexSlot(self._currMaterial, fileName).scale[1] = -1
-                                # self._currMaterial.diffusemap.coords.V_Tile = False
-                                # self._currMaterial.diffusemap.coords.V_offset = 0.5
-                                # self._currMaterial.diffusemap.coords.V_Tiling = 0.5
-                        else:
-                            raise ValueError("Unknown wrapT " + str(self.tex.texHeaders[v2].wrapS))
-            elif n.type == 0x12:  # - type = 18
-                self.DrawBatch(n.index, effP)  # fixed
-            elif n.type == 1:
-                i += self.DrawScenegraph(i + 1, call_depth + 1, effP) # -- note: i and j start at 1 instead of 0
+    # convenient method for a less messy scenegraph analysis
+    def buildSceneGraph(self, inf1, sg, j=0):
+        i=j
+        while i < len(inf1.scenegraph):
+            n = inf1.scenegraph[i]
+            if n.type == 1:
+                i += self.buildSceneGraph(inf1, sg.children[-1], i+1)
             elif n.type == 2:
-                return i- j + 1 # -- note: i and j start at 1 instead of 0
-            i += 1
-        return -1
+                return i - j + 1
+            elif n.type == 0x10 or n.type == 0x11 or n.type == 0x12:
+                t=SceneGraph()
+                t.type = n.type
+                t.index = n.index
+                sg.children.append(t)
+            else:
+                print("buildSceneGraph(): unexpected node type %d", n.type, file=sys.stderr)
+            i+=1
+
+        #//remove dummy node at root
+        if len(sg.children) == 1:
+            t = sg.children[0]
+            sg = t  #//does it wotk without the temp value?
+        else:
+            sg.type = sg.index = -1
+            print("buildSceneGraph(): Unexpected size %d", len(sg.children), file=sys.stderr)
+        return 0
+
+
+    def DrawScenegraph(self, sg, parentMatrix, onDown=True, matIndex=0):
+
+        effP = parentMatrix.copy()
+
+        n = sg
+
+        if n.type == 0x10:  # -joint
+            # XCX update matrix
+            effP = self.jnt.matrices[n.index]  # -- setup during CreateFrameNodes # corrected
+        elif n.type == 0x11:  # build material
+            matName = self._mat1.stringtable[n.index]  # correced
+            mat = self._mat1.materials[self._mat1.indexToMatIndex[n.index]]  # corrected *2
+            onDown = mat.flag == 1
+            matIndex=n.index
+
+            stage = mat.texStages[0]  # XCX multiples textures
+            num = 0
+            if stage != 0xffff:
+                self._currMaterial = bpy.data.materials.new("temp_name_whatsoever")  #name will be erased afterwards, in a subcall
+            # while stage != 0xffff:  # ONE texture for now
+                self.textureName = ""
+                v2 = self._mat1.texStageIndexToTextureIndex[stage]  # -- undefined if stage = 0xffff
+
+                # -- v2 used latter. value is undefined if stage == 0xffff
+                self.textureName = self.tex.stringtable[v2]
+
+                # --self.textureName = matName
+                fileName = self._texturePath + self._texturePrefix + self.textureName + ".tga"
+                bmpFound = OSPath.exists(fileName) or OSPath.exists(fileName[:-4]+'.dds')  # two image types!
+
+                # -- messageBox fileName
+                newtex(fileName, 'DIFFUSE', self._currMaterial)
+                img = getTexImage(self._currMaterial, fileName)
+
+                # --gc()
+                bmp = None
+                hasAlpha = False
+                if bmpFound:
+                    alp = 0
+                    for p in range(3, len(img.pixels), 4):  # pixels stored as individual channels
+                        if True:  #img.pixels[p] != 1:  # only get alpha
+                            #alp = img.pixels[p]
+                            hasAlpha = True
+                            break
+                    #hasAlpha = (p == len(img.pixels)-1)
+                else:
+                    # -- make it easier to see invalid self.textures
+                    self._currMaterial.diffuse_color = mathutils.Color((1,0,0))
+
+                if hasAlpha:
+                    #self._currMaterial.twoSided = True # -- anything with alpha is always two sided?
+                    newtex(fileName, 'ALPHA', self._currMaterial)
+
+                showTextureMap(self._currMaterial)  # -- display self.texture in view
+                self._currMaterial.name = matName
+
+                # -- messageBox (matName + (self.tex.self.texHeaders[v2].wrapS as string) + "+" + (self.tex.self.texHeaders[v2].wrapT as string))
+                # -- NOTE: check ash.bmd for case when wrapS=2 and wrap=2. u_offset = 0.5 and V_offset = -0.5 [note negative on v]
+
+                if bmpFound:
+                    if self.tex.texHeaders[v2].wrapS == 0:#- clamp to edge? Needs testing. Cannot use .U_Mirror = False and .U_Tile = False. If WrapS == 0 then has Alpha?
+                        pass
+                    elif self.tex.texHeaders[v2].wrapS == 1:  #- repeat (default)
+                        pass
+                    elif self.tex.texHeaders[v2].wrapS == 2:
+                        self._currMaterial.name += "_U" # -- add suffix to let the modeler know where mirror should be used
+                        if self._allowTextureMirror:
+                            getTexSlot(self._currMaterial, fileName).scale[0] = -1
+                            # self._currMaterial.diffusemap.coords.U_Tile = False
+                            #self._currMaterial.diffusemap.coords.U_offset = 0.5
+                            #self._currMaterial.diffusemap.coords.U_Tiling = 0.5
+                    else:
+                        raise ValueError("Unknown wrapS "+ str(self.tex.texHeaders[v2].wrapS))
+                    if self.tex.texHeaders[v2].wrapT == 0:  # - clamp to edge? Needs testing
+                        pass
+                    elif self.tex.texHeaders[v2].wrapT == 1 :  #- repeat (default)
+                        pass
+                        #					self._currMaterial.diffusemap.coords.V_Mirror = False
+                        #					self._currMaterial.diffusemap.coords.V_Tile = True
+                        #
+                        #					if (hasAlpha) then
+                        #					(
+                        #						self._currMaterial.opacityMap.coords.V_Mirror = False
+                        #						self._currMaterial.opacityMap.coords.V_Tile = True
+                        #					)
+                    elif self.tex.texHeaders[v2].wrapT == 2:
+                        self._currMaterial.name += "_V" # -- add suffix to let the modeler know where mirror should be used
+                        if self._allowTextureMirror:
+                            getTexSlot(self._currMaterial, fileName).scale[1] = -1
+                            # self._currMaterial.diffusemap.coords.V_Tile = False
+                            # self._currMaterial.diffusemap.coords.V_offset = 0.5
+                            # self._currMaterial.diffusemap.coords.V_Tiling = 0.5
+                    else:
+                        raise ValueError("Unknown wrapT " + str(self.tex.texHeaders[v2].wrapS))
+                num += 1
+                stage = mat.texStages[num]
+
+            if mat.texStages[0] != 0xffff:  # do it if any texture has been made
+                while self._currMaterialIndex >= len(self._subMaterials):  # create one more slot
+                    self._subMaterials.append(None)
+                self._subMaterials[self._currMaterialIndex] = self._currMaterial
+
+                # -- display in material editor?
+                # -- meditMaterials[self._currMaterialIndex] = self._currMaterial
+                self._currMaterialIndex += 1
+        elif n.type == 0x12 and onDown:  # - type = 18
+            # XCX apply material
+            self.DrawBatch(n.index, effP, matIndex)  # fixed
+
+        for com in sg.children:
+            self.DrawScenegraph(com, effP, onDown, matIndex)  # -- note: i and j start at 1 instead of 0
+
+        if n.type == 0x12 and not onDown:  # - type = 18
+            # XCX apply material
+            self.DrawBatch(n.index, effP, matIndex)  # fixed
 
     def RotateAroundWorld(self, obj, rotation):
         print(rotation, type(rotation))
@@ -843,9 +921,9 @@ class BModel:
         d.rotation_euler = mathutils.Euler(rotation, 'XYZ')
         act_bk = bpy.ops.active
         bpy.ops.active = d
-        bpy.ops.object.transform_apply(rotation = True)
+        bpy.ops.object.transform_apply(rotation=True)
         bpy.ops.active = obj
-        bpy.ops.object.transform_apply(rotation = True)
+        bpy.ops.object.transform_apply(rotation=True)
         bpy.ops.active = act_bk
         obj.parent = None
         bpy.data.objects.remove(d)
@@ -855,7 +933,7 @@ class BModel:
 
     def DrawScene(self):  # XCX create armature here
         # delete $* XCX
-        print("DrawScene : ",time())
+        print("DrawScene : ", time())
         m = Matrix44()
         _frameMatrix = m.GetIdentity()
         rootFrameNode = FrameNode()
@@ -894,7 +972,9 @@ class BModel:
         # -----------------------------------
 
         print("animations: ", time())
-        self.DrawScenegraph(0, 0, i)
+        sg=SceneGraph()
+        self.buildSceneGraph(self.inf, sg)
+        self.DrawScenegraph(sg, i)
         modelMesh = self.BuildSingleMesh()
 
         chr = None
@@ -1036,37 +1116,37 @@ class BModel:
 
                     if frame in com.position_kf.keys():
                         vct = com.position_kf[frame]
-                        if vct.x != math.nan:
-                            posebone.keyframe_insert('location')
+                        if not math.isnan(vct.x):
+                            posebone.keyframe_insert('location',0)
                             posebone.location[0] = vct.x
-                        if vct.y != math.nan:
-                            posebone.keyframe_insert('location')
-                            posebone.location[1] = vct.y
-                        if vct.z != math.nan:
-                            posebone.keyframe_insert('location')
-                            posebone.location[2] = vct.z
+                        if not math.isnan(vct.z):
+                            posebone.keyframe_insert('location',1)
+                            posebone.location[1] = -vct.z  # flip y and z
+                        if not math.isnan(vct.y):
+                            posebone.keyframe_insert('location',2)
+                            posebone.location[2] = vct.y
                     if frame in com.rotation_kf.keys():
                         vct = com.rotation_kf[frame]
-                        if vct.x != math.nan:
-                            posebone.keyframe_insert('rotation_euler')
+                        if not math.isnan(vct.x):
+                            posebone.keyframe_insert('rotation_euler',0)
                             posebone.rotation_euler[0] = vct.x
-                        if vct.y != math.nan:
-                            posebone.keyframe_insert('rotation_euler')
-                            posebone.rotation_euler[1] = vct.y
-                        if vct.z != math.nan:
-                            posebone.keyframe_insert('rotation_euler')
-                            posebone.rotation_euler[2] = vct.z
+                        if not math.isnan(vct.z):
+                            posebone.keyframe_insert('rotation_euler',1)
+                            posebone.rotation_euler[1] = -vct.z
+                        if not math.isnan(vct.y):
+                            posebone.keyframe_insert('rotation_euler',2)
+                            posebone.rotation_euler[2] = vct.y
                     if frame in com.scale_kf.keys():
                         vct = com.scale_kf[frame]
-                        if vct.x != math.nan:
-                            posebone.keyframe_insert('scale')
+                        if not math.isnan(vct.x):
+                            posebone.keyframe_insert('scale',0)
                             posebone.scale[0] = vct.x
-                        if vct.y != math.nan:
-                            posebone.keyframe_insert('scale')
-                            posebone.scale[1] = vct.y
-                        if vct.z != math.nan:
-                            posebone.keyframe_insert('scale')
-                            posebone.scale[2] = vct.z
+                        if not math.isnan(vct.z):
+                            posebone.keyframe_insert('scale',1)
+                            posebone.scale[1] = -vct.z
+                        if not math.isnan(vct.y):
+                            posebone.keyframe_insert('scale',2)
+                            posebone.scale[2] = vct.y
 
         #if self._exportType=='XFILE':
             #exportFile (self._bmdDir + self._bmdFileName + ".x", noPrompt) # -- selectedOnly:True
@@ -1179,7 +1259,8 @@ class BModel:
         print("</TextureAnimation>", file=fBTP)
         fBTP.close()
 
-    def Import(self, filename, boneThickness, allowTextureMirror, forceCreateBones, loadAnimations, exportTextures, exportType, includeScaling):
+    def Import(self, filename, boneThickness, allowTextureMirror, forceCreateBones, loadAnimations, exportTextures, exportType, includeScaling, dvg):
+        self.DEBUGVG = dvg
         if exportTextures:
             self._texturePrefix = ""
         else:
