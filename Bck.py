@@ -5,7 +5,7 @@ from .Vector3 import Vector3
 from .pseudobones import getBoneByName, Pseudobone
 import mathutils
 import bpy
-from math import nan
+from math import nan, pi
 
 
 class BckKey:
@@ -16,7 +16,9 @@ class BckKey:
     # <variable tangent>
     # -- float  //??
     def __init__(self):  # GENERATED!
+        self.time = 0
         self.value = 0
+        self.tangent = 0
 
 
 class BckJointAnim:
@@ -163,16 +165,16 @@ class BckAnimatedJoint:
      self.z.LoadData(br)
 
 
-#-----------------------------------------------
+# -----------------------------------------------
 
 
 class Bck:
-    # <variable anims>
+    """# <variable anims>
     # -- std::vector<JointAnim>
     # <variable animationLength>
-    # -- int 
+    # -- int
     # <variable currAnimTime>
-    # -- float 
+    # -- float
     # -- ConvRotation(vector<Key>& rots, float scale)
     # <function>
 
@@ -231,20 +233,18 @@ class Bck:
     # -- from stdplugs/stdscripts/CharacterPluginObject.ms
     # <function>
 
-    # <function>
+    # <function>"""
 
     def __init__(self):  # GENERATED!
         self.anims = []
 
     def ConvRotation(self, rots, scale):
         for j in range(len(rots)):  # XCX!
-            while len(rots) <= j:
-                rots.append(None)
             rots[j].value *= scale
             rots[j].tangent *= scale
         return rots
 
-    def ReadComp(self, dst, src, index):
+    def ReadComp(self, src, index):
         dst = []
         # -- dst.resize(index.count);
 
@@ -264,7 +264,7 @@ class Bck:
             dst[0].value = src[index.index]
             dst[0].tangent = 0
         else:
-            for j in range(0, index.count):  # (int j = 0; j < index.count; ++j)
+            for j in range(index.count):  # (int j = 0; j < index.count; ++j)
                 while len(dst) <= j:
                     dst.append(None)
                 dst[j] = BckKey()
@@ -285,25 +285,18 @@ class Bck:
 
         # -- read scale floats:
         br.SeekSet(ank1Offset + h.offsetToScales)
-        scales = []
-        # -- vector<f32> scales(h.scaleCount);
-        for i in range(h.scaleCount):
-            scales.append(br.GetFloat())
+        scales = [br.GetFloat() for _ in range(h.scaleCount)]
 
         # -- read rotation s16s:
         br.SeekSet(ank1Offset + h.offsetToRots)
-        rotations = []
-        for i in range(h.rotCount):
-            rotations.append(br.GetSHORT())
+        rotations = [br.GetSHORT() for _ in range(h.rotCount)]
 
         # -- read translation floats:
         br.SeekSet(ank1Offset + h.offsetToTrans)
-        translations = []
+        translations = [br.GetFloat() for _ in range(h.transCount)]
 
-        for i in range(h.transCount):
-            translations.append(br.GetFloat())
         # -- read joints
-        rotScale = (pow(2., h.angleMultiplier) * 180. / 32768.)
+        rotScale = (pow(2., h.angleMultiplier) * pi / 32768.)  # result in RADIANS  per increment (in a short)
         br.SeekSet(ank1Offset + h.offsetToJoints)
         self.anims = []
         # -- bck.self.anims.resize(h.numJoints);
@@ -314,21 +307,20 @@ class Bck:
             while len(self.anims) <= i:
                 self.anims.append(None)
             self.anims[i] = BckJointAnim()
-            self.anims[i].scalesX = self.ReadComp(self.anims[i].scalesX, scales, joint.x.s)
-            self.anims[i].scalesY = self.ReadComp(self.anims[i].scalesY, scales, joint.y.s)
-            self.anims[i].scalesZ = self.ReadComp(self.anims[i].scalesZ, scales, joint.z.s)
+            self.anims[i].scalesX = self.ReadComp(scales, joint.x.s)
+            self.anims[i].scalesY = self.ReadComp(scales, joint.y.s)
+            self.anims[i].scalesZ = self.ReadComp(scales, joint.z.s)
 
-            self.anims[i].rotationsX = self.ReadComp(self.anims[i].rotationsX, rotations, joint.x.r)
+            self.anims[i].rotationsX = self.ReadComp(rotations, joint.x.r)
+            self.anims[i].rotationsZ = self.ReadComp(rotations, joint.z.r)
+            self.anims[i].rotationsY = self.ReadComp(rotations, joint.y.r)
             self.anims[i].rotationsX = self.ConvRotation(self.anims[i].rotationsX, rotScale)
-            self.anims[i].rotationsY = self.ReadComp(self.anims[i].rotationsY, rotations, joint.y.r)
             self.anims[i].rotationsY = self.ConvRotation(self.anims[i].rotationsY, rotScale)
-            self.anims[i].rotationsZ = self.ReadComp(self.anims[i].rotationsZ, rotations, joint.z.r)
             self.anims[i].rotationsZ = self.ConvRotation(self.anims[i].rotationsZ, rotScale)
 
-            self.anims[i].translationsX = self.ReadComp(self.anims[i].translationsX, translations, joint.x.t)
-            self.anims[i].translationsY = self.ReadComp(self.anims[i].translationsY, translations, joint.y.t)
-            self.anims[i].translationsZ = self.ReadComp(self.anims[i].translationsZ, translations, joint.z.t)
-
+            self.anims[i].translationsX = self.ReadComp(translations, joint.x.t)
+            self.anims[i].translationsY = self.ReadComp(translations, joint.y.t)
+            self.anims[i].translationsZ = self.ReadComp(translations, joint.z.t)
 
     def LoadBck(self, filePath):
         br = BinaryReader()
@@ -347,7 +339,6 @@ class Bck:
 
             br.SeekSet(pos)
 
-            # --if tag == "ANK1" then
             if tag == "ANK1":
                 self.LoadAnk1(br)
             else:
@@ -356,11 +347,13 @@ class Bck:
             br.SeekSet(pos)
             i += 1
         br.Close()
-  
 
+    # no use here
     def Interpolate(self, v1, d1, v2, d2, t): # -- t in [0,1]
-                
-        # --cubic interpolation
+        # linear imterpolation:
+        # return v1+t*(v1-v1)
+
+        # --cubic interpolation:
         # -- float values
         a = 2*(v1 - v2) + d1 + d2
         b = -3 * v1 + 3 * v2 - 2 * d1 - d2
@@ -369,27 +362,29 @@ class Bck:
         # --TODO: yoshi_walk.bck has strange-looking legs...not sure if
         # --the following line is to blame, though
         return ((a*t + b)*t + c) *t + d
-  
 
+    # no use neither
     def getAnimValue(self, keys, t):
         if keys.count == 0:
                 return 0.0
         if keys.count == 1:
-                return keys[1].value
+                return keys[0].value
         # --messageBox (keys as string)
         # -- throw "E"
-        i = 2
+        i = 0
 
         while keys[i].time < t:
             i += 1
         # XCX
-        time = (t - keys[i - 1].time) /(keys[i].time- keys[i- 1].time)         # -- scale to [0, 1]
-        return mathutils.interpolate(keys[i- 1].value,keys[i- 1].tangent,keys[i].value,keys[i].tangent,time)
-  
+        time = (t - keys[i].time) /(keys[i].time- keys[i].time)         # -- scale to [0, 1]
+        #return mathutils.interpolate(keys[i- 1].value,keys[i- 1].tangent,keys[i].value,keys[i].tangent,time)
+        return self.Interpolate(keys[i].value,keys[i].tangent,keys[i].value,keys[i].tangent,time)
+
+    # still nope.
     def AnimateJnt(self, jnt, deltaTime):
-                
+
         # -- update time
-        self.currAnimTime += deltaTime # --*16 -- convert from seconds to ticks (dunno if this is right this way...TODO)
+        self.currAnimTime += deltaTime  # --*16 -- convert from seconds to ticks (dunno if this is right this way...TODO)
         self.currAnimTime = self.currAnimTime % self.animationLength # -- loop?
 
         # -- update joints
@@ -407,8 +402,197 @@ class Bck:
             jnt.frames[i].t.y = self.getAnimValue(self.anims[i].translationsY, self.currAnimTime)
             jnt.frames[i].t.z = self.getAnimValue(self.anims[i].translationsZ, self.currAnimTime)
 
+    # TODO: erase dummy bone system
+    def GetPositionBone(self, curBone):
+        # XCX
+        dummyBone = getBoneByName(curBone.name.fget() + "_dummy")
+
+        if dummyBone is None:
+            return curBone
+
+        else:
+            return dummyBone
+
+    # function which only has docs in it. Whut?!
+    def ValidateScale(self, curBone, scaleValue):
+
+        """# --if (scaleValue != 1 and curBone.children.count > 1) then
+        # --	throw (curBone.name + " unable to scale ( " +(scaleValue as string)+" ) bones with more than one child bone")"""
+
+    # GOT it!
+    def AnimateBoneFrames(self, timeOffset, bones, frameScale, rootBoneOffset, exportType, refBoneRequiresDummyList, includeScaling):
+        if exportType == 'CHARACTER' and self.animationLength > 0:
+            timeOffset = 0  # XCX difference ONE
+
+        # --alert (bones.count as string)
+        rootBoneOffset = [0, 0, 0]
+
+        for i in range(len(bones)):
+            bone = bones[i]
+            anim = self.anims[i]
+
+            # -- animated bones require scaling helper
+            if (len(anim.scalesX) > 1 or len(anim.scalesY) > 1 or len(anim.scalesZ) > 1):
+                refBoneRequiresDummyList[i] = True  # -- bone.name
+
+            if (len(anim.translationsX) > 1 or len(anim.translationsY) > 1 or len(anim.translationsZ) > 1):
+                pass  #bone.boneEnable = False  # -- allow moving bone without affecting parent bone # XCX
+
+                # --messageBox (anim.scalesX as string) -- only one value if position not animated. value = 0
+                # --messageBox (anim.translationsY as string) -- only one value if scale not animated. value = 1
+
+            # XCX: what if a bone has initial scale?
+            # position correction LATER in the program
+            for j in range(len(anim.rotationsX)):
+                rot = anim.rotationsX[j]
+                # at time ((rot.time * frameScale) + timeOffset)
+                if int(rot.time * frameScale + timeOffset) not in bone.rotation_kf.keys():
+                    bone.rotation_kf[int(rot.time * frameScale + timeOffset)] = mathutils.Euler((nan,nan,nan), 'XYZ')
+                bone.rotation_kf[int(rot.time * frameScale + timeOffset)].x = rot.value
+
+            for j in range(len(anim.rotationsY)):
+                rot = anim.rotationsY[j]
+                # at time ((rot.time * frameScale) + timeOffset)
+                if int(rot.time * frameScale + timeOffset) not in bone.rotation_kf.keys():
+                    bone.rotation_kf[int(rot.time * frameScale + timeOffset)] = mathutils.Euler((nan,nan,nan), 'XYZ')
+                bone.rotation_kf[int(rot.time * frameScale + timeOffset)].y = rot.value
+
+            for j in range(len(anim.rotationsZ)):
+                rot = anim.rotationsZ[j]
+                # at time ((rot.time * frameScale) + timeOffset)
+                if int(rot.time * frameScale + timeOffset) not in bone.rotation_kf.keys():
+                    bone.rotation_kf[int(rot.time * frameScale + timeOffset)] = mathutils.Euler((nan,nan,nan), 'XYZ')
+                bone.rotation_kf[int(rot.time * frameScale + timeOffset)].z = rot.value
+
+            for j in range(len(anim.translationsX)):
+                t = anim.translationsX[j]
+                # at time ((t.time * frameScale) + timeOffset)
+                if int(t.time * frameScale + timeOffset) not in self.GetPositionBone(bone).position_kf.keys():
+                    self.GetPositionBone(bone).position_kf[int(t.time * frameScale + timeOffset)] = mathutils.Vector((nan,nan,nan))
+                self.GetPositionBone(bone).position_kf[int(t.time * frameScale + timeOffset)].x\
+                    = t.value - rootBoneOffset[0]
+
+            for j in range(len(anim.translationsY)):
+                t = anim.translationsY[j]
+                # at time ((t.time * frameScale) + timeOffset)
+                if int(t.time * frameScale + timeOffset) not in self.GetPositionBone(bone).position_kf.keys():
+                    self.GetPositionBone(bone).position_kf[int(t.time * frameScale + timeOffset)] = mathutils.Vector((nan,nan,nan))
+                self.GetPositionBone(bone).position_kf[int(t.time * frameScale + timeOffset)].y\
+                    = t.value - rootBoneOffset[1]
+
+            for j in range(len(anim.translationsZ)):
+                t = anim.translationsZ[j]
+                # at time ((t.time * frameScale) + timeOffset)
+                if int(t.time * frameScale + timeOffset) not in self.GetPositionBone(bone).position_kf.keys():
+                    self.GetPositionBone(bone).position_kf[int(t.time * frameScale + timeOffset)] = mathutils.Vector((nan,nan,nan))
+                self.GetPositionBone(bone).position_kf[int(t.time * frameScale + timeOffset)].z\
+                    = t.value - rootBoneOffset[2]
+
+            if includeScaling:
+                for j in range(len(anim.scalesX)):
+                    s = anim.scalesX[j]
+                    # at time ((s.time * frameScale) + timeOffset)
+                    self.ValidateScale(bone, s.value)
+                    # in coordsys local
+                    if int(s.time * frameScale + timeOffset) not in bone.scale_kf.keys():
+                        bone.scale_kf[int(s.time * frameScale + timeOffset)] = mathutils.Vector((nan,nan,nan))
+                    bone.scale_kf[int(s.time * frameScale + timeOffset)].x = s.value  # * 100 3dsmax has a percent scale
+                    #)
+
+                for j in range(len(anim.scalesY)):
+                    s = anim.scalesY[j]
+                    #at time ((s.time * frameScale) + timeOffset)
+                    self.ValidateScale(bone, s.value)
+                    #in coordsys local
+                    if int(s.time * frameScale + timeOffset) not in bone.scale_kf.keys():
+                        bone.scale_kf[int(s.time * frameScale + timeOffset)] = mathutils.Vector((nan,nan,nan))
+                    bone.scale_kf[int(s.time * frameScale + timeOffset)].y = s.value  # * 100
+                for j in range(len(anim.scalesZ)):
+                    s = anim.scalesZ[j]
+                    #at time ((s.time * frameScale) + timeOffset)
+                    #in coordsys local
+                    #(
+                    self.ValidateScale(bone, s.value)
+                    #in coordsys local
+                    if int(s.time * frameScale + timeOffset) not in bone.scale_kf.keys():
+                        bone.scale_kf[int(s.time * frameScale + timeOffset)] = mathutils.Vector((nan,nan,nan))
+                    bone.scale_kf[int(s.time * frameScale + timeOffset)].z = s.value  # * 100
+                    #))
+            self.rootBoneOffset = [0, 0, 0]  # -- only the root bone has an offset. bones[1]
+        # for i = 1 to bones.count do
+
+        # -- IMPORTANT: set all transforms for the first and last frame. prevents errors when frames loaded on after another animation
+        for i in range(len(bones)):
+            bone = bones[i]
+            anim = self.anims[i]
+            if timeOffset + 1 not in bone.rotation_kf.keys():
+                        bone.rotation_kf[timeOffset + 1] = mathutils.Euler((nan, nan, nan), 'XYZ')
+            bone.rotation_kf[timeOffset + 1].x = (anim.rotationsX[0]).value  # --
+            bone.rotation_kf[timeOffset + 1].y = (anim.rotationsY[0]).value  # --+ delta
+            bone.rotation_kf[timeOffset + 1].z = (anim.rotationsZ[0]).value  # --+delta
+            posBone = self.GetPositionBone(bone)
+            if timeOffset + 1 not in posBone.position_kf.keys():
+                posBone.position_kf[timeOffset + 1] = mathutils.Vector((nan, nan, nan))
+            posBone.position_kf[timeOffset + 1].x = (anim.translationsX[0]).value
+            posBone.position_kf[timeOffset + 1].y = (anim.translationsY[0]).value
+            posBone.position_kf[timeOffset + 1].z = (anim.translationsZ[0]).value
+    
+            if (includeScaling):
+                if timeOffset + 1 not in posBone.scale_kf.keys():
+                    bone.scale_kf[timeOffset + 1] = mathutils.Vector((nan, nan, nan))
+                bone.scale_kf[timeOffset + 1].x = ((anim.scalesX[0]).value)
+                bone.scale_kf[timeOffset + 1].y = ((anim.scalesY[0]).value)
+                bone.scale_kf[timeOffset + 1].z = ((anim.scalesZ[0]).value)
+        if self.animationLength > 0:
+            endFrame = timeOffset + self.animationLength
+
+            for i in range(len(bones)):
+                bone = bones[i]
+                anim = self.anims[i]
+
+                #addNewKey bone.rotation.controller endFrame
+                #addNewKey bone.position.controller endFrame
+                #addNewKey bone.scale.controller endFrame
+                # -- only seems to create a new keyframe if the value changes (+ 0.0000000000000001)
+                delta = 0.0000001
+                # at time (endFrame) (
+                if endFrame not in bone.rotation_kf.keys():
+                    bone.rotation_kf[endFrame] = mathutils.Euler((nan, nan, nan), 'XYZ')
+                bone.rotation_kf[endFrame].x = (anim.rotationsX[-1]).value  # --
+                bone.rotation_kf[endFrame].y = (anim.rotationsY[-1]).value  # --+ delta
+                bone.rotation_kf[endFrame].z = (anim.rotationsZ[-1]).value  # --+delta
+                posBone = self.GetPositionBone(bone)
+                if endFrame not in posBone.position_kf.keys():
+                    posBone.position_kf[endFrame] = mathutils.Vector((nan, nan, nan))
+                posBone.position_kf[endFrame].x = (anim.translationsX[-1]).value
+                posBone.position_kf[endFrame].y = (anim.translationsY[-1]).value
+                posBone.position_kf[endFrame].z = (anim.translationsZ[-1]).value
+
+                if (includeScaling):
+                    if endFrame not in posBone.scale_kf.keys():
+                        bone.scale_kf[endFrame] = mathutils.Vector((nan, nan, nan))
+                    bone.scale_kf[endFrame].x = ((anim.scalesX[-1]).value)
+                    bone.scale_kf[endFrame].y = ((anim.scalesY[-1]).value)
+                    bone.scale_kf[endFrame].z = ((anim.scalesZ[-1]).value)
+                    # )
+
+                # )
+            # for i = 1 to bones.count do
+            # -- if (self.animationLength > 0) then*/
+        if exportType == 'CHARACTER' and self.animationLength > 0:
+            bpy.context.scene.frame_start = 0
+            if self.animationLength > 0:
+                bpy.context.scene.frame_end = self.animationLength * frameScale
+                #animationRange = interval (0, (self.animationLength * frameScale))
+            else:  #animationRange = interval (0, 1)
+                bpy.context.scene.frame_end = 1
+                # -- animate on XCX turn keyframe mode off
+
+
+"""
+
     def GetParentBoneScale(self, currBone, frameTime):
-                
+
         parentScale = Vector3()
         parentScale.setXYZ(1, 1, 1)
         # at(time(frameTime))
@@ -425,7 +609,7 @@ class Bck:
         return parentScale
 
     def _CalcParentScale(self, boneIndex, keys, parentBoneIndexs, frame):
-                
+
     # -- if (keys.count == 0) then
     # --    return 1.0 -- identity
 
@@ -437,7 +621,7 @@ class Bck:
         if val < 0.1  :
                 raise ValueError ("E")
 
-        if val > 10 : 
+        if val > 10 :
                 raise ValueError ("Max")
         val = 1 / val
 
@@ -465,7 +649,7 @@ class Bck:
         # --return _CalcParentScale parentBoneIndexs[boneIndex] keys parentBoneIndexs frame
 
     def CalcParentXScale(self, anims, parentBoneIndex, parentBoneIndexs, frame):
-                
+
         # --	return 1
 
         if parentBoneIndexs[parentBoneIndex] <= 0  :# -- root bone
@@ -476,7 +660,7 @@ class Bck:
         # --return (CalcParentXScale self.anims parentBoneIndexs[parentBoneIndex] parentBoneIndexs frame) * val
 
     def CalcParentYScale(self, anims, parentBoneIndex, parentBoneIndexs, frame):
-                
+
         # --return 1
 
         if parentBoneIndexs[parentBoneIndex] <= 0:  # -- root bone
@@ -494,168 +678,6 @@ class Bck:
         val = 1 / self.getAnimValue(self.anims[parentBoneIndex].scalesZ, frame)         # -- absolute value
         return val
         # --return (CalcParentZScale self.anims parentBoneIndexs[parentBoneIndex] parentBoneIndexs frame) * val
-
-    def GetPositionBone(self, curBone):
-        # XCX
-        dummyBone = getBoneByName(curBone.name.fget() + "_dummy")
-
-        if dummyBone is None:
-            return curBone
-
-        else:
-            return dummyBone
-
-    def ValidateScale(self, curBone, scaleValue):
-                
-        """# --if (scaleValue != 1 and curBone.children.count > 1) then
-        # --	throw (curBone.name + " unable to scale ( " +(scaleValue as string)+" ) bones with more than one child bone")"""
-
-    def AnimateBoneFrames(self, timeOffset, bones, frameScale, rootBoneOffset, exportType, refBoneRequiresDummyList, includeScaling):
-        if exportType == 'CHARACTER' and self.animationLength > 0:
-            timeOffset = 0
-
-        # --alert (bones.count as string)
-        rootBoneOffset = [0, 0, 0]
-        # animate on
-        #(
-
-        for i in range(len(bones)):
-            bone = bones[i]
-            anim = self.anims[i]
-
-            # -- animated bones require scaling helper
-            if (len(anim.scalesX) > 1 or len(anim.scalesY) > 1 or len(anim.scalesZ) > 1):
-                refBoneRequiresDummyList[i] = True  # -- bone.name
-
-            if (len(anim.translationsX) > 1 or len(anim.translationsY) > 1 or len(anim.translationsZ) > 1):
-                bone.boneEnable = False  # -- allow moving bone without affecting parent bone # XCX
-
-                # --messageBox (anim.scalesX as string) -- only one value if position not animated. value = 0
-                # --messageBox (anim.translationsY as string) -- only one value if scale not animated. value = 1
-
-            for j in range(len(anim.rotationsX)):
-                rot = anim.rotationsX[j]
-                # at time ((rot.time * frameScale) + timeOffset)
-                if int(rot.time * frameScale + timeOffset) not in bone.rotation_kf.keys():
-                    bone.rotation_kf[int(rot.time * frameScale + timeOffset)] = mathutils.Euler((nan,nan,nan), 'XYZ')
-                bone.rotation_kf[int(rot.time * frameScale + timeOffset)].x = rot.value
-
-            for j in range(len(anim.rotationsY)):
-                rot = anim.rotationsY[j]
-                # at time ((rot.time * frameScale) + timeOffset)
-                if int(rot.time * frameScale + timeOffset) not in bone.rotation_kf.keys():
-                    bone.rotation_kf[int(rot.time * frameScale + timeOffset)] = mathutils.Euler((nan,nan,nan), 'XYZ')
-                bone.rotation_kf[int(rot.time * frameScale + timeOffset)].y = rot.value
-
-            for j in range(len(anim.rotationsZ)):
-                rot = anim.rotationsZ[j]
-                # at time ((rot.time * frameScale) + timeOffset)
-                if int(rot.time * frameScale + timeOffset) not in bone.rotation_kf.keys():
-                    bone.rotation_kf[int(rot.time * frameScale + timeOffset)] = mathutils.Euler((nan,nan,nan), 'XYZ')
-                bone.rotation_kf[int(rot.time * frameScale + timeOffset)].z = rot.value
-
-            for j in range(len(anim.translationsX)):
-                t = anim.translationsX[j]
-                # at time ((t.time * frameScale) + timeOffset)
-                if int(t.time * frameScale + timeOffset) not in self.GetPositionBone(bone).position_kf.keys():
-                    self.GetPositionBone(bone).position_kf[int(t.time * frameScale + timeOffset)] = mathutils.Vector((nan,nan,nan))
-                self.GetPositionBone(bone).position_kf[int(t.time * frameScale + timeOffset)].x = t.value - rootBoneOffset[0]
-
-            for j in range(len(anim.translationsY)):
-                t = anim.translationsY[j]
-                # at time ((t.time * frameScale) + timeOffset)
-                if int(t.time * frameScale + timeOffset) not in self.GetPositionBone(bone).position_kf.keys():
-                    self.GetPositionBone(bone).position_kf[int(t.time * frameScale + timeOffset)] = mathutils.Vector((nan,nan,nan))
-                self.GetPositionBone(bone).position_kf[int(t.time * frameScale + timeOffset)].y = t.value - rootBoneOffset[1]
-
-            for j in range(len(anim.translationsZ)):
-                t = anim.translationsZ[j]
-                # at time ((t.time * frameScale) + timeOffset)
-                if int(t.time * frameScale + timeOffset) not in self.GetPositionBone(bone).position_kf.keys():
-                    self.GetPositionBone(bone).position_kf[int(t.time * frameScale + timeOffset)] = mathutils.Vector((nan,nan,nan))
-                self.GetPositionBone(bone).position_kf[int(t.time * frameScale + timeOffset)].z = t.value - rootBoneOffset[2]
-
-            if includeScaling:
-                for j in range(len(anim.scalesX)):
-                    s = anim.scalesX[j]
-                    # at time ((s.time * frameScale) + timeOffset)
-                    #(
-                    self.ValidateScale(bone, s.value)
-                    # in coordsys local
-                    if int(s.time * frameScale + timeOffset) not in bone.scale_kf.keys():
-                        bone.scale_kf[int(s.time * frameScale + timeOffset)] = mathutils.Vector((nan,nan,nan))
-                    bone.scale_kf[int(s.time * frameScale + timeOffset)].x = s.value * 100
-                    #)
-
-                for j in range(len(anim.scalesY)):
-                    s = anim.scalesY[j]
-                    #at time ((s.time * frameScale) + timeOffset)
-                    #(
-                    self.ValidateScale(bone, s.value)
-                    #in coordsys local
-                    if int(s.time * frameScale + timeOffset) not in bone.scale_kf.keys():
-                        bone.scale_kf[int(s.time * frameScale + timeOffset)] = mathutils.Vector((nan,nan,nan))
-                    bone.scale_kf[int(s.time * frameScale + timeOffset)].y = s.value * 100
-                for j in range(len(anim.scalesZ)):
-                    s = anim.scalesZ[j]
-                    #at time ((s.time * frameScale) + timeOffset)
-                    #(
-                    #in coordsys local
-                    #(
-                    self.ValidateScale(bone, s.value)
-                    #in coordsys local
-                    if int(s.time * frameScale + timeOffset) not in bone.scale_kf.keys():
-                        bone.scale_kf[int(s.time * frameScale + timeOffset)] = mathutils.Vector((nan,nan,nan))
-                    bone.scale_kf[int(s.time * frameScale + timeOffset)].z = s.value * 100
-                    #))
-            self.rootBoneOffset = [0, 0, 0]  # -- only the root bone has an offset. bones[1]
-        # for i = 1 to bones.count do
-
-        # -- IMPORTANT: set all transforms for the last frame. prevents errors when frames loaded on after another animation
-        if self.animationLength > 0:
-            endFrame = timeOffset + self.animationLength
-
-            for i in range(len(bones)):
-                bone = bones[i]
-                anim = self.anims[i]
-
-                #addNewKey bone.rotation.controller endFrame
-                #addNewKey bone.position.controller endFrame
-                #addNewKey bone.scale.controller endFrame
-                # -- only seems to create a new keyframe if the value changes (+ 0.0000000000000001)
-                delta = 0.0000001
-                # at time (endFrame) (
-                if endFrame not in bone.rotation_kf.keys():
-                    bone.rotation_kf[endFrame] = mathutils.Euler((nan, nan, nan), 'XYZ')
-                bone.rotation_kf[endFrame].x = (anim.rotationsX[len(anim.rotationsX)-1]).value + delta  # --
-                bone.rotation_kf[endFrame].y = (anim.rotationsY[len(anim.rotationsY)-1]).value + delta  # --+ delta
-                bone.rotation_kf[endFrame].z = (anim.rotationsZ[len(anim.rotationsZ)-1]).value + delta  # --+delta
-                posBone = self.GetPositionBone(bone)
-                if endFrame not in posBone.position_kf.keys():
-                    posBone.position_kf[endFrame] = mathutils.Vector((nan, nan, nan))
-                posBone.position_kf[endFrame].x = (anim.translationsX[-1]).value + delta
-                posBone.position_kf[endFrame].y = (anim.translationsY[-1]).value + delta
-                posBone.position_kf[endFrame].z = (anim.translationsZ[-1]).value + delta
-
-                if (includeScaling):
-                    if endFrame not in posBone.scale_kf.keys():
-                        bone.scale_kf[endFrame] = mathutils.Vector((nan, nan, nan))
-                    bone.scale_kf[endFrame].x = ((anim.scalesX[-1]).value * 100) + delta
-                    bone.scale_kf[endFrame].y = ((anim.scalesY[-1]).value * 100) + delta
-                    bone.scale_kf[endFrame].z = ((anim.scalesZ[-1]).value * 100) + delta
-                    # )
-
-                # )
-            # for i = 1 to bones.count do
-            # -- if (self.animationLength > 0) then*/
-        if exportType == 'CHARACTER' and self.animationLength > 0:
-            bpy.context.scene.frame_start = 0
-            if self.animationLength > 0:
-                bpy.context.scene.frame_end = self.animationLength * frameScale
-                #animationRange = interval (0, (self.animationLength * frameScale))
-            else:  #animationRange = interval (0, 1)
-                bpy.context.scene.frame_end = 1
-                # -- animate on XCX turn keyframe mode off
 
     def AnimateBones(self, bones, deltaTime):
                 
@@ -736,7 +758,7 @@ class Bck:
                 #moveKeys(b.scale.controller, -animationLength+1, selection)
                 #deleteKeys(b.scale.controller, selection)
 
-                # --moveKeys  b -animationLength
+                # --moveKeys  b -animationLength"""
 
 
 

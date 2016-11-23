@@ -70,6 +70,7 @@ class BtpAnim:
     def __init__(self):  # GENERATED!
         pass
 
+
 class Btp:
     # <variable anims>
     # <function>
@@ -104,9 +105,8 @@ class Btp:
 
         for _ in range(header.numMaterialAnims):
             matAnimIndexToMat3Index.append(br.ReadWORD())
-
         
-# -- messagebox (matAnimIndexToMat3Index as string)
+        # -- messagebox (matAnimIndexToMat3Index as string)
         # --read shorts table
         shorts = []
         # -- (h.numShorts);

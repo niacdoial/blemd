@@ -36,6 +36,7 @@ def add_vcolor(mesh, color_layer, cv_to_f_v, Faces, uvlayer):
     tulpe = type(())
 
     vx_layer = mesh.vertex_colors.new("v_color_"+str(len(mesh.vertex_colors)))
+    vx_layer_a = mesh.vertex_colors.new("v_color_alpha_"+str(len(mesh.vertex_colors)))
     alpimg = bpy.data.images.new(mesh.name+'_vcol_alpha_'+str(len(mesh.vertex_colors)), 256, 256)
 
     l_to_v = []
@@ -48,7 +49,10 @@ def add_vcolor(mesh, color_layer, cv_to_f_v, Faces, uvlayer):
     #verts are aligned. are faces too?
     f_to_rf = [None]*len(mesh.polygons)  # blender faces index to loaded faces index
     for num, com in enumerate(mesh.polygons):  # will be identity most of the time
-        f_to_rf[Faces.index(tulpe(com.vertices))] = num
+        index = Faces.index(tulpe(com.vertices))
+        while f_to_rf[index] is not None:
+            index = Faces.index(tulpe(com.vertices), index+1)
+        f_to_rf[index] = num
     v_rf_to_l = []
     for com in range(len(mesh.vertices)):
         v_rf_to_l.append({})
@@ -69,10 +73,11 @@ def add_vcolor(mesh, color_layer, cv_to_f_v, Faces, uvlayer):
 
     for num, com0 in enumerate(cv_to_f_v):
         for com in com0:
-            for com2 in mesh.polygons[f_to_rf[com[0]]].loop_indices:
-                if mesh.loops[com2].vertex_index == com[1]:
-                    DBG_temp = [list(color_layer[num])[3]]*3
-                    vx_layer.data[com2].color = mathutils.Color(DBG_temp)
+            if f_to_rf[com[0]] is not None:
+                for com2 in mesh.polygons[f_to_rf[com[0]]].loop_indices:
+                    if mesh.loops[com2].vertex_index == com[1]:
+                        DBG_temp = [list(color_layer[num])[3]]*3
+                        vx_layer_a.data[com2].color = mathutils.Color(DBG_temp)
 
     for face in range(len(mesh.polygons)):
         uvlayer.data[face].image = alpimg
@@ -87,19 +92,22 @@ def add_vcolor(mesh, color_layer, cv_to_f_v, Faces, uvlayer):
     bpy.context.scene.render.bake_type = 'VERTEX_COLORS'
     bpy.context.scene.render.use_bake_to_vertex_color = False
     alpimg.pack(as_png=True)
-    #bpy.ops.object.bake_image()  # forget this yet. XCX crashes
+    # bpy.ops.object.bake_image()  # forget this yet. XCX crashes
     alpimg.pack(as_png=True)
 
     ## RE-setting the correct Vcols
     for num, com0 in enumerate(cv_to_f_v):
         for com in com0:
-            for com2 in mesh.polygons[f_to_rf[com[0]]].loop_indices:
-                if mesh.loops[com2].vertex_index == com[1]:
-                    DBG_temp = list(color_layer[num])[:3]
-                    vx_layer.data[com2].color = mathutils.Color(DBG_temp)
+            if f_to_rf[com[0]] is not None:
+                for com2 in mesh.polygons[f_to_rf[com[0]]].loop_indices:
+                    if mesh.loops[com2].vertex_index == com[1]:
+                        DBG_temp = list(color_layer[num])[:3]
+                        vx_layer.data[com2].color = mathutils.Color(DBG_temp)
     #for i in range(len(l_to_v)):  # fixed
     #    vx_layer.data[i].color = mathutils.Color(list(color_layer[l_to_v[i]])[:3])  # remove alpha(supported earlier in this file)
 
+    for face in range(len(mesh.polygons)):
+        uvlayer.data[face].image = mesh.materials[mesh.polygons[face].material_index].texture_slots[0].texture.image
 
     return alpimg
 

@@ -26,7 +26,7 @@ from bpy.types import Operator
 
 class ImportBmd(Operator, ImportHelper):
     """This appears in the tooltip of the operator and in the generated docs"""
-    bl_idname = "blemd.importer"  # important since its how bpy.ops.import_test.some_data is constructed
+    bl_idname = "import_mesh.bmd"  # important since its how bpy.ops.import_test.some_data is constructed
     bl_label = "Import BMD"
 
     # ImportHelper mixin class uses this
@@ -66,7 +66,7 @@ class ImportBmd(Operator, ImportHelper):
 
     ic_sc = BoolProperty(
         name="include scaling",
-        description="",
+        description="DO NOT USE yet",
         default=False
         )
 
@@ -79,8 +79,8 @@ class ImportBmd(Operator, ImportHelper):
     type = EnumProperty(
         name="Import Type",
         description="Choose between two items",
-        items=(('XFILE', "x export (games)", ""),
-               ('CHARACTER', "character export (animations)", "")),
+        items=(('XFILE', "x export (games)", "")),
+               #('CHARACTER', "character export (animations)", "")),
         default='XFILE'
         )
 
@@ -107,6 +107,7 @@ def menu_func(self, context):
     self.layout.operator(ImportBmd.bl_idname, text="Nintendo BMD")
 
 def register():
+    print(__name__)
     bpy.utils.register_module(__name__)
     #bpy.utils.register_class(ImportSomeData)
     bpy.types.INFO_MT_file_import.append(menu_func)

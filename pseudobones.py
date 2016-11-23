@@ -19,13 +19,13 @@ class Pseudobone:
         self._name = None
         self.length = math.sqrt(ori.x**2 + ori.y**2 + ori.z**2)
         self.orientation = vect_normalize(ori)
-        self.scale = mathutils.Vector((0, 0, 0))
+        self.scale = mathutils.Vector((1, 1, 1))
         self.rotation_euler = mathutils.Euler((0, 0, 0), 'XYZ')
         self.position = startpoint
         self.scale_kf = {}
         self.rotation_kf = {}
         self.position_kf = {}
-        self.transform = mathutils.Matrix.Identity(4)  # what to do with that?
+        # self.transform = mathutils.Matrix.Identity(4)  # what to do with that? it will be ultimately useless.
 
         self._parent = None
         self.children = []
@@ -61,11 +61,11 @@ class Pseudobone:
             val._parent = holder
         self.children_append = (lambda self2, x: _setinchildren(self, x))
 
-    def update_r_t(self):
-        pass  # will work this out later
+    # def update_r_t(self):
+    #    pass  # will work this out later
 
-    def recalculate_transform(self):
-        pass  # procrastinating here too.
+    # def recalculate_transform(self):
+    #     pass  # procrastinating here too.
 
 
 def getBoneByName(name):

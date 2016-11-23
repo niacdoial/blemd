@@ -63,6 +63,8 @@ class SceneGraph:
         self.index=0
         self.children=[]
 
+
+
 class Inf1:
     # <variable numVertices>
     # -- int no idea what's this good for ;-)

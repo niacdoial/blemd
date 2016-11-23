@@ -254,11 +254,15 @@ class BModel:
         for num, com in enumerate(modelObject.material_slots):
             bm_to_pm[com.material] = num
         f_to_rf = [None]*len(self.faces)
-        for num, com in enumerate([type(())(temp.vertices) for temp in modelMesh.polygons]):
-            f_to_rf[self.faces.index(com)] = num
+        tulpe = type(())
+        for num, temp in enumerate(modelMesh.polygons):
+            index = self.faces.index(tulpe(temp.vertices))
+            while f_to_rf[index] is not None:
+                index = self.faces.index(tulpe(temp.vertices), index+1)
+            f_to_rf[index] = num
         for num, com in enumerate(self._materialIDS):  # assign materials to faces
             # DEBUG reversed index
-            if f_to_rf is not None:
+            if f_to_rf[num] is not None:
                 if com is not None:
                     modelMesh.polygons[f_to_rf[num]].material_index = com  # bm_to_pm[com]
                 else:
@@ -361,12 +365,14 @@ class BModel:
                     realbone = arm.edit_bones[bone.name.fget()]
                     vec = realbone.head
                     grp = modelObject.vertex_groups[bone.name.fget()]
-                    for num in range(len(self.vertices)):
-                        try:
-                            tmp = grp.weight(num)
-                        except RuntimeError:  # vert not in group
-                            tmp = 0
-                        modelMesh.vertices[num].co += (vec*tmp)
+                    # XCX old bone displacement method
+                    #for num in range(len(self.vertices)):
+                    #    try:
+                    #        with stdout_redirected():  # stop this call to print junk in stdout
+                    #            tmp = grp.weight(num)
+                    #    except RuntimeError:  # vert not in group
+                    #        tmp = 0
+                    #    modelMesh.vertices[num].co += (vec*tmp)
             for com in self.DEBUGvgroups.keys():  # DEBUG vertex groups to fix UVs
                 vg = modelObject.vertex_groups.new(com)
                 vg.add(self.DEBUGvgroups[com], 1, 'REPLACE')
@@ -452,25 +458,7 @@ class BModel:
             # p = bpy.types.MeshVertex(pos=[vec.x, vec.y, vec.z], cross=on, Box=off)
             print(vec)
 
-    def Mad(self, r, m, f):
-        for j in range(3):
-            for k in range(4):
-                r.m[j][k] += f * m.m[j][k]
-        return r
-
-    def LocalMatrix(self, i):
-        #- returns Matrix44f
-        # --s =  Matrix44f()
-        # --s.LoadScale self.jnt.frames[i].sx self.jnt.frames[i].sy self.jnt.frames[i].sz
-
-        # --TODO: I don't  know which of these two return values are the right ones
-        # --(if it's the first, then what is scale used for at all?)
-
-        # --looks wrong in certain circumstances...
-        return self.jnt.matrices[i]  # -- this looks better with vf_064l.bdl (from zelda)
-        # return bm.jnt1.matrices[i]*s   # -- this looks a bit better with mario's bottle_in animation
-
-    def DrawBatch(self, index, def_, matIndex):
+    def DrawBatch(self, index, effP, matIndex):
         currBatch = self.shp.batches[index]
         batchid = index
 
@@ -506,69 +494,8 @@ class BModel:
                     self.tverts[uv][i_temp] = [tvert.s, -tvert.t+1, 0]  # -- flip uv v element
 
         for packnum, currPacket in enumerate(currBatch.packets):
-            for n in range(len(currPacket.matrixTable)):
-                index = currPacket.matrixTable[n]
-                if index != 0xffff:  # -- //this means keep old entry
-                    if self.drw.isWeighted[index]:  # corrected
-                        # --TODO: the EVP1 data should probably be used here,
-                        # --figure out how this works (most files look ok
-                        # --without this, but models/ji.bdl is for example
-                        # --broken this way)
-                        # --matrixTable[n] = def_;
+            updateMatrixTable(self.evp, self.drw, self.jnt, currPacket, multiMatrixTable, matrixTable, isMatrixWeighted)
 
-                        # --the following _does_ the right thing...it looks
-                        # --ok for all files, but i don't understand why :-P
-                        # --(and this code is slow as hell, so TODO: fix this)
-
-                        # --NO idea if this is right this way...
-                        m = Matrix44()
-                        m.LoadZero()
-
-                        mm = self.evp.weightedIndices[self.drw.data[index]]  # -- get MultiMatrix # corrected
-                        singleMultiMatrixEntry = MultiMatrix()
-
-                        for r in range(len(mm.weights)):
-                            singleMultiMatrixEntry.weights[r] = mm.weights[r]
-                            singleMultiMatrixEntry.indices[r] = mm.indices[r]  # corrected (r]+1) # -- (drw.data[mm.indices[r]+ 1] + 1) -- bone index
-                            #--  sm1 = evp.matrices[mm.indices[r]] -- const Matrix44f
-                            #--  messageBox (mm.indices as string)
-                            #--if (mm.indices[r] != 0) then
-                            #-- (
-                            sm1 = self.evp.matrices[mm.indices[r]]  # corrected(r]+1) # -- const Matrix44f
-                            sm2 = self.LocalMatrix(mm.indices[r])  # corrected (r]+1)
-                            sm3 = sm2.Multiply(sm1)
-                            #
-                            #   sm1 = evp.matrices[mm.indices[r]] -- const Matrix44f
-                            #sm2 = LocalMatrix mm.indices[r]
-                            #sm3 = sm2.Multiply sm1*/
-                            #)
-                            #else
-                            #--	sm3 = (LocalMatrix mm.indices[r] )
-
-                            self.Mad(m, sm3, mm.weights[r])
-
-                        multiMatrixTable[n] = singleMultiMatrixEntry
-                        m.m[3][3] = 1  # fixed
-                        matrixTable[n] = m
-                        isMatrixWeighted[n] = True
-                    else:
-                        while len(matrixTable) <= n:
-                            matrixTable.append(None)
-                        while len(isMatrixWeighted) <= n:
-                            isMatrixWeighted.append(None)
-                        matrixTable[n] = self.jnt.matrices[self.drw.data[index]]  # corrected x2
-                        isMatrixWeighted[n] = False
-
-                        singleMultiMatrixEntry = MultiMatrix()
-                        singleMultiMatrixEntry.weights = [1]
-                        singleMultiMatrixEntry.indices = [self.drw.data[index]]  #corrected x2  # -- bone index
-
-                        while len(multiMatrixTable) <= n:
-                            multiMatrixTable.append(None)
-                        multiMatrixTable[n] = singleMultiMatrixEntry
-                        # -- end if drw.isWeighted[index] then
-
-                # -- end if index != 0xffff then -- //this means keep old entry
             # end for index in currPacket.matrixTable do
             # --if no matrix index is given per vertex, 0 is the default.
             # --otherwise, mat is overwritten later.
@@ -599,7 +526,11 @@ class BModel:
                     newPos = mat.MultiplyVector(self.vtx.positions[posIndex])
                     while len(self.vertices) <= posIndex:
                         self.vertices.append(None)
-                    self.vertices[posIndex] = [newPos.x, -newPos.z, newPos.y]  # -- flip order
+                    # tempvert = Vector3()
+                    # tempvert.setXYZ(newPos.x, newPos.y, newPos.z)
+                    # tempvert = effP.MultiplyVector(tempvert)
+                    # tempvert.ToMaxScriptPosFlip()  # -- flip order
+                    self.vertices[posIndex] = [newPos.x, -newPos.z, newPos.y]
                 if currPrimitive.type == 0x98:  # - strip
                     iterator = StripIterator(currPrimitive.points)
                 # -- GL_TRIANGLE_STRIP:
@@ -691,41 +622,24 @@ class BModel:
             # -- end for currPrimitive in currPacket.primitives do
          # -- end for currPacket in currBatch.packets do
 
-    def FrameMatrix(self, f):
-        t = Matrix44()
-        rx = Matrix44()
-        ry = Matrix44()
-        rz = Matrix44()
-        s = Matrix44()
-
-        t.LoadTranslateLM(f.t.x, f.t.y, f.t.z)
-        rx.LoadRotateXLM((f.rx / 360.) * 2 *math.pi)
-        ry.LoadRotateYLM((f.ry / 360.) * 2 *math.pi)
-        rz.LoadRotateZLM((f.rz / 360.) * 2 *math.pi)
-  
-        res = Matrix44()
-        res.LoadIdentity()
-        res = t.Multiply(rz.Multiply(ry.Multiply(rx)))
-        return res
-
     def CreateFrameNodes(self, j, d, parentMatrix, parentFrameNode):
         b1 = False
-        effP = parentMatrix
+        effP = parentMatrix.copy()
         i = j
         fNode = parentFrameNode
 
         while i < len(self.inf.scenegraph):
-                        
+
             n = self.inf.scenegraph[i]  # fixed
             if n.type != 1 and b1:
                 b1 = False
-                effP = parentMatrix   # -- prevents fixed chain
+                effP = parentMatrix.copy()   # -- prevents fixed chain
                 fNode = parentFrameNode
 
             if n.type == 0x10:
                 # --joint
                 f = self.jnt.frames[n.index]  # -- arrays start at index 1 in maxscript # fixed
-                effP = effP.Multiply(self.FrameMatrix(f))
+                effP = effP.Multiply(FrameMatrix(f))
                 while len(self.jnt.matrices) <= n.index:
                     self.jnt.matrices.append(None)
                 self.jnt.matrices[n.index] = effP  # -- effP.Multiply(FrameMatrix(f)) # fixed
@@ -741,11 +655,11 @@ class BModel:
                 parentFrameNode.children.append(fNode)
                 b1 = True
             elif n.type == 1:
-                i += self.CreateFrameNodes(i+1, d+1, effP, fNode) # -- note: i and j start at 1 instead of 0
+                i += self.CreateFrameNodes(i+1, d+1, effP, fNode)  # -- note: i and j start at 1 instead of 0
             elif n.type == 2:
-                return i - j + 1 # -- note: i and j start at 1 instead of 0
+                return i - j + 1  # -- note: i and j start at 1 instead of 0
             i += 1
-        return-1
+        return -1
 
     def CreateCharacter(self, rootFrameNode):
         # XCX FUNC plz get here when role defined
@@ -763,14 +677,14 @@ class BModel:
             #    groupHead = n
 
         for bone in self._bones:
-            bone.setSkinPose()
-        chr.displayRes = 1  # -- hide bones
-        #assemblyMgr.Open(chr)
+            pass # bone.setSkinPose()
+        # chr.displayRes = 1  # -- hide bones
+        # assemblyMgr.Open(chr)
         return chr
 
     # convenient method for a less messy scenegraph analysis
     def buildSceneGraph(self, inf1, sg, j=0):
-        i=j
+        i = j
         while i < len(inf1.scenegraph):
             n = inf1.scenegraph[i]
             if n.type == 1:
@@ -778,13 +692,13 @@ class BModel:
             elif n.type == 2:
                 return i - j + 1
             elif n.type == 0x10 or n.type == 0x11 or n.type == 0x12:
-                t=SceneGraph()
+                t = SceneGraph()
                 t.type = n.type
                 t.index = n.index
                 sg.children.append(t)
             else:
                 print("buildSceneGraph(): unexpected node type %d", n.type, file=sys.stderr)
-            i+=1
+            i += 1
 
         #//remove dummy node at root
         if len(sg.children) == 1:
@@ -795,7 +709,6 @@ class BModel:
             print("buildSceneGraph(): Unexpected size %d", len(sg.children), file=sys.stderr)
         return 0
 
-
     def DrawScenegraph(self, sg, parentMatrix, onDown=True, matIndex=0):
 
         effP = parentMatrix.copy()
@@ -803,7 +716,7 @@ class BModel:
         n = sg
 
         if n.type == 0x10:  # -joint
-            # XCX update matrix
+            self.jnt.matrices[n.index] = updateMatrix(self.jnt.frames[n.index], effP) # XCX update matrix needed?
             effP = self.jnt.matrices[n.index]  # -- setup during CreateFrameNodes # corrected
         elif n.type == 0x11:  # build material
             matName = self._mat1.stringtable[n.index]  # correced
@@ -868,10 +781,10 @@ class BModel:
                             #self._currMaterial.diffusemap.coords.U_offset = 0.5
                             #self._currMaterial.diffusemap.coords.U_Tiling = 0.5
                     else:
-                        raise ValueError("Unknown wrapS "+ str(self.tex.texHeaders[v2].wrapS))
+                        raise ValueError("Unknown wrapS " + str(self.tex.texHeaders[v2].wrapS))
                     if self.tex.texHeaders[v2].wrapT == 0:  # - clamp to edge? Needs testing
                         pass
-                    elif self.tex.texHeaders[v2].wrapT == 1 :  #- repeat (default)
+                    elif self.tex.texHeaders[v2].wrapT == 1:  #- repeat (default)
                         pass
                         #					self._currMaterial.diffusemap.coords.V_Mirror = False
                         #					self._currMaterial.diffusemap.coords.V_Tile = True
@@ -882,7 +795,7 @@ class BModel:
                         #						self._currMaterial.opacityMap.coords.V_Tile = True
                         #					)
                     elif self.tex.texHeaders[v2].wrapT == 2:
-                        self._currMaterial.name += "_V" # -- add suffix to let the modeler know where mirror should be used
+                        self._currMaterial.name += "_V"  # -- add suffix to let the modeler know where mirror should be used
                         if self._allowTextureMirror:
                             getTexSlot(self._currMaterial, fileName).scale[1] = -1
                             # self._currMaterial.diffusemap.coords.V_Tile = False
@@ -955,7 +868,7 @@ class BModel:
             # -- easier than recalculating all bone transforms
             d = mathutils.Vector()
             self._bones[0].parent.fset(d)  # fixed
-            d.rotate(mathutils.Euler((90, 0, 0), 'XYZ'))
+            d.rotate(mathutils.Euler((90, 0, 0), 'XZY'))
         i = m.GetIdentity()
 
         # -----------------------------------
@@ -972,19 +885,19 @@ class BModel:
         # -----------------------------------
 
         print("animations: ", time())
-        sg=SceneGraph()
+        sg = SceneGraph()
         self.buildSceneGraph(self.inf, sg)
         self.DrawScenegraph(sg, i)
         modelMesh = self.BuildSingleMesh()
 
         chr = None
         characterPos = None
-        if self._createBones and self._exportType != 'XFILE':
+        if self._createBones and self._exportType != 'XFILE' and False:  # this is suspected to be a pile of bullcrap
             chr = self.CreateCharacter(rootFrameNode)
             # --RotateAroundWorld  chr (EulerAngles 90 0 0)
 
             # -- Rotate Character assembly upwards and swap hierarchy for Point and Character
-            chr.rotation_euler = mathutils.Euler((90, 0, 0), 'XYZ')
+            chr.rotation_euler = mathutils.Euler((90, 0, 0), 'XZY')
             self._bones[0].parent.fset(d)  # fixed
             d.parent.fset(chr)
         # --RotateAroundWorld modelMesh (EulerAngles 90 0 0) -- e.g. stage, object
@@ -997,8 +910,7 @@ class BModel:
         errMsg = ""
         # max tool zoomextents all  # XCX
         for bone in self._bones:
-            pass# XCX what is the rest position?
-            #bone.setSkinPose()
+            pass  # bone.SetSkinPose()
         #fileProperties.addProperty  custom "exportAnimation" False
         # --self._createBones = True
         if self._createBones and self._loadAnimations:
@@ -1105,6 +1017,7 @@ class BModel:
             for com in self._bones:
                 name = com.name.fget()
                 posebone = self.arm_obj.pose.bones[name]
+                posebone.rotation_mode = "XZY"  # remember, coords are flipped
                 bpy.context.scene.frame_current = 0
                 posebone.keyframe_insert('location')
                 posebone.keyframe_insert('rotation_euler')
@@ -1113,40 +1026,40 @@ class BModel:
                              set(com.rotation_kf.keys())).union(
                              set(com.scale_kf.keys())):
                     bpy.context.scene.frame_current = frame
-
+                    # flip y and z
                     if frame in com.position_kf.keys():
                         vct = com.position_kf[frame]
                         if not math.isnan(vct.x):
-                            posebone.keyframe_insert('location',0)
-                            posebone.location[0] = vct.x
+                            posebone.keyframe_insert('location', 0)
+                            posebone.location[0] = vct.x - posebone.bone.head.x
                         if not math.isnan(vct.z):
-                            posebone.keyframe_insert('location',1)
-                            posebone.location[1] = -vct.z  # flip y and z
+                            posebone.keyframe_insert('location', 1)
+                            posebone.location[1] = -vct.z - posebone.bone.head.y
                         if not math.isnan(vct.y):
-                            posebone.keyframe_insert('location',2)
-                            posebone.location[2] = vct.y
+                            posebone.keyframe_insert('location', 2)
+                            posebone.location[2] = vct.y - posebone.bone.head.z
                     if frame in com.rotation_kf.keys():
                         vct = com.rotation_kf[frame]
                         if not math.isnan(vct.x):
-                            posebone.keyframe_insert('rotation_euler',0)
-                            posebone.rotation_euler[0] = vct.x
+                            posebone.keyframe_insert('rotation_euler', 0)
+                            posebone.rotation_euler[0] = vct.x - com.rotation_euler.x
                         if not math.isnan(vct.z):
-                            posebone.keyframe_insert('rotation_euler',1)
-                            posebone.rotation_euler[1] = -vct.z
+                            posebone.keyframe_insert('rotation_euler', 1)
+                            posebone.rotation_euler[1] = -vct.z + com.rotation_euler.z
                         if not math.isnan(vct.y):
-                            posebone.keyframe_insert('rotation_euler',2)
-                            posebone.rotation_euler[2] = vct.y
+                            posebone.keyframe_insert('rotation_euler', 2)
+                            posebone.rotation_euler[2] = vct.y - com.rotation_euler.y
                     if frame in com.scale_kf.keys():
                         vct = com.scale_kf[frame]
                         if not math.isnan(vct.x):
-                            posebone.keyframe_insert('scale',0)
-                            posebone.scale[0] = vct.x
+                            posebone.keyframe_insert('scale', 0)
+                            posebone.scale[0] = vct.x/com.scale[0]
                         if not math.isnan(vct.z):
-                            posebone.keyframe_insert('scale',1)
-                            posebone.scale[1] = -vct.z
+                            posebone.keyframe_insert('scale', 1)
+                            posebone.scale[1] = -vct.z/(-com.scale[2])
                         if not math.isnan(vct.y):
-                            posebone.keyframe_insert('scale',2)
-                            posebone.scale[2] = vct.y
+                            posebone.keyframe_insert('scale', 2)
+                            posebone.scale[2] = vct.y/com.scale[1]
 
         #if self._exportType=='XFILE':
             #exportFile (self._bmdDir + self._bmdFileName + ".x", noPrompt) # -- selectedOnly:True

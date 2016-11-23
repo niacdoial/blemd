@@ -64,7 +64,7 @@ class Drw1:
             elif v == 1:
                 self.isWeighted.append(True)
             else:
-                raise ValueError ("drw1: unexpected value in isWeighted array: " + str(v))
+                raise ValueError("drw1: unexpected value in isWeighted array: " + str(v))
 
         # -- read self.data array
         self.data = []
