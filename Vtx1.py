@@ -253,7 +253,7 @@ class Vtx1:
                 k = 0
                 for _ in range(normalsCount):
                     utmp = Vector3()
-                    utmp.setXYZ(-data[k], -data[k+1], -data[k+2])
+                    utmp.setXYZ(data[k], data[k+1], data[k+2])
                     self.normals.append(utmp)
                     k += 3
 

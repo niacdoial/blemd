@@ -56,7 +56,7 @@ def newtex(fname, type, mat):
         matslot.use_map_alpha = True
         mat.use_transparency = True
         mat.alpha = 0
-        mat.transparency_method = "MASK"
+        mat.transparency_method = "Z_TRANSPARENCY"
     elif type == SPECULAR:
         matslot.specular_color_factor = 1
         matslot.use_map_color_spec = True
@@ -87,8 +87,11 @@ def newUVlayer(mesh, tverts, tfaces, Faces, tv_to_f_v):
 
     #verts are aligned. are faces too?
     f_to_rf = [None]*len(mesh.polygons)  # blender faces index to loaded faces index
-    for num, com in enumerate(mesh.polygons):  # will be identity most of the time
-        f_to_rf[Faces.index(tulpe(com.vertices))] = num
+    for num, com in enumerate(mesh.polygons):  # will be identity _MOST_ of the time
+        index = Faces.index(tulpe(com.vertices))
+        while f_to_rf[index] is not None:
+            index = Faces.index(tulpe(com.vertices), index+1)
+        f_to_rf[index] = num
     # -- TODO: should never have undefined texture faces
     #for f, rf in enumerate(f_to_rf):
     #    f_to_l[f] = rf_to_l[rf]
@@ -105,9 +108,10 @@ def newUVlayer(mesh, tverts, tfaces, Faces, tv_to_f_v):
     # those lines are a new method.
     for num, com0 in enumerate(tv_to_f_v):
         for com in com0:
-            for com2 in mesh.polygons[f_to_rf[com[0]]].loop_indices:
-                if mesh.loops[com2].vertex_index == com[1]:
-                    uvtex.data[com2].uv = mathutils.Vector(tverts[num][:2])
+            if f_to_rf[com[0]] is not None:
+                for com2 in mesh.polygons[f_to_rf[com[0]]].loop_indices:
+                    if mesh.loops[com2].vertex_index == com[1]:
+                        uvtex.data[com2].uv = mathutils.Vector(tverts[num][:2])
 
     # STABLE version (but less precise)
     #for num, com in enumerate(tfaces):

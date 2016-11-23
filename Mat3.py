@@ -304,7 +304,6 @@ class Mat3:
         #        self.texTable[i] = temptable[stage]
         #    else:
         #        self.texTable[i] = 0xffff
-        print("", end='')  # breakpoint dummy
 
 
 

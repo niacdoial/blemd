@@ -133,7 +133,7 @@ class FrameNode:
                 d.scale = self._bone.scale
                 d.position = childBone.position  # -- end points should match parent direction? Watch out for multi child bones e.g. back -> 2 shoulders (back shouldn't scale)
                 d.endpoint = childBone.position + mathutils.Vector((0,0,boneThickness))
-                d.recalculate_transform()
+                # d.recalculate_transform()
                 
                 # -- in coordsys world (d.position.x = child.position.x) -- only move along x axis?
                 d.parent.fset(self._bone)
@@ -168,10 +168,11 @@ class FrameNode:
                 # -- create an end point bone (same direction as parent bone with a length of boneThickness)
                 start = self.startPoint
                 
-                if parentBone is not None :  #-- THIS FIXES IMPORT OF MODELS WITH ONE BONE
-                    dir = vect_normalize(parentBone.position - mathutils.Vector(start))
+                if parentBone is not None:  #-- THIS FIXES IMPORT OF MODELS WITH ONE BONE
+                    # bones MUST be pointed BACK (Y+) in order to make the animations work
+                    dir = mathutils.Vector((0, -1, 0))  # vect_normalize(parentBone.position - mathutils.Vector(start))
                 else:
-                    dir = [0, 0, 0]
+                    dir = mathutils.Vector((0, 0, 0))
                 dir *= (-1 * boneThickness)
                 dir += mathutils.Vector(self.startPoint)
                 self.endPoint = [dir.x, dir.y, dir.z]
@@ -186,27 +187,30 @@ class FrameNode:
                               mathutils.Vector((0,0,1)).rotate(parentTransform.to_euler()))
             # --	self.freeze bone -- don't hide or .x export won't work
             self._bone = bone
+            bone.scale = (self.f.sx, self.f.sy, self.f.sz)
             
             # --self_bone.boneFreezeLength=self.false -- prevent scale errors on animations. e.g. talking animations scale head?
             # --self_bone.boneAutoAlign=self.false
 
-            mt = mathutils.Matrix.Translation(mathutils.Vector((self.f.t.x, self.f.t.y, self.f.t.z)))
+            #mt = mathutils.Matrix.Translation(mathutils.Vector((self.f.t.x, self.f.t.y, self.f.t.z)))
             mx = mathutils.Matrix.Rotation(self.f.rx, 4, 'X')
             my = mathutils.Matrix.Rotation(self.f.ry, 4, 'Y')
             mz = mathutils.Matrix.Rotation(self.f.rz, 4, 'Z')
+            mTransform = (mx * my * mz) * parentTransform
 
             if parentBone is not None:
-                mTransform = (mx * my * mz * mt) * parentTransform
-                
-                bone.transform = mTransform
-                bone.update_r_t()
+                bone.rotation_euler = mTransform.to_euler("XYZ")
+
+                # bone.transform = mTransform
+                # bone.update_r_t()
                 bone.parent.fset(parentBone)
                 bone.name.fset(self.name + postfixName)
 
             else:
-                mTransform = (mx * my * mz * mt)
-                bone.transform = mTransform
-                bone.update_r_t()
+                # mTransform = (mx * my * mz * mt)
+                # bone.transform = mTransform
+                # bone.update_r_t()
+                bone.rotation_euler = mathutils.Euler((self.f.rx, self.f.ry, self.f.rz), "XYZ")
                 bone.name.fset('root' + postfixName)
 
 
@@ -217,7 +221,7 @@ class FrameNode:
             mTransform = parentTransform
             self.name = 'root'
         for child in self.children:
-            child._CreateBones(bone, boneThickness, createdBonesTable, postfixName,  mTransform)
+            child._CreateBones(bone, boneThickness, createdBonesTable, postfixName, mTransform)
 
     def _FixBoneLength(self):
 
@@ -287,22 +291,30 @@ class FrameNode:
         #)
         return createdBonesTable
 
-    def _RemapBones(self, boneSet):
+    def _RemapBones(self, boneSet, parent=None):
                 
         self._bone = getBoneByName(self.name)
-        
+        if self._bone is None and parent:
+            self._bone = parent._bone
+            boneSet.remove(parent._bone)
+
+        if self._bone is None and parent:
+            self._bone = parent._bone
+            boneSet.remove(parent._bone)
+
         if self._bone is not None:
-            self._dummyHelper = getBoneByName(self._bone.name +"_dummy")
+            self._dummyHelper = getBoneByName(self._bone.name.fget() +"_dummy")
         
         boneSet.append(self._bone)
         
-        for child in self.children  :
-           child._RemapBones(boneSet)
+        for child in self.children:
+           child._RemapBones(boneSet, self)
 
     def RemapBones(self):
         boneSet = []
-        for child in self.children:
-            child._RemapBones(boneSet)
+        self._RemapBones(boneSet)
+        # for child in self.children:
+        #    child._RemapBones(boneSet)
         return boneSet
 
     def ResetControllers(self):

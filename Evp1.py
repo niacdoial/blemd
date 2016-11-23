@@ -62,11 +62,11 @@ class Evp1:
         header.LoadData(br)
 
         # -- read counts array
-        br.SeekSet (evp1Offset + header.offsets[0])  # TR: adapted
+        br.SeekSet(evp1Offset + header.offsets[0])  # TR: adapted
         counts = []
         # -- vector<int> counts(h.count);
         sum = 0
-        for _ in range(header.count) :
+        for _ in range(header.count):
             v = br.GetByte()  # -- u8 v; fread(&v, 1, 1, f);
             sum += v
             counts.append(v)
@@ -74,7 +74,7 @@ class Evp1:
         self.weightedIndices = []         # --  dst.self.weightedIndices.resize(h.count);
 
         # -- read indices of weighted self.matrices
-        br.SeekSet (evp1Offset + header.offsets[1])  # TR: adapted
+        br.SeekSet(evp1Offset + header.offsets[1])  # TR: adapted
         numMatrices = 0
 
         for i in range(header.count):
@@ -83,10 +83,10 @@ class Evp1:
             for j in range(counts[i]):
                 d = br.ReadWORD()  # -- index to array (starts at one)
                 self.weightedIndices[i].indices[j] = d
-                numMatrices = max(numMatrices, (d+1))
+                numMatrices = max(numMatrices, d+1)
 
         # -- read weights of weighted self.matrices
-        br.SeekSet (evp1Offset + header.offsets[2])  # TR adapted
+        br.SeekSet(evp1Offset + header.offsets[2])  # TR adapted
 
         for i in range(header.count):
             self.weightedIndices[i].weights = []  # -- .resize(counts[i]);
@@ -99,7 +99,7 @@ class Evp1:
         # -- read self.matrices
         self.matrices = []
         # -- .resize(numMatrices);
-        br.SeekSet (evp1Offset + header.offsets[3])  # TR adapted
+        br.SeekSet(evp1Offset + header.offsets[3])  # TR adapted
         for i in range(numMatrices):
             self.matrices[i] = Matrix44()
             self.matrices[i].LoadIdentity()
