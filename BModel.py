@@ -1189,6 +1189,8 @@ class BModel:
         self._allowTextureMirror = allowTextureMirror
         self._forceCreateBones = forceCreateBones
         self._loadAnimations = loadAnimations
+        if isinstance(boneThickness, type(())):
+            print(boneThickness, '\n\n\n')
         self._boneThickness = boneThickness
         print(filename)
         self.LoadModel(filename)
