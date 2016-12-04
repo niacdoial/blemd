@@ -1,5 +1,21 @@
+if "bpy" in locals():  # trick to reload module on f8-press in blender
+    LOADED = True
+else:
+    LOADED = False
 import bpy
-from .BModel import BModel
+if LOADED:
+    from importlib import reload
+    del BModel
+    reload(BModule)
+
+    from .BModel import BModel
+else:
+    from importlib import import_module
+    from .BModel import BModel
+    BModule = import_module('.BModel', "blemd")
+del LOADED
+
+import os.path as OSPath
 IDE_DEBUG = True
 
 bl_info = {
@@ -79,7 +95,7 @@ class ImportBmd(Operator, ImportHelper):
     type = EnumProperty(
         name="Import Type",
         description="Choose between two items",
-        items=(('XFILE', "x export (games)", "")),
+        items=(('XFILE', "x export (games)", ""),),
                #('CHARACTER', "character export (animations)", "")),
         default='XFILE'
         )
@@ -96,7 +112,8 @@ class ImportBmd(Operator, ImportHelper):
 
     def execute(self, context):
         temp = BModel()
-        temp.SetBmdViewExePath('C:\\Users\\Liam\\Bureau\\MaxBMD-multi-texcoords\\')
+        path = OSPath.abspath(OSPath.split(__file__)[0])  # automatically find where we are
+        temp.SetBmdViewExePath(path+'\\')  # add backslash for good measure
         temp.Import(self.filepath, self.boneThickness, self.mir_tx, self.frc_cr_bn,
                     self.sv_anim, self.tx_xp, self.type, self.ic_sc, self.dvg)
         return {'FINISHED'}
@@ -106,11 +123,13 @@ class ImportBmd(Operator, ImportHelper):
 def menu_func(self, context):
     self.layout.operator(ImportBmd.bl_idname, text="Nintendo BMD")
 
+
 def register():
     print(__name__)
     bpy.utils.register_module(__name__)
     #bpy.utils.register_class(ImportSomeData)
     bpy.types.INFO_MT_file_import.append(menu_func)
+
 
 def unregister():
     bpy.utils.unregister_module(__name__)
