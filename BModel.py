@@ -176,7 +176,7 @@ class BModel:
         # --print startpath
         try:
             HiddenDOSCommand(cmd, startpath=startpath)
-        except:
+        except Exception as err:
             pass
             # -- Uncomment the line below for if the startpath contains spaces
             # -- startpath = "C:\\" -- and place BmdView.exe in "C:\\" directory
@@ -740,7 +740,7 @@ class BModel:
                 bmpFound = OSPath.exists(fileName) or OSPath.exists(fileName[:-4]+'.dds')  # two image types!
 
                 # -- messageBox fileName
-                newtex(fileName, 'DIFFUSE', self._currMaterial)
+                newtex(fileName, 'DIFFUSE', self._currMaterial, self.imtype, self._images, self.ExtractImages)
                 img = getTexImage(self._currMaterial, fileName)
 
                 # --gc()
@@ -760,7 +760,7 @@ class BModel:
 
                 if hasAlpha:
                     #self._currMaterial.twoSided = True # -- anything with alpha is always two sided?
-                    newtex(fileName, 'ALPHA', self._currMaterial)
+                    newtex(fileName, 'ALPHA', self._currMaterial, self.imtype, self._images, self.ExtractImages)
 
                 showTextureMap(self._currMaterial)  # -- display self.texture in view
                 self._currMaterial.name = matName
@@ -1069,7 +1069,7 @@ class BModel:
             #loadMaxFile saveMaxName  # XCX
             #animationRange = interval(0, 100) # -- not required
 
-    def ExtractImages(self):
+    def ExtractImages(self, force=False):
                 
         imageType = ".tga"
 
@@ -1087,11 +1087,13 @@ class BModel:
         tgaFiles = getFiles(self._texturePath + "*.tga")
         ddsFiles = getFiles(self._texturePath + "*.dds")
 
+        self._images = tgaFiles+ddsFiles
+
         # -- cannot use shellLaunch because it doesn't wait for a return value
         # -- don't use DOSCommand. Doesn't support spaces in full exe path. e.g. C:Program files\
         # -- if using version before 2008 then use DOSCommand and set BmdView.exe into a known path
 
-        if len(tgaFiles) == 0 and len(ddsFiles) == 0:
+        if (len(tgaFiles) == 0 and len(ddsFiles) == 0) or force:
             self.TryHiddenDOSCommand("BmdView.exe \"" + self._bmdFilePath+ "\" \"" +
                                  self._texturePath+ "\\\"", self._bmdViewPathExe)
         #classof(tgaFiles)  #XCX
@@ -1172,7 +1174,7 @@ class BModel:
         print("</TextureAnimation>", file=fBTP)
         fBTP.close()
 
-    def Import(self, filename, boneThickness, allowTextureMirror, forceCreateBones, loadAnimations, exportTextures, exportType, includeScaling, dvg):
+    def Import(self, filename, boneThickness, allowTextureMirror, forceCreateBones, loadAnimations, exportTextures, exportType, includeScaling, imtype ,dvg):
         self.DEBUGVG = dvg
         if exportTextures:
             self._texturePrefix = ""
@@ -1185,6 +1187,7 @@ class BModel:
         self._includeScaling = includeScaling
         # --self._exportType=XFILE
         self._exportType = exportType
+        self.imtype = imtype
 
         self._allowTextureMirror = allowTextureMirror
         self._forceCreateBones = forceCreateBones
@@ -1195,7 +1198,7 @@ class BModel:
         print(filename)
         self.LoadModel(filename)
 
-        bmdPath = "".join(OSPath.split(self._bmdFilePath)) + "\\"  # generates dir name from file name?
+        bmdPath = "".join(OSPath.splitext(self._bmdFilePath)) + "\\"  # generates dir name from file name?
         try:
             os.mkdir(bmdPath)
         except FileExistsError:
