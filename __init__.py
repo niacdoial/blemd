@@ -100,6 +100,16 @@ class ImportBmd(Operator, ImportHelper):
         default='XFILE'
         )
 
+    imtype = EnumProperty(
+        name="Image use type",
+        description="Choose packed images, native format image, or targa converted ones",
+        items=(('TARGA', "targa files", ""),
+               ('PACKED', "packed dds files", ''),
+               ('AS_PNG', "packed dds files as png ones", ''),
+               ('NATIVE', 'dds files', '')),
+        default='PACKED'
+        )
+
     boneThickness = IntProperty(
         name="Bone Thickness",
         description="from 5 to 100",
@@ -115,7 +125,7 @@ class ImportBmd(Operator, ImportHelper):
         path = OSPath.abspath(OSPath.split(__file__)[0])  # automatically find where we are
         temp.SetBmdViewExePath(path+'\\')  # add backslash for good measure
         temp.Import(self.filepath, self.boneThickness, self.mir_tx, self.frc_cr_bn,
-                    self.sv_anim, self.tx_xp, self.type, self.ic_sc, self.dvg)
+                    self.sv_anim, self.tx_xp, self.type, self.ic_sc, self.imtype, self.dvg)
         return {'FINISHED'}
 
 

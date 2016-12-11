@@ -24,7 +24,7 @@ def getTexSlot(mat, fname):
                 return com
 
 
-def newtex(fname, type, mat):
+def newtex(fname, type, mat, mode='PACKED', _loaded_images=[], export_function=(lambda: None)):
     global imported
     if mat in imported.keys() and fname in imported[mat].keys():
         tex = imported[mat][fname]
@@ -33,8 +33,15 @@ def newtex(fname, type, mat):
         if fname in force_names.keys():
             img = force_names[fname]
         else:
+            if fname not in _loaded_images:
+                export_function(force=True)
             img = bpy.data.images.load(fname)
+        if mode == 'PACKED':
             img.pack()
+        elif mode == 'AS_PNG':
+            img.pack(as_png=True)
+        elif mode == 'TARGA':
+            tgaconvert(img)
         tex = bpy.data.textures.new(getFilenameFile(fname)+'_texture', type='IMAGE')
         mat.name = getFilenameFile(fname)+'_material'
         tex.image = img
@@ -60,6 +67,14 @@ def newtex(fname, type, mat):
     elif type == SPECULAR:
         matslot.specular_color_factor = 1
         matslot.use_map_color_spec = True
+
+
+def tgaconvert(img):
+    img.pack()
+    img.filepath_raw = img.filepath_raw[:-3]+'tga'
+    img.file_format = 'TARGA'
+    img.packed_files[0].filepath = img.packed_files[0].filepath[:-3]+'tga'
+    img.unpack(method='WRITE_ORIGINAL')
 
 
 def showTextureMap(mat):

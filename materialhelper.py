@@ -107,7 +107,11 @@ def add_vcolor(mesh, color_layer, cv_to_f_v, Faces, uvlayer):
     #    vx_layer.data[i].color = mathutils.Color(list(color_layer[l_to_v[i]])[:3])  # remove alpha(supported earlier in this file)
 
     for face in range(len(mesh.polygons)):
-        uvlayer.data[face].image = mesh.materials[mesh.polygons[face].material_index].texture_slots[0].texture.image
+        try:
+            uvlayer.data[face].image = mesh.materials[mesh.polygons[face].material_index].texture_slots[0].texture.image
+        except AttributeError:
+            # in case of undetected material:
+            pass
 
     return alpimg
 

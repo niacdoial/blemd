@@ -472,6 +472,7 @@ void readBmd(FILE* f)
 	sprintf(filename, "%s%s.dds", g_folder.c_str(), strings[k].c_str());
 
     FILE* outF = fopen(filename, "wb");
+    cout<<"just opened "<<filename<<endl;
     fwrite(&ddsHead, sizeof(ddsHead), 1, outF);
 
     //image data
@@ -486,6 +487,7 @@ void readBmd(FILE* f)
     }
 
     delete [] buff0;
+    cout<<"gonna close "<<filename<<endl;
     fclose(outF);
   }
 }

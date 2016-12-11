@@ -60,7 +60,9 @@ def HiddenDOSCommand(cmd, startpath=os.getcwd()):
 def DosCommand(cmd):
     if not os.path.isabs(cmd):
         cmd = os.path.abspath(cmd)
-    print(subprocess.check_output(cmd,stderr=subprocess.STDOUT))
+    if cmd[-2] == '\\':  # NO! causes incorrect path
+        cmd = cmd[:-2] + "\""
+    print(subprocess.check_output(cmd, stderr=subprocess.STDOUT))
 
 
 def getFilenamePath(path):
