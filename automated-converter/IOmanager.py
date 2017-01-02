@@ -19,6 +19,6 @@ except AttributeError:  # module not loaded: do it manually
     temp.SetBmdViewExePath('C:\\Users\\Liam\\Bureau\\MaxBMD-multi-texcoords\\')
     temp.Import(path, 5, True, False, True, True, 'XFILE', False, 'AS_PNG', False)
 
-bpy.ops.export_scene.fbx(filepath=path[:-3]+'fbx', axis_forward='Y', axis_up='Z')
+bpy.ops.export_scene.fbx(filepath=path[:-3]+'fbx', axis_forward='Y', axis_up='Z', path_mode='COPY', embed_textures=True)
 
 bpy.ops.wm.quit_blender()  # quit blender the clean way
