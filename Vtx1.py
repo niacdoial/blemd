@@ -1,6 +1,5 @@
 #! /usr/bin/python3
-from .Vector3 import Vector3
-from mathutils import Color
+from mathutils import Vector
 from .maxheader import MessageBox
 
 
@@ -201,8 +200,7 @@ class Vtx1:
                 posCount = int(posCount)
                 k = 0
                 for j in range(posCount):
-                    pos = Vector3()
-                    pos.setXYZ(data[k], data[k+1], 0)
+                    pos = Vector((data[k], data[k+1], 0))
                     self.positions.append(pos)
                     k += 2
                 MessageBox("Vtx1: DT %d %d. Needs testings"%(af.dataType, af.componentCount))
@@ -219,19 +217,16 @@ class Vtx1:
                 posCount = int(posCount)
                 k = 0
                 for _ in range(posCount):
-                    pos = Vector3()
-                    pos.setXYZ(data[k], data[k+1], data[k+2])
+                    pos = Vector((data[k], data[k+1], data[k+2]))
                     self.positions.append(pos)
                     # pos.setXYZFlip(data[k], data[k+1], data[k+2])
                     k += 3
                 if len(data) - posCount*3 == 1:
-                    pos = Vector3()
-                    pos.setXYZ(data[-2], data[-1], max(data) * 2)
+                    pos = Vector((data[-2], data[-1], max(data) * 2))
                     self.positions.append(pos)
 
                 if len(data) - posCount*3 == 2:
-                    pos = Vector3()
-                    pos.setXYZ(data[-1], max(data)*2, max(data)*2)
+                    pos = Vector((data[-1], max(data)*2, max(data)*2))
                     self.positions.append(pos)
             # --
             # --print (format "LEN %. COUNT %" length (data.count / 3))
@@ -252,19 +247,16 @@ class Vtx1:
                 # -- arrays.self.normals.resize(data.size()/3);
                 k = 0
                 for _ in range(normalsCount):
-                    utmp = Vector3()
-                    utmp.setXYZ(data[k], data[k+1], data[k+2])
+                    utmp = Vector((data[k], data[k+1], data[k+2]))
                     self.normals.append(utmp)
                     k += 3
 
                 if len(data) - normalsCount*3 == 1:
-                    pos = Vector3()
-                    pos.setXYZ(data[-2], data[-1], max(data) * 2)
+                    pos = Vector((data[-2], data[-1], max(data) * 2))
                     self.normals.append(pos)
 
                 if len(data) - normalsCount*3 == 2:
-                    pos = Vector3()
-                    pos.setXYZ(data[-1], max(data)*2, max(data)*2)
+                    pos = Vector((data[-1], max(data)*2, max(data)*2))
                     self.normals.append(pos)
                     # --for(int j = 0, k = 0; j < arrays.self.normals.size(); ++j, k += 3)
                     # --  arrays.self.normals[j].setXYZ(data[k], data[k + 1], data[k + 2]);

@@ -89,8 +89,6 @@ def newUVlayer(mesh, tverts, tfaces, Faces, tv_to_f_v):
     #it's goal is to set the right UV coords to the right UV point.
     # with the fact that most verts had changed index between steps. gah.
 
-    tulpe = type(())
-
     num = len(mesh.uv_textures)
     mesh.uv_textures.new()
     uvtex = mesh.uv_layers[num]
@@ -103,9 +101,9 @@ def newUVlayer(mesh, tverts, tfaces, Faces, tv_to_f_v):
     #verts are aligned. are faces too?
     f_to_rf = [None]*len(mesh.polygons)  # blender faces index to loaded faces index
     for num, com in enumerate(mesh.polygons):  # will be identity _MOST_ of the time
-        index = Faces.index(tulpe(com.vertices))
+        index = Faces.index(tuple(com.vertices))
         while f_to_rf[index] is not None:
-            index = Faces.index(tulpe(com.vertices), index+1)
+            index = Faces.index(tuple(com.vertices), index+1)
         f_to_rf[index] = num
     # -- TODO: should never have undefined texture faces
     #for f, rf in enumerate(f_to_rf):
