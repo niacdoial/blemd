@@ -4,6 +4,7 @@ else:
     LOADED = False
 import bpy
 if LOADED:
+    unregister()
     from importlib import reload
     del BModel
     reload(BModule)

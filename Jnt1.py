@@ -1,6 +1,6 @@
 #! /usr/bin/python3
-from .Vector3 import *
 from .maxheader import MessageBox
+from mathutils import Vector
 
 class Jnt1Header:
     """# <variable tag>
@@ -136,8 +136,7 @@ class JntFrame:
         self.ry = (e.ry/32768. *180)
         self.rz = (e.rz/32768. *180)
 
-        self.t = Vector3()
-        self.t.setXYZ(e.tx, e.ty, e.tz)
+        self.t = Vector((e.tx, e.ty, e.tz))
 
         _bbMin = e.bbMin
         _bbMax= e.bbMax

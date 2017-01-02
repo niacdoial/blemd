@@ -1,6 +1,22 @@
-#! /usr/bin/python3    from Math import *
+#! /usr/bin/python3
+if "bpy" in locals():  # trick to reload module on f8-press in blender
+    LOADED = True
+else:
+    LOADED = False
+import bpy
+if LOADED:
+    from importlib import reload
+    del FrameMatrix, updateMatrixTable
+    reload(MModule)
+
+    from .Matrix44 import *
+else:
+    from importlib import import_module
+    from .Matrix44 import *
+    MModule = import_module('.Matrix44', "blemd")
+del LOADED
+
 from .BinaryReader import *
-from .Vector3 import *
 from .Matrix44 import *
 from .Inf1 import *
 from .Vtx1 import *
@@ -19,8 +35,9 @@ from os import path as OSPath
 from .maxheader import *
 import math
 from .texhelper import newtex, getTexImage, showTextureMap, getTexSlot, newUVlayer, addforcedname
-import mathutils
+from mathutils import Matrix, Vector, Euler, Color
 from .materialhelper import add_vcolor, add_material, add_err_material
+from .pseudobones import apply_animation
 from time import time
 
 
@@ -254,11 +271,10 @@ class BModel:
         for num, com in enumerate(modelObject.material_slots):
             bm_to_pm[com.material] = num
         f_to_rf = [None]*len(self.faces)
-        tulpe = type(())
         for num, temp in enumerate(modelMesh.polygons):
-            index = self.faces.index(tulpe(temp.vertices))
+            index = self.faces.index(tuple(temp.vertices))
             while f_to_rf[index] is not None:
-                index = self.faces.index(tulpe(temp.vertices), index+1)
+                index = self.faces.index(tuple(temp.vertices), index+1)
             f_to_rf[index] = num
         for num, com in enumerate(self._materialIDS):  # assign materials to faces
             # DEBUG reversed index
@@ -303,8 +319,8 @@ class BModel:
 
         for i in range(len(self.vertices)):
             if self.normals[i] is not None:
-                modelMesh.vertices[i].normal = mathutils.Vector(self.normals[i])
-        modelMesh.update()  # XCX
+                modelMesh.vertices[i].normal = -Vector(self.normals[i])  # normals are for some reason flipped
+        modelMesh.update()
 
         if len(self.vtx.colors) and len(self.vtx.colors[0]):  #- has colors? fixed.
             alpha_image = add_vcolor(modelMesh, self.vtx.colors[0], self.cv_to_f_v[0], self.faces, active_uv)
@@ -314,7 +330,7 @@ class BModel:
             #add alpha_image to materials!
 
         bpy.context.scene.objects.active = act_bk
-        # update(modelMesh) # XCX
+        # update(modelMesh)
 
         # -----------------------------------------------------------------
         # -- skin
@@ -340,14 +356,14 @@ class BModel:
                     if bone.parent.fget().name.fget() not in [temp.name.fget() for temp in self._bones]:
                         tempbone = arm.edit_bones.new(bone.parent.fget().name.fget())
                         tempbone.parent = arm.edit_bones[bone.parent.fget().parent.fget().name.fget()]
-                        tempbone.head = mathutils.Vector(bone.parent.fget().position)
-                        tempbone.tail = mathutils.Vector(bone.parent.fget().endpoint)
+                        tempbone.head = Vector(bone.parent.fget().position)
+                        tempbone.tail = Vector(bone.parent.fget().endpoint)
             for bone in self._bones:
                 realbone = arm.edit_bones[bone.name.fget()]
                 if isinstance(bone.parent.fget(), Pseudobone):
                     realbone.parent = arm.edit_bones[bone.parent.fget().name.fget()]
-                realbone.head = mathutils.Vector(bone.position)  #mathutils.Vector((0,0,0))
-                realbone.tail = mathutils.Vector(bone.endpoint)  #mathutils.Vector((0,0,1))
+                realbone.head = Vector(bone.position)  #mathutils.Vector((0,0,0))
+                realbone.tail = Vector(bone.endpoint)  #mathutils.Vector((0,0,1))
                 modelObject.vertex_groups.new(bone.name.fget())
                 # skinOps.addBone(mysk, bone, 0) # XCX DONE?
 
@@ -358,14 +374,12 @@ class BModel:
                 for i in range(len(self.vertices)):
                     for num, vg_id in enumerate(self.vertexMultiMatrixEntry[i].indices):
                         modelObject.vertex_groups[vg_id].add([i], self.vertexMultiMatrixEntry[i].weights[num], 'REPLACE')
-                    # -- Don't use setVertexWeights. Has issues with existing bone weights (mainly root bone)
-                    #skinOps.ReplaceVertexWeights(mysk,  i, vertexMultiMatrixEntry[i].indices,
-                    #                             vertexMultiMatrixEntry[i].weights)  # XCX
+
                 for bone in self._bones:
                     realbone = arm.edit_bones[bone.name.fget()]
                     vec = realbone.head
                     grp = modelObject.vertex_groups[bone.name.fget()]
-                    # XCX old bone displacement method
+                    # old bone displacement method
                     #for num in range(len(self.vertices)):
                     #    try:
                     #        with stdout_redirected():  # stop this call to print junk in stdout
@@ -381,10 +395,6 @@ class BModel:
             bpy.ops.object.mode_set(mode='OBJECT')
             bpy.context.scene.objects.active = act_bk
             modelMesh.update()
-
-
-        # -- freeze model by default
-        # --freeze  modelMesh	-- DO NOT FREEZE MODEL BY DEFAULT
 
         return modelMesh
 
@@ -518,12 +528,12 @@ class BModel:
                         #    normal.setXYZ(0,0,-1) # easy to spot errors afterwards
                         while len(self.normals) <= posIndex:
                             self.normals.append(None)
-                        self.normals[posIndex] = normal.ToMaxScriptPosFlip()
+                        self.normals[posIndex] = (normal.x, -normal.z, normal.y)
 
                     while len(self.vertexMultiMatrixEntry) <= posIndex:
                         self.vertexMultiMatrixEntry.append(None)
                     self.vertexMultiMatrixEntry[posIndex] = multiMat
-                    newPos = mat.MultiplyVector(self.vtx.positions[posIndex])
+                    newPos = mat*(self.vtx.positions[posIndex])
                     while len(self.vertices) <= posIndex:
                         self.vertices.append(None)
                     # tempvert = Vector3()
@@ -622,44 +632,34 @@ class BModel:
             # -- end for currPrimitive in currPacket.primitives do
          # -- end for currPacket in currBatch.packets do
 
-    def CreateFrameNodes(self, j, d, parentMatrix, parentFrameNode):
-        b1 = False
+    def CreateFrameNodes(self, sg, parentMatrix, parentFrameNode):
         effP = parentMatrix.copy()
-        i = j
         fNode = parentFrameNode
+        n = sg
 
-        while i < len(self.inf.scenegraph):
+        if n.type == 0x10:
+            # --joint
+            f = self.jnt.frames[n.index]  # -- arrays start at index 1 in maxscript # fixed
+            effP = parentMatrix*FrameMatrix(f)
+            while len(self.jnt.matrices) <= n.index:
+                self.jnt.matrices.append(None)
+            self.jnt.matrices[n.index] = effP  # -- effP.Multiply(FrameMatrix(f)) # fixed
 
-            n = self.inf.scenegraph[i]  # fixed
-            if n.type != 1 and b1:
-                b1 = False
-                effP = parentMatrix.copy()   # -- prevents fixed chain
-                fNode = parentFrameNode
+            fNode = FrameNode()
+            fNode.f = f
+            fNode.name = f.name
 
-            if n.type == 0x10:
-                # --joint
-                f = self.jnt.frames[n.index]  # -- arrays start at index 1 in maxscript # fixed
-                effP = effP.Multiply(FrameMatrix(f))
-                while len(self.jnt.matrices) <= n.index:
-                    self.jnt.matrices.append(None)
-                self.jnt.matrices[n.index] = effP  # -- effP.Multiply(FrameMatrix(f)) # fixed
+            fstartPoint = parentMatrix*f.t
+            fNode.startPoint = fstartPoint.x, -fstartPoint.z, fstartPoint.y
+            del fstartPoint
+            fNode.parentFrameNode = parentFrameNode
+            fNode.effP = effP
+            # --fNode.name = self._bmdFileName + "_" + f.name	-- FIX: DO NOT ADD FILENAME PREFIX TO BONES
+            parentFrameNode.children.append(fNode)
+            b1 = True
 
-                fNode = FrameNode()
-                fNode.f = f
-                fNode.name = f.name
-
-                fNode.startPoint = (parentMatrix.MultiplyVector(f.t)).ToMaxScriptPosFlip()
-                fNode.parentFrameNode = parentFrameNode
-                fNode.effP = effP
-                # --fNode.name = self._bmdFileName + "_" + f.name	-- FIX: DO NOT ADD FILENAME PREFIX TO BONES
-                parentFrameNode.children.append(fNode)
-                b1 = True
-            elif n.type == 1:
-                i += self.CreateFrameNodes(i+1, d+1, effP, fNode)  # -- note: i and j start at 1 instead of 0
-            elif n.type == 2:
-                return i - j + 1  # -- note: i and j start at 1 instead of 0
-            i += 1
-        return -1
+        for com in sg.children:
+            self.CreateFrameNodes(com, effP, fNode)
 
     def CreateCharacter(self, rootFrameNode):
         # XCX FUNC plz get here when role defined
@@ -756,7 +756,7 @@ class BModel:
                     #hasAlpha = (p == len(img.pixels)-1)
                 else:
                     # -- make it easier to see invalid self.textures
-                    self._currMaterial.diffuse_color = mathutils.Color((1,0,0))
+                    self._currMaterial.diffuse_color = Color((1,0,0))
 
                 if hasAlpha:
                     #self._currMaterial.twoSided = True # -- anything with alpha is always two sided?
@@ -815,23 +815,21 @@ class BModel:
                 # -- meditMaterials[self._currMaterialIndex] = self._currMaterial
                 self._currMaterialIndex += 1
         elif n.type == 0x12 and onDown:  # - type = 18
-            # XCX apply material
             self.DrawBatch(n.index, effP, matIndex)  # fixed
 
         for com in sg.children:
             self.DrawScenegraph(com, effP, onDown, matIndex)  # -- note: i and j start at 1 instead of 0
 
         if n.type == 0x12 and not onDown:  # - type = 18
-            # XCX apply material
             self.DrawBatch(n.index, effP, matIndex)  # fixed
 
     def RotateAroundWorld(self, obj, rotation):
         print(rotation, type(rotation))
         origParent = obj.parent
         d = bpy.data.new('UTEMP_PL', None)
-        d.location = mathutils.Vector((0,0,0))
+        d.location = Vector((0,0,0))
         obj.parent = d
-        d.rotation_euler = mathutils.Euler(rotation, 'XYZ')
+        d.rotation_euler = Euler(rotation, 'XYZ')
         act_bk = bpy.ops.active
         bpy.ops.active = d
         bpy.ops.object.transform_apply(rotation=True)
@@ -845,13 +843,15 @@ class BModel:
         # --	obj.parent = origParent
 
     def DrawScene(self):  # XCX create armature here
-        # delete $* XCX
         print("DrawScene : ", time())
-        m = Matrix44()
-        _frameMatrix = m.GetIdentity()
+        m = Matrix()
+        _frameMatrix = Matrix.Identity(4)
         rootFrameNode = FrameNode()
-        identity = m.GetIdentity()
-        self.CreateFrameNodes(0, 0, identity, rootFrameNode)
+        identity = Matrix.Identity(4)
+        sg = SceneGraph()
+        self.buildSceneGraph(self.inf, sg)
+
+        self.CreateFrameNodes(sg, identity, rootFrameNode)
         print("frame node created", time())
         # -- FIX: Force create bone option allows to generate bones independently of their count
         if len(rootFrameNode.children) == 1 and len(rootFrameNode.children[0].children) == 0:  # fixed
@@ -863,13 +863,14 @@ class BModel:
                 rootFrameNode.FixBones(self._boneThickness)
 
             self._parentBoneIndexs = rootFrameNode.CreateParentBoneIndexs()
+            # XCX get rid of this call (^^^^) and what goes with it.
             origWorldBonePos = self._bones[0].position  # fixed
 
             # -- easier than recalculating all bone transforms
-            d = mathutils.Vector()
+            d = Vector()
             self._bones[0].parent.fset(d)  # fixed
-            d.rotate(mathutils.Euler((90, 0, 0), 'XZY'))
-        i = m.GetIdentity()
+            d.rotate(Euler((90, 0, 0), 'XZY'))
+        i = Matrix.Identity(4)
 
         # -----------------------------------
         # -- reverse items
@@ -885,19 +886,17 @@ class BModel:
         # -----------------------------------
 
         print("animations: ", time())
-        sg = SceneGraph()
-        self.buildSceneGraph(self.inf, sg)
         self.DrawScenegraph(sg, i)
         modelMesh = self.BuildSingleMesh()
 
         chr = None
         characterPos = None
-        if self._createBones and self._exportType != 'XFILE' and False:  # this is suspected to be a pile of bullcrap
+        if self._createBones and self._exportType != 'XFILE' and False:  # XCX this is suspected to be a pile of bullcrap
             chr = self.CreateCharacter(rootFrameNode)
             # --RotateAroundWorld  chr (EulerAngles 90 0 0)
 
             # -- Rotate Character assembly upwards and swap hierarchy for Point and Character
-            chr.rotation_euler = mathutils.Euler((90, 0, 0), 'XZY')
+            chr.rotation_euler = Euler((90, 0, 0), 'XZY')
             self._bones[0].parent.fset(d)  # fixed
             d.parent.fset(chr)
         # --RotateAroundWorld modelMesh (EulerAngles 90 0 0) -- e.g. stage, object
@@ -908,9 +907,6 @@ class BModel:
         bckFiles = []
         #saveMaxName = self._bmdDir + self._bmdFileName + ".max" # -- .chr?
         errMsg = ""
-        # max tool zoomextents all  # XCX
-        for bone in self._bones:
-            pass  # bone.SetSkinPose()
         #fileProperties.addProperty  custom "exportAnimation" False
         # --self._createBones = True
         if self._createBones and self._loadAnimations:
@@ -966,7 +962,6 @@ class BModel:
                     else:
                         endFrame = None
                         b.AnimateBoneFrames(startFrame, self._bones, 1,
-                                            [origWorldBonePos.x, origWorldBonePos.y, origWorldBonePos.z],
                                             self._exportType, refBoneRequiresDummyList, self._includeScaling)
 
                         numberOfFrames = b.animationLength
@@ -1004,70 +999,10 @@ class BModel:
             #for item in refBoneRequiresDummyList do
             #	print item
             # --messageBox (refBoneRequiresDummyList as string)
+            bpy.context.scene.frame_start = 0
+            bpy.context.scene.frame_end = startFrame
 
-            if self._exportType == 'XFILE':   # XCX
-                kwXPortAnimationName = str(animationCount) + ";"+ kwXPortAnimationName
-                # --messageBox kwXPortAnimationName
-                # fileProperties.addProperty(custom, "allAnimations", kwXPortAnimationName)
-                bpy.context.scene.frame_start = 0
-                bpy.context.scene.frame_end = startFrame
-                # --messageBox (self._bmdDir + self._bmdFileName + ".x" )
-
-            # XCX XCX pose bones here!
-            for com in self._bones:
-                name = com.name.fget()
-                posebone = self.arm_obj.pose.bones[name]
-                posebone.rotation_mode = "XZY"  # remember, coords are flipped
-                bpy.context.scene.frame_current = 0
-                posebone.keyframe_insert('location')
-                posebone.keyframe_insert('rotation_euler')
-                posebone.keyframe_insert('scale')
-                for frame in set(com.position_kf.keys()).union(
-                             set(com.rotation_kf.keys())).union(
-                             set(com.scale_kf.keys())):
-                    bpy.context.scene.frame_current = frame
-                    # flip y and z
-                    if frame in com.position_kf.keys():
-                        vct = com.position_kf[frame]
-                        if not math.isnan(vct.x):
-                            posebone.keyframe_insert('location', 0)
-                            posebone.location[0] = vct.x - posebone.bone.head.x
-                        if not math.isnan(vct.z):
-                            posebone.keyframe_insert('location', 1)
-                            posebone.location[1] = -vct.z - posebone.bone.head.y
-                        if not math.isnan(vct.y):
-                            posebone.keyframe_insert('location', 2)
-                            posebone.location[2] = vct.y - posebone.bone.head.z
-                    if frame in com.rotation_kf.keys():
-                        vct = com.rotation_kf[frame]
-                        if not math.isnan(vct.x):
-                            posebone.keyframe_insert('rotation_euler', 0)
-                            posebone.rotation_euler[0] = vct.x - com.rotation_euler.x
-                        if not math.isnan(vct.z):
-                            posebone.keyframe_insert('rotation_euler', 1)
-                            posebone.rotation_euler[1] = -vct.z + com.rotation_euler.z
-                        if not math.isnan(vct.y):
-                            posebone.keyframe_insert('rotation_euler', 2)
-                            posebone.rotation_euler[2] = vct.y - com.rotation_euler.y
-                    if frame in com.scale_kf.keys():
-                        vct = com.scale_kf[frame]
-                        if not math.isnan(vct.x):
-                            posebone.keyframe_insert('scale', 0)
-                            posebone.scale[0] = vct.x/com.scale[0]
-                        if not math.isnan(vct.z):
-                            posebone.keyframe_insert('scale', 1)
-                            posebone.scale[1] = -vct.z/(-com.scale[2])
-                        if not math.isnan(vct.y):
-                            posebone.keyframe_insert('scale', 2)
-                            posebone.scale[2] = vct.y/com.scale[1]
-
-        #if self._exportType=='XFILE':
-            #exportFile (self._bmdDir + self._bmdFileName + ".x", noPrompt) # -- selectedOnly:True
-            # saveMaxFile saveMaxName # XCX
-
-        #else:
-            #loadMaxFile saveMaxName  # XCX
-            #animationRange = interval(0, 100) # -- not required
+            apply_animation(self._bones, self.arm_obj)
 
     def ExtractImages(self, force=False):
                 

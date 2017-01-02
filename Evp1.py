@@ -1,6 +1,6 @@
 #! /usr/bin/python3
 from .Matrix44 import *
-
+from mathutils import Matrix
 
 class Evp1Header:
     """# <variable tag>
@@ -82,8 +82,11 @@ class Evp1:
             self.weightedIndices[i].indices = []  # -- weightedIndices[i].indices.resize(counts[i]);
             for j in range(counts[i]):
                 d = br.ReadWORD()  # -- index to array (starts at one)
+                while len(self.weightedIndices[i].indices) <= j:
+                    self.weightedIndices[i].indices.append(0)
                 self.weightedIndices[i].indices[j] = d
-                numMatrices = max(numMatrices, d+1)
+                numMatrices = max(numMatrices, d+1)  # XCX does the '+1' skrew it up?
+                # XCX(probably not, it might just create extra, unused, junk, data)
 
         # -- read weights of weighted self.matrices
         br.SeekSet(evp1Offset + header.offsets[2])  # TR adapted
@@ -93,17 +96,18 @@ class Evp1:
             for j in range(counts[i]):  # --(int j = 0; j < counts[i]; ++j)
                 # error if f1 = br.GetFloat() used? can print value but assign = undefined
                 fz = br.GetFloat()
+                while len(self.weightedIndices[i].weights) <= j:
+                    self.weightedIndices[i].weights.append(0)
                 self.weightedIndices[i].weights[j] = fz
 
 
-        # -- read self.matrices
+        # -- read matrices
         self.matrices = []
         # -- .resize(numMatrices);
         br.SeekSet(evp1Offset + header.offsets[3])  # TR adapted
+        self.matrices = [None] * numMatrices
         for i in range(numMatrices):
-            self.matrices[i] = Matrix44()
-            self.matrices[i].LoadIdentity()
-
+            self.matrices[i] = Matrix.Identity(4)
             for j in range(3):
                 for k in range(4):
-                    self.matrices[i].m[j][k] = br.GetFloat()
+                    self.matrices[i][j][k] = br.GetFloat()

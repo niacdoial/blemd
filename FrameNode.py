@@ -161,7 +161,8 @@ class FrameNode:
 
         if self.parentFrameNode is not None:
                
-            if len(self.children) > 0:
+            if len(self.children) > 0 and False:  # XCX relationships are unclear,
+                # XCX but this is needed for correct animation
                 self.endPoint = self.children[0].startPoint  # fixed
 
             else:
@@ -211,7 +212,7 @@ class FrameNode:
                 # bone.transform = mTransform
                 # bone.update_r_t()
                 bone.rotation_euler = mathutils.Euler((self.f.rx, self.f.ry, self.f.rz), "XYZ")
-                bone.name.fset('root' + postfixName)
+                bone.name.fset(self.name + postfixName)
 
 
             bone.width = boneThickness
@@ -219,7 +220,13 @@ class FrameNode:
             createdBonesTable.append(bone)
         else:
             mTransform = parentTransform
-            self.name = 'root'
+            self.name = 'root'  # XCX point: does this need to be removed?
+            #self._bone = Pseudobone(mathutils.Vector((0, 0, 0)), mathutils.Vector((0, 0, 1)),
+            #                  mathutils.Vector((0, 0, 1)).rotate(parentTransform.to_euler()))
+            #self._bone.scale = (1, 1, 1)
+            #self._bone.rotation_euler = mathutils.Euler((0, 0, 0), "XYZ")
+            #self._bone.name.fset('root' + postfixName)
+            #createdBonesTable.append(self._bone)
         for child in self.children:
             child._CreateBones(bone, boneThickness, createdBonesTable, postfixName, mTransform)
 
@@ -244,25 +251,25 @@ class FrameNode:
             childBone._FixBoneLength()
 
     def _ToArray(self, items):
-
+        items.append(self)
         for child in self.children:
-           items.append(child)
-           child._ToArray(items)
+            child._ToArray(items)
 
     def ToArray(self):
         items = []
-        self._ToArray(items)
+        for child in self.children:
+            child._ToArray(items)
         return items
 
     def _CreateParentBoneIndexs(self, items, itemIndex, parentIndex, depth):
 
         items.append(parentIndex)
         
-        parentIndex = itemIndex[0]  # fixed
+        parentIndex = itemIndex  # fixed
         # --if (name is not None) then -- self.first item is None
         # --	print (depth + name + ":" + (parentIndex as string) + ":" + (itemIndex[1] as string))
         
-        itemIndex[0] = itemIndex[0] + 1  # fixed *2
+        itemIndex = itemIndex + 1  # fixed *2
         
         for child in self.children:
             child._CreateParentBoneIndexs(items, itemIndex, parentIndex, depth + "--")
@@ -270,7 +277,7 @@ class FrameNode:
     def CreateParentBoneIndexs(self):
                 
         items = []
-        itemIndex = [0]
+        itemIndex = 0
         # -- only contains one value. Pass by reself.ference?
         self._CreateParentBoneIndexs(items, itemIndex, 0, "--")
         

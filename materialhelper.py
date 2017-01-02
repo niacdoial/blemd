@@ -33,7 +33,6 @@ def add_err_material(obj):
 
 def add_vcolor(mesh, color_layer, cv_to_f_v, Faces, uvlayer):
     #return  # XCX debug that later
-    tulpe = type(())
 
     vx_layer = mesh.vertex_colors.new("v_color_"+str(len(mesh.vertex_colors)))
     vx_layer_a = mesh.vertex_colors.new("v_color_alpha_"+str(len(mesh.vertex_colors)))
@@ -49,9 +48,9 @@ def add_vcolor(mesh, color_layer, cv_to_f_v, Faces, uvlayer):
     #verts are aligned. are faces too?
     f_to_rf = [None]*len(mesh.polygons)  # blender faces index to loaded faces index
     for num, com in enumerate(mesh.polygons):  # will be identity most of the time
-        index = Faces.index(tulpe(com.vertices))
+        index = Faces.index(tuple(com.vertices))
         while f_to_rf[index] is not None:
-            index = Faces.index(tulpe(com.vertices), index+1)
+            index = Faces.index(tuple(com.vertices), index+1)
         f_to_rf[index] = num
     v_rf_to_l = []
     for com in range(len(mesh.vertices)):

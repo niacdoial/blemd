@@ -1,12 +1,13 @@
 #! /usr/bin/python3
 
 
-from .Vector3 import *
 from math import cos, sin
+from mathutils import Matrix, Vector, Euler
 from .Evp1 import *
+from math import radians as rads
 
 
-class Matrix44:
+'''class Matrix44:
     """# --_00, _01, _02, _03,
     # --_10, _11, _12, _13,
     # --_20, _21, _22, _23,
@@ -137,14 +138,14 @@ class Matrix44:
     def LoadRotateXRM(self, rad):
         self.LoadIdentity()  # corrected
         self.m[1][1] = cos(rad)
-        self.m[2][1] = -1 * sin(rad)
+        self.m[2][1] = -sin(rad)
         self.m[1][2] = sin(rad)
         self.m[2][2] = cos(rad)
 
     def LoadRotateXLM(self, rad):
         self.LoadIdentity()  # corrected
         self.m[1][1] = cos(rad)
-        self.m[1][2] = -1 * sin(rad)  # -- -1 * sin rad saself.me as -sin 1.5707
+        self.m[1][2] = -sin(rad)  # -- -1 * sin rad same as -sin 1.5707
         self.m[2][1] = sin(rad)
         self.m[2][2] = cos(rad)
 
@@ -180,55 +181,49 @@ class Matrix44:
         self.LoadIdentity()
         self.m[0][0] = xs
         self.m[1][1] = ys
-        self.m[2][2] = zs
+        self.m[2][2] = zs'''
 
 
 def Mad(r, m, f):
     for j in range(3):
         for k in range(4):
-            r.m[j][k] += f * m.m[j][k]
+            r[j][k] += f * m[j][k]
     return r
 
 
 def LocalMatrix(jnt, i):
     # - returns Matrix44f
-    s = Matrix44()
-    s.LoadScale(jnt.frames[i].sx, jnt.frames[i].sy, jnt.frames[i].sz)
+    scale_vector = Vector((jnt.frames[i].sx, jnt.frames[i].sy, jnt.frames[i].sz))
+    sx = Matrix.Scale(scale_vector.x, 4, Vector((1, 0, 0)))
+    sy = Matrix.Scale(scale_vector.y, 4, Vector((0, 1, 0)))
+    sz = Matrix.Scale(scale_vector.z, 4, Vector((0, 0, 1)))
 
     # --TODO: I don't  know which of these two return values are the right ones
     # --(if it's the first, then what is scale used for at all?)
 
     # --looks wrong in certain circumstances...
-    # return jnt.matrices[i]  # -- this looks better with vf_064l.bdl (from zelda)
-    return jnt.matrices[i]*s   # -- this looks a bit better with mario's bottle_in animation
+    return jnt.matrices[i]  # -- this looks better with vf_064l.bdl (from zelda)
+    return jnt.matrices[i]*sz*sy*sx   # -- this looks a bit better with mario's bottle_in animation
 
 
 def FrameMatrix(f):
-    t = Matrix44()
-    rx = Matrix44()
-    ry = Matrix44()
-    rz = Matrix44()
-    s = Matrix44()
-
-    t.LoadTranslateLM(f.t.x, f.t.y, f.t.z)
-    rx.LoadRotateXLM(f.rx)
-    ry.LoadRotateYLM(f.ry)
-    rz.LoadRotateZLM(f.rz)
-
-    res = Matrix44()
-    res.LoadIdentity()
-    res = t.Multiply(rz.Multiply(ry.Multiply(rx)))
+    t = Matrix.Translation(Vector((f.t.x, f.t.y, f.t.z)))
+    # s = Matrix.Scale
+    r = Euler((rads(f.rx), rads(f.ry), rads(f.rz)), 'XYZ').to_matrix().to_4x4()
+    res = t*r
     return res
 
 
 def updateMatrix(frame, parentmatrix):
-    return parentmatrix.Multiply(FrameMatrix(frame))
-
+    return parentmatrix*FrameMatrix(frame)
 
 def updateMatrixTable(evp, drw, jnt, currPacket, multiMatrixTable, matrixTable, isMatrixWeighted):
+    global dataholder
     for n in range(len(currPacket.matrixTable)):
         index = currPacket.matrixTable[n]
-        if index != 0xffff:  # -- //this means keep old entry
+
+        # if index is 0xffff, use the last packet's data.
+        if index != 0xffff:  # 0xffff this means keep old entry
             if drw.isWeighted[index]:  # corrected
                 # --TODO: the EVP1 data should probably be used here,
                 # --figure out how this works (most files look ok
@@ -241,32 +236,41 @@ def updateMatrixTable(evp, drw, jnt, currPacket, multiMatrixTable, matrixTable, 
                 # --(and this code is slow as hell, so TODO: fix this)
 
                 # --NO idea if this is right this way...
-                m = Matrix44()
-                m.LoadZero()
+                m = Matrix()
+                m.zero()  # zero-ifiy m
 
                 mm = evp.weightedIndices[drw.data[index]]  # -- get MultiMatrix # corrected
                 singleMultiMatrixEntry = MultiMatrix()
 
+                singleMultiMatrixEntry.weights = mm.weights.copy()
+                singleMultiMatrixEntry.indices = mm.indices.copy()
                 for r in range(len(mm.weights)):
-                    singleMultiMatrixEntry.weights[r] = mm.weights[r]
-                    singleMultiMatrixEntry.indices[r] = mm.indices[r]
+                    # did before.
+                    #singleMultiMatrixEntry.weights[r] = mm.weights[r]
+                    #singleMultiMatrixEntry.indices[r] = mm.indices[r]
+
                     # corrected (r]+1) # -- (drw.data[mm.indices[r]+ 1] + 1) -- bone index
-                    # --  sm1 = evp.matrices[mm.indices[r]] -- const Matrix44f
                     # --  messageBox (mm.indices as string)
                     # --if (mm.indices[r] != 0) then
                     # -- (
                     sm1 = evp.matrices[mm.indices[r]]  # corrected(r]+1) # -- const Matrix44f
                     sm2 = LocalMatrix(jnt, mm.indices[r])  # corrected (r]+1)
-                    sm3 = sm2.Multiply(sm1)
+                    sm3 = sm2*sm1
                     # )
                     # else
                     # --	sm3 = (LocalMatrix mm.indices[r] )
 
                     Mad(m, sm3, mm.weights[r])
 
+                while len(multiMatrixTable) <= n:
+                    multiMatrixTable.append(None)
                 multiMatrixTable[n] = singleMultiMatrixEntry
-                m.m[3][3] = 1  # fixed
+                m[3][3] = 1  # fixed
+                while len(matrixTable) <= n:
+                    matrixTable.append(None)
                 matrixTable[n] = m
+                while len(isMatrixWeighted) <= n:
+                    isMatrixWeighted.append(None)
                 isMatrixWeighted[n] = True
             else:
                 while len(matrixTable) <= n:
