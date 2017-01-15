@@ -1,6 +1,6 @@
 import bpy
 import sys
-path=' '.join(sys.argv[4:])
+path=' '.join(sys.argv[4:])  # path to the bmd file
 
 bpy.data.objects.remove(bpy.data.objects['Cube'],True)
 bpy.data.meshes.remove(bpy.data.meshes['Cube'],True)
@@ -16,9 +16,12 @@ try:
 except AttributeError:  # module not loaded: do it manually
     import blemd
     temp = blemd.BModel()
-    temp.SetBmdViewExePath('C:\\Users\\Liam\\Bureau\\MaxBMD-multi-texcoords\\')
+    current_dir = OSPath.abspath(OSPath.split(__file__)[0])  # automatically find where we are
+    temp.SetBmdViewExePath(current_dir+'\\')  # add backslash for good measure
     temp.Import(path, 5, True, False, True, True, 'XFILE', False, 'AS_PNG', False)
 
+    
+# this line (below) is the export command. feel free to change it to whatever you want
 bpy.ops.export_scene.fbx(filepath=path[:-3]+'fbx', axis_forward='Y', axis_up='Z', path_mode='COPY', embed_textures=True)
 
 bpy.ops.wm.quit_blender()  # quit blender the clean way
