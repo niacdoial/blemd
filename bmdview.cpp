@@ -469,10 +469,13 @@ void readBmd(FILE* f)
 
     char filename[2000];
     //sprintf(filename, "%s %d %s %d.dds", g_name, k, strings[k].c_str(), tx.format);
-	sprintf(filename, "%s%s.dds", g_folder.c_str(), strings[k].c_str());
+	if (g_folder[g_folder.size() - 1] != '\\')
+		sprintf(filename, "%s\\%s.dds", g_folder.c_str(), strings[k].c_str());
+	else
+		sprintf(filename, "%s%s.dds", g_folder.c_str(), strings[k].c_str());
 
     FILE* outF = fopen(filename, "wb");
-    cout<<"just opened "<<filename<<endl;
+    //cout<<"just opened "<<filename <<'('<<outF <<')'<<endl;
     fwrite(&ddsHead, sizeof(ddsHead), 1, outF);
 
     //image data
@@ -487,7 +490,7 @@ void readBmd(FILE* f)
     }
 
     delete [] buff0;
-    cout<<"gonna close "<<filename<<endl;
+    //cout<<"gonna close "<<filename<<endl;
     fclose(outF);
   }
 }
@@ -503,6 +506,14 @@ int main(int argc, char* argv[])
     return EXIT_FAILURE;
 
   g_folder = argv[2];
+  std::string g_folder2 = g_folder;  // this is a "ghost" for debugging purposes
+  if (g_folder[g_folder.size() - 1] == '\"')
+  {
+	  cout << "g_folder: " << g_folder2;
+	  g_folder.erase(g_folder.end() - 1);
+	  cout << "g_folder: " << g_folder;
+  }
+  cout << "textures: " << g_folder << endl;
 
   readBmd(f);
 

@@ -1,10 +1,8 @@
 #! /usr/bin/python3
 
 
-from math import cos, sin
 from mathutils import Matrix, Vector, Euler
 from .Evp1 import *
-from math import radians as rads
 
 
 '''class Matrix44:
@@ -209,7 +207,7 @@ def LocalMatrix(jnt, i):
 def FrameMatrix(f):
     t = Matrix.Translation(Vector((f.t.x, f.t.y, f.t.z)))
     # s = Matrix.Scale
-    r = Euler((rads(f.rx), rads(f.ry), rads(f.rz)), 'XYZ').to_matrix().to_4x4()
+    r = Euler((f.rx, f.ry, f.rz), 'XYZ').to_matrix().to_4x4()
     res = t*r
     return res
 

@@ -1,6 +1,7 @@
 #! /usr/bin/python3
 from mathutils import Vector
 from .maxheader import MessageBox
+import mathutils
 
 
 class VertColor:
@@ -368,12 +369,41 @@ def StripIterator(lst):
     flip = False  # odd faces are in reversed index
     for com in range(len(lst)-2):
         if flip:
-            yield (lst[com+2], lst[com+1], lst[com])
+            yield (lst[com+2], lst[com], lst[com+1])# (swap vertices ,n°2 and n°3)
         else:
-            yield (lst[com], lst[com+1], lst[com+2])
+            yield (lst[com], lst[com+2], lst[com+1])# (swap vertices ,n°2 and n°3)
         flip = not flip
 
 
 def FanIterator(lst):
     for com in range(1, len(lst)-1):
-        yield (lst[0], lst[com], lst[com+1])
+        yield (lst[0], lst[com+1], lst[com])  # faces need to be described like this in order to have correct normals
+
+
+def setNormals(mesh, Faces, nc_to_f_v, normals):
+    f_to_rf = [None] * len(mesh.polygons)  # blender faces index to loaded faces index
+    for num, com in enumerate(mesh.polygons):  # will be identity _MOST_ of the time
+        index = Faces.index(tuple(com.vertices))
+        while f_to_rf[index] is not None:
+            index = Faces.index(tuple(com.vertices), index + 1)
+        f_to_rf[index] = num
+
+    v_rf_to_l = []
+    for com in range(len(mesh.vertices)):
+        v_rf_to_l.append({})
+    for num, com in enumerate(mesh.polygons):
+        for com2 in com.loop_indices:
+            l_id = mesh.loops[com2].index
+            v_rf_to_l[mesh.loops[com2].vertex_index][num] = l_id
+
+    # those lines are a new method.
+    for num, com0 in enumerate(nc_to_f_v):
+        for com in com0:
+            if f_to_rf[com[0]] is not None:
+                for com2 in mesh.polygons[f_to_rf[com[0]]].loop_indices:
+                    if mesh.loops[com2].vertex_index == com[1]:
+                        if normals[num] is not None:
+                            normal = (normals[num].x, -normals[num].z, normals[num].y)
+                            mesh.loops[com2].normal = mathutils.Vector(normal)
+                        else:
+                            mesh.loops[com2].normal = mesh.vertices[mesh.loops[com2].vertex_index].normal

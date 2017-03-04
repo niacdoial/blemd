@@ -25,9 +25,9 @@ def stdout_redirected(to=os.devnull):
     ####assert libc.fileno(ctypes.c_void_p.in_dll(libc, "stdout")) == fd == 1
 
     def _redirect_stdout(to):
-        sys.stdout.close() # + implicit flush()
-        os.dup2(to.fileno(), fd) # fd writes to 'to' file
-        sys.stdout = os.fdopen(fd, 'w') # Python writes to fd
+        sys.stdout.close()  # + implicit flush()
+        os.dup2(to.fileno(), fd)  # fd writes to 'to' file
+        sys.stdout = os.fdopen(fd, 'w')  # Python writes to fd
 
     with os.fdopen(os.dup(fd), 'w') as old_stdout:
         with open(to, 'w') as file:
@@ -40,12 +40,22 @@ def stdout_redirected(to=os.devnull):
                                              # CLOEXEC may be different
 
 
+@contextmanager  # XCX use me!
+def active_object(obj):
+    act_bk = bpy.context.scene.objects.active
+    bpy.context.scene.objects.active = obj
+    try:
+        yield  # run some code
+    finally:
+        bpy.context.scene.objects.active = act_bk
+
+
 def MessageBox(string):
     if IDE:
         print(string, file=sys.stderr, end='')
         input()
         return
-    drawer = (lambda obj, context : obj.layout.label(string))
+    drawer = (lambda obj, context: obj.layout.label(string))
     bpy.context.window_manager.popup_menu(drawer, 'message box', icon='ERROR')
     sleep(5)
 
@@ -61,8 +71,9 @@ def DosCommand(cmd):
     if not os.path.isabs(cmd):
         cmd = os.path.abspath(cmd)
     if cmd[-2] == '\\':  # NO! causes incorrect path
-        cmd = cmd[:-2] + "\""
-    print(subprocess.check_output(cmd, stderr=subprocess.STDOUT))
+        cmd = cmd[:-2] # + "\" "  # XCX need to replace ?
+    print(subprocess.check_output(cmd, stderr=subprocess.STDOUT).decode())
+    # shell output in bytes
 
 
 def getFilenamePath(path):

@@ -148,7 +148,7 @@ class BinaryReader:
 
     def ReadFixedLengthString(self, len):
         strRead = b""
-        for _ in range(len) :
+        for _ in range(len):
             strRead += (self._f.read(1))
         return strRead.decode('utf-8')
 
@@ -173,7 +173,7 @@ class BinaryReader:
 
         tag = self.ReadFixedLengthString(4)
         self._f.seek(0)
-        if tag != "Yaz0" :
+        if tag != "Yaz0":
             return  # -- not compressed, return file directly
 
         # -- yaz0-compressed file - uncompress to a temporary file,
@@ -240,7 +240,7 @@ class BinaryReader:
         strRead = strRead[:-1]  # strip final '\x00'
         self._f.seek(t)
 
-        return strRead.decode('utf-8')
+        return strRead.decode('cp1252')
 
     def ReadWORD(self):
         w1 = ord(self._f.read(1))

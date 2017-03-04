@@ -7,61 +7,6 @@ from .maxheader import MessageBox
 
 
 class FrameNode:
-    """# <variable name>
-    # <variable startPoint>
-    # -- end point = first child
-    # <variable children>
-    # -- FrameNode
-    # <variable parentFrameNode>
-    # <variable effP>
-    # <variable f>
-    # <variable _bone>
-    # <variable _eulerController>
-    # -- used for animations
-    # <variable _dummyHelper>
-    # --_dummyHelperRequired = false,
-    # <function>
-
-    # -- required for character assembly
-    # <function>
-
-    # <function>
-
-    # -- parent scale has no effect on child bone (prevents skewing)
-    # -- can move child bone without auto scaling parent bone (face animation)
-    # -- should only scale when the parent bone only has one child?
-    # <function>
-
-    # -- private
-    # <function>
-
-    # -- used for testing
-    # <function>
-
-    # -- private
-    # <function>
-
-    # -- private: NYI
-    # <function>
-
-    # <function>
-
-    # <function>
-
-    # <function>
-
-    # <function>
-
-    # -- returns new bones array
-    # <function>
-
-    # <function>
-
-    # -- used on hold, fetch. Bone references lost.
-    # <function>
-
-    # <function>"""
-
     def __init__(self):  # GENERATED!
         self.children = []
         self.startPoint = mathutils.Vector((0,0,0))
@@ -72,26 +17,28 @@ class FrameNode:
         self._dummyHelper = None
 
     def RemoveDummyHelper(self):
-        if (self._bone is not None) and (self._dummyHelper is not None) :                        
+        if (self._bone is not None) and (self._dummyHelper is not None):
             self._bone.parent.fset(self._dummyHelper.parent.fget())
             self._dummyHelper = None
 
     def _GetAllNodes(self, nodes):
+        """private function called by getAllNodes, and recursively on each child"""
         if self._bone is not None:
             nodes.append(self._bone) 
             
-            if self._dummyHelper is not None :
-                nodes.append(self._dummyHelper) # -- required
+            if self._dummyHelper is not None:
+                nodes.append(self._dummyHelper)  # -- required
         for child in self.children:
            child._GetAllNodes(nodes)
 
     def GetAllNodes(self):
-                
+        """return every pseudobone in an array"""
         retNodes = []        
         self._GetAllNodes(retNodes)        
         return retNodes
 
     def FixBones(self, boneThickness):
+        return  # XCX no dummy bones!
         """
                     #
             #		local parent = self_bone
@@ -146,15 +93,14 @@ class FrameNode:
             # --)
             child.FixBones(boneThickness)
 
-    def _PrintTree(self, depth):
+    def PrintTree(self, depth=""):
+        """prints the Framenode in a tree manner
+        `depth` reserved to self-calls"""
         if self.name is not None:
             print(depth + self.name)
 
         for child in self.children:
             child._printTree(depth + '--')
-
-    def PrintTree(self):
-        self._PrintTree("")
 
     def _CreateBones(self, parentBone, boneThickness, createdBonesTable, postfixName, parentTransform):
         bone = None
@@ -220,7 +166,7 @@ class FrameNode:
             createdBonesTable.append(bone)
         else:
             mTransform = parentTransform
-            self.name = 'root'  # XCX point: does this need to be removed?
+            self.name = 'root'  # XCX point: does this need to be removed? seems not.
             #self._bone = Pseudobone(mathutils.Vector((0, 0, 0)), mathutils.Vector((0, 0, 1)),
             #                  mathutils.Vector((0, 0, 1)).rotate(parentTransform.to_euler()))
             #self._bone.scale = (1, 1, 1)
@@ -310,7 +256,8 @@ class FrameNode:
             boneSet.remove(parent._bone)
 
         if self._bone is not None:
-            self._dummyHelper = getBoneByName(self._bone.name.fget() +"_dummy")
+            pass  # self._dummyHelper = getBoneByName(self._bone.name.fget() +"_dummy")
+            # XCX no damn dummy bones!
         
         boneSet.append(self._bone)
         
