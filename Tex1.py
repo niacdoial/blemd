@@ -172,10 +172,9 @@ class Tex1:
         h = Tex1Header()
         h.LoadData(br)
         # -- read self.stringtable
-        self.stringtable = br.ReadStringTable (tex1Offset + h.stringTableOffset)         # -- readStringtable(tex1Offset + h.stringTableOffset, f, self.stringtable);
+        self.stringtable = br.ReadStringTable(tex1Offset + h.stringTableOffset)  # readStringtable(tex1Offset + h.stringTableOffset, f, self.stringtable);
 
-
-        if len(self.stringtable) != h.numImages :
+        if len(self.stringtable) != h.numImages:
             raise ValueError("tex1: number of strings doesn't match number of images")
 
           # -- read all image headers before loading the actual image

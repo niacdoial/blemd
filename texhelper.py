@@ -4,57 +4,72 @@ import mathutils
 from .maxheader import getFilenameFile
 
 
-imported = {}
+imported_tslots = {}
+imported_textures = {}
 force_names = {}
 
 DIFFUSE = 'DIFFUSE'
 ALPHA = 'ALPHA'
 SPECULAR = 'SPECULAR'
 
+# used to set mode before calls
+MODE = 'PACKED'
 
 def getTexImage(mat, fname):
-    global imported
-    return imported[mat][fname].image
+    global imported_tslots
+    return imported_tslots[mat][fname].image
 
 
 def getTexSlot(mat, fname):
     for com in mat.texture_slots:
         if com is not None:
-            if com.texture == imported[mat][fname]:
+            if com.texture == imported_tslots[mat][fname]:
                 return com
 
+def newtex_tex(fname, _loaded_images=[], export_function=(lambda: None)):
+    global forced_names
+    global imported_textures
+    global MODE
+    if fname in imported_textures.keys():
+        return imported_textures[fname]
 
-def newtex(fname, type, mat, mode='PACKED', _loaded_images=[], export_function=(lambda: None)):
-    global imported
-    if mat in imported.keys() and fname in imported[mat].keys():
-        tex = imported[mat][fname]
+    if fname in force_names.keys():
+        img = force_names[fname]
+    else:
+        # if fname not in _loaded_images:  # XCX is this useless?
+        #    export_function(force=True)
+        img = bpy.data.images.load(fname)
+    if MODE == 'PACKED':
+        img.pack()
+    elif MODE == 'AS_PNG':
+        img.pack(as_png=True)
+    elif MODE == 'TARGA':
+        tgaconvert(img)
+    tex = bpy.data.textures.new(getFilenameFile(fname) + '_texture', type='IMAGE')
+
+    tex.image = img
+    tex.use_interpolation = True
+    tex.filter_type = 'EWA'
+    tex.filter_size = 1
+    tex.use_alpha = True
+
+    imported_textures[fname] = tex
+    return tex
+
+def newtex_tslot(fname, type, mat, _loaded_images=[], export_function=(lambda: None)):
+    global imported_tslots
+    if mat in imported_tslots.keys() and fname in imported_tslots[mat].keys():
+        tex = imported_tslots[mat][fname]
         matslot = getTexSlot(mat, fname)
     else:
-        if fname in force_names.keys():
-            img = force_names[fname]
-        else:
-            if fname not in _loaded_images:
-                export_function(force=True)
-            img = bpy.data.images.load(fname)
-        if mode == 'PACKED':
-            img.pack()
-        elif mode == 'AS_PNG':
-            img.pack(as_png=True)
-        elif mode == 'TARGA':
-            tgaconvert(img)
-        tex = bpy.data.textures.new(getFilenameFile(fname)+'_texture', type='IMAGE')
         mat.name = getFilenameFile(fname)+'_material'
-        tex.image = img
-        tex.use_interpolation = True
-        tex.filter_type = 'EWA'
-        tex.filter_size = 1
-        tex.use_alpha = True
+        tex = newtex_tex(fname, _loaded_images, export_function)
         matslot = mat.texture_slots.add()
         matslot.texture = tex
         matslot.texture_coords = 'UV'
-        if mat not in imported.keys():
-            imported[mat] = {}
-        imported[mat][fname] = tex
+        if mat not in imported_tslots.keys():
+            imported_tslots[mat] = {}
+        imported_tslots[mat][fname] = tex
     if type == DIFFUSE:
         matslot.diffuse_color_factor = 1
         matslot.use_map_color_diffuse = True
@@ -92,6 +107,8 @@ def newUVlayer(mesh, tverts, tfaces, Faces, tv_to_f_v):
     num = len(mesh.uv_textures)
     mesh.uv_textures.new()
     uvtex = mesh.uv_layers[num]
+    uvtex.name = 'UV '+str(len(mesh.uv_layers)-1)
+    # '-1' because count takes the new layer in account and index starts at 0
 
     # ##--meshop.setNumMapVerts modelMesh uv tverts[uv].count
 

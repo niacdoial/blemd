@@ -26,7 +26,7 @@ bl_info = {
     "blender": (2, 77, 0),
     "location": "File > Import > Nintendo BMD",
     "description": "Import files in the gc/wii BMD format (.bmd)",
-    "wiki_url": "https://github.com/niacdoial",
+    "wiki_url": "https://github.com/niacdoial/blemd",
     "warning": "still in devlopement",
     "tracker_url": "???",
     "category": "Import-Export",
@@ -58,7 +58,7 @@ class ImportBmd(Operator, ImportHelper):
     # List of operator properties, the attributes will be assigned
     # to the class instance from the operator settings before calling.
     sv_anim = BoolProperty(
-        name="Save Animations",
+        name="Save Animations externally (WIP)",
         description="",
         default=True
         )
@@ -77,15 +77,15 @@ class ImportBmd(Operator, ImportHelper):
 
     tx_xp = BoolProperty(
         name="Export textures",
-        description="",
+        description="why does this option even exist?",
         default=True
         )
 
-    ic_sc = BoolProperty(
-        name="include scaling",
-        description="DO NOT USE yet",
-        default=False
-        )
+    #ic_sc = BoolProperty(
+    #    name="include scaling",
+    #    description="DO NOT USE yet",
+    #    default=False
+    #    )
 
     dvg = BoolProperty(
         name="DEBUG vertex groups",
@@ -93,13 +93,13 @@ class ImportBmd(Operator, ImportHelper):
         default=False
         )
 
-    type = EnumProperty(
-        name="Import Type",
-        description="Choose between two items",
-        items=(('XFILE', "x export (games)", ""),),
-               #('CHARACTER', "character export (animations)", "")),
-        default='XFILE'
-        )
+    #type = EnumProperty(
+    #    name="Import Type",
+    #   description="Choose between two items",
+    #    items=(('XFILE', "x export (games)", ""),),
+    #           #('CHARACTER', "character export (animations)", "")),
+    #    default='XFILE'
+    #    )
 
     imtype = EnumProperty(
         name="Image use type",
@@ -112,13 +112,19 @@ class ImportBmd(Operator, ImportHelper):
         )
 
     boneThickness = IntProperty(
-        name="Bone Thickness",
-        description="from 5 to 100",
+        name="bone length",
+        description="from 5 to 100 (usually)",
         min=1,
         max=1000,
         soft_min=5,
         soft_max=100,
-        default=5
+        default=10
+    )
+
+    use_nodes = BoolProperty(
+        name="use node materials",
+        description="use complete (glsl) materials (converted into nodes), hard to export.",
+        default=False
     )
 
     def execute(self, context):
@@ -126,7 +132,7 @@ class ImportBmd(Operator, ImportHelper):
         path = OSPath.abspath(OSPath.split(__file__)[0])  # automatically find where we are
         temp.SetBmdViewExePath(path+'\\')  # add backslash for good measure
         temp.Import(self.filepath, self.boneThickness, self.mir_tx, self.frc_cr_bn,
-                    self.sv_anim, self.tx_xp, self.type, self.ic_sc, self.imtype, self.dvg)
+                    self.sv_anim, self.tx_xp, 'XFILE', True, self.imtype, self.dvg, self.use_nodes)
         return {'FINISHED'}
 
 

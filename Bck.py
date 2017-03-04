@@ -384,7 +384,7 @@ class Bck:
 
         # -- update time
         self.currAnimTime += deltaTime  # --*16 -- convert from seconds to ticks (dunno if this is right this way...TODO)
-        self.currAnimTime = self.currAnimTime % self.animationLength # -- loop?
+        self.currAnimTime = self.currAnimTime % self.animationLength  # -- loop?
 
         # -- update joints
         for i in range(len(jnt.frames)):
@@ -392,7 +392,7 @@ class Bck:
             jnt.frames[i].sy = self.getAnimValue(self.anims[i].scalesY, self.currAnimTime)
             jnt.frames[i].sz = self.getAnimValue(self.anims[i].scalesZ, self.currAnimTime)
 
-            # --TODO: use quaternion interpolation for rotations?
+            # --TODO: use quaternion interpolation for rotations? nope: it will screw the keyframes up.
             jnt.frames[i].rx = self.getAnimValue(self.anims[i].rotationsX, self.currAnimTime)
             jnt.frames[i].ry = self.getAnimValue(self.anims[i].rotationsY, self.currAnimTime)
             jnt.frames[i].rz = self.getAnimValue(self.anims[i].rotationsZ, self.currAnimTime)
@@ -403,7 +403,6 @@ class Bck:
 
     # TODO: erase dummy bone system
     def GetPositionBone(self, curBone):
-        # XCX
         dummyBone = getBoneByName(curBone.name.fget() + "_dummy")
 
         if dummyBone is None:
@@ -428,15 +427,13 @@ class Bck:
 
             # -- animated bones require scaling helper
             if (len(anim.scalesX) > 1 or len(anim.scalesY) > 1 or len(anim.scalesZ) > 1):
-                refBoneRequiresDummyList[i] = True  # -- bone.name
+                pass  # refBoneRequiresDummyList[i] = True  # -- bone.name
+                # XCX no dummy bones!
 
             if (len(anim.translationsX) > 1 or len(anim.translationsY) > 1 or len(anim.translationsZ) > 1):
-                pass  #bone.boneEnable = False  # -- allow moving bone without affecting parent bone # XCX
+                pass  #bone.boneEnable = False  # -- allow moving bone without affecting parent bone
+                #  XCX means no IK: means IK is here by default?
 
-                # --messageBox (anim.scalesX as string) -- only one value if position not animated. value = 0
-                # --messageBox (anim.translationsY as string) -- only one value if scale not animated. value = 1
-
-            # XCX: what if a bone has initial scale?
             # position correction LATER in the program
             for j in range(len(anim.rotationsX)):
                 rot = anim.rotationsX[j]
