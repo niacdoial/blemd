@@ -369,7 +369,7 @@ class BModel:
                 bpy.context.scene.update()
                 bpy.ops.object.mode_set(mode='OBJECT')
 
-            modelMesh.update()
+        modelMesh.update()
 
         modelMesh.create_normals_split()  # does this stabilize normals?
 
@@ -392,7 +392,7 @@ class BModel:
         modelMesh.validate(clean_customdata=False)  # *Very* important to not remove loop normals here!
         modelMesh.update()
 
-        # begin not understand black box (where does this thing write to make normals stable?)
+        # begin not understood black box (where does this thing write to make normals stable?)
         clnors = array('f', [0.0] * (len(modelMesh.loops) * 3))
         modelMesh.loops.foreach_get("normal", clnors)
 
@@ -401,7 +401,7 @@ class BModel:
         modelMesh.normals_split_custom_set(tuple(zip(*(iter(clnors),) * 3)))
         modelMesh.use_auto_smooth = True
         modelMesh.show_edge_sharp = True
-        # end not understand black box
+        # end not understood black box
 
         return modelMesh
 
@@ -744,6 +744,7 @@ class BModel:
         if n.type == 0x10:  # -joint
             self.jnt.matrices[n.index] = updateMatrix(self.jnt.frames[n.index], effP)  # XCX update matrix needed?
             effP = self.jnt.matrices[n.index]  # -- setup during CreateFrameNodes # corrected
+            self.jnt.frames[n.index].incr_matrix = effP
         elif n.type == 0x11:  # build material
 
             matIndex=n.index
@@ -901,7 +902,7 @@ class BModel:
                     savePath = self._bmdDir + "Animations\\" + bckFileName + ".anm"
 
                     saveMaxAnimName = self._bmdDir + bckFileName + ".max"  # -- .chr?
-                    b = Bck()
+                    b = Bck_in()
                     b.LoadBck(f)
                     if len(b.anims) != len(self._bones):
                         errMsg += bckFileName + "\n"
@@ -949,7 +950,7 @@ class BModel:
             bpy.context.scene.frame_end = startFrame
 
 
-            apply_animation(self._bones, self.arm_obj)
+            apply_animation(self._bones, self.arm_obj, self.jnt.frames)
 
     def ExtractImages(self, force=False):
                 

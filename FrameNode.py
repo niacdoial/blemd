@@ -135,6 +135,7 @@ class FrameNode:
             # --	self.freeze bone -- don't hide or .x export won't work
             self._bone = bone
             bone.scale = (self.f.sx, self.f.sy, self.f.sz)
+            bone.jnt_frame = self.f
             
             # --self_bone.boneFreezeLength=self.false -- prevent scale errors on animations. e.g. talking animations scale head?
             # --self_bone.boneAutoAlign=self.false
@@ -224,10 +225,10 @@ class FrameNode:
                 
         items = []
         itemIndex = 0
-        # -- only contains one value. Pass by reself.ference?
+        # only contains one value. Pass by reference?
         self._CreateParentBoneIndexs(items, itemIndex, 0, "--")
         
-        del items[0]  # -- self.first item not used  # fixed
+        del items[0]  # first item not used  # fixed
         return items
 
     def CreateBones(self, boneThickness, postfixName):

@@ -1,10 +1,24 @@
 #! /usr/bin/python3
 from .BinaryReader import BinaryReader
+from .BinaryWriter import BinaryWriter
 from .maxheader import MessageBox
-from .pseudobones import getBoneByName, Pseudobone
+from .pseudobones import getBoneByName, Pseudobone, cubic_interpolator
 import mathutils
 import bpy
-from math import nan, pi
+from math import nan, pi, isnan, ceil, isclose, floor
+
+
+def round(f):
+    """gets the closest int"""
+    d1 = f-floor(f)
+    d2 = ceil(f)-f
+    if d1 < d2:
+        return floor(f)
+    else:
+        return ceil(f)
+
+max_pos = 0
+timez = ([],[],[])
 
 
 class BckKey:
@@ -14,10 +28,15 @@ class BckKey:
     # -- float 
     # <variable tangent>
     # -- float  //??
-    def __init__(self):  # GENERATED!
-        self.time = 0
-        self.value = 0
-        self.tangent = 0
+    def __init__(self, tm=0, vl=0.0, tg=0.0):  # GENERATED!
+        self.time = tm
+        self.value = vl
+        self.tangent = tg
+
+    def __eq__(self, other):
+        return (self.time == other.time and
+                isclose(self.value, other.value, rel_tol=1E-3) and
+                isclose(self.tangent, other.tangent, rel_tol=1E-3))
 
 
 class BckJointAnim:
@@ -40,16 +59,30 @@ class BckJointAnim:
     # <variable translationsZ>
     # -- std::vector<Key>
     def __init__(self):  # GENERATED!
-        self.scalesX= []
-        self.rotationsY= []
-        self.rotationsZ= []
-        self.scalesZ= []
-        self.translationsZ= []
-        self.translationsX= []
-        self.rotationsX= []
-        self.translationsY= []
-        self.scalesY= []
+        self.scalesX = []
+        self.rotationsY = []
+        self.rotationsZ = []
+        self.scalesZ = []
+        self.translationsZ = []
+        self.translationsX = []
+        self.rotationsX = []
+        self.translationsY = []
+        self.scalesY = []
+        self.frames_scale = set()
+        self.frames_rotation = set()
+        self.frames_translation = set()
     # ------------------------------------
+
+    def __eq__(self, other):
+        return (self.scalesX == other.scalesX and
+                self.scalesY == other.scalesY and
+                self.scalesZ == other.scalesZ and
+                self.rotationsX == other.rotationsX and
+                self.rotationsY == other.rotationsY and
+                self.rotationsZ == other.rotationsZ and
+                self.translationsX == other.translationsX and
+                self.translationsY == other.translationsY and
+                self.translationsZ == other.translationsZ)
 
 
 class BckAnk1Header:
@@ -102,6 +135,21 @@ class BckAnk1Header:
       self.offsetToTrans = br.ReadDWORD()
     # -- TODO: the following two structs have really silly names, rename them
 
+    def DumpData(self, bw):
+        bw.writeString(self.tag)
+        bw.writeDword(self.sizeOfSection)
+        bw.writeByte(self.loopFlags)
+        bw.writeByte(self.angleMultiplier)
+        bw.writeWord(self.animationLength)
+        bw.writeWord(self.numJoints)
+        bw.writeWord(self.scaleCount)
+        bw.writeWord(self.rotCount)
+        bw.writeWord(self.transCount)
+        bw.writeDword(self.offsetToJoints)
+        bw.writeDword(self.offsetToScales)
+        bw.writeDword(self.offsetToRots)
+        bw.writeDword(self.offsetToTrans)
+
 
 class BckAnimIndex:
     # <variable count>
@@ -115,12 +163,21 @@ class BckAnimIndex:
     def __init__(self):  # GENERATED!
         pass
 
-    def LoadData(self, br):
-                
-     self.count = br.GetSHORT()        
-     self.index = br.GetSHORT()
-     self.zero = br.GetSHORT()
-  
+    def LoadData(self, br, type):
+        global max_pos
+        max_pos = max((max_pos, br.Position()))
+        self.count = br.GetSHORT()
+        self.index = br.GetSHORT()
+        self.zero = br.GetSHORT()
+        if self.count > 1:
+            for i in range(self.count):
+                timez[type].append(self.index+3*i)
+
+    def DumpData(self, bw):
+        bw.writeShort(self.count)
+        bw.writeShort(self.index)
+        bw.writeShort(self.zero)
+
 
 class BckAnimComponent:
     # <variable s>
@@ -137,9 +194,14 @@ class BckAnimComponent:
         self.t= BckAnimIndex()
 
     def LoadData(self, br):
-     self.s.LoadData(br)
-     self.r.LoadData(br)
-     self.t.LoadData(br)
+     self.s.LoadData(br, 0)
+     self.r.LoadData(br, 1)
+     self.t.LoadData(br, 2)
+
+    def DumpData(self, bw):
+     self.s.DumpData(bw)
+     self.r.DumpData(bw)
+     self.t.DumpData(bw)
   
 
 class BckAnimatedJoint:
@@ -163,11 +225,93 @@ class BckAnimatedJoint:
      self.y.LoadData(br)
      self.z.LoadData(br)
 
+    def DumpData(self, bw):
+     self.x.DumpData(bw)
+     self.y.DumpData(bw)
+     self.z.DumpData(bw)
+
 
 # -----------------------------------------------
 
 
-class Bck:
+def translate_animation(timeOffset, bone, anim, frameScale, major, minor, default):
+    """this function and the next have to be run 9x to apply transformation: pos/rot/scale and x/y/z
+    this function translates animation data from `anim`, and into `bone`"""
+    # some name definitions
+    KEYF = major + '_kf'
+    TKEYF = major + '_tkf'
+    major_2 = major.replace('position', 'translation')  # incoherent naming?
+    ANIM_PART = (major_2 + 's' + minor.upper())
+
+    for j in range(len(getattr(anim, ANIM_PART))):
+        key = getattr(anim, ANIM_PART)[j]
+        # at time ((rot.time * frameScale) + timeOffset)
+        if int(key.time * frameScale + timeOffset) not in getattr(bone, KEYF).keys():
+            getattr(anim, 'frames_'+major_2).add(int(key.time * frameScale + timeOffset))
+            getattr(bone, KEYF)[int(key.time * frameScale + timeOffset)] = default.copy()
+            getattr(bone, TKEYF)[int(key.time * frameScale + timeOffset)] = default.copy()
+        setattr(getattr(bone, KEYF)[int(key.time * frameScale + timeOffset)], minor, key.value)
+        setattr(getattr(bone, TKEYF)[int(key.time * frameScale + timeOffset)], minor, key.tangent)
+
+
+def complete_animation(timeOffset, bone, anim, animationLength, major, minor, default):
+    """this function extrapolates more animation data, into `bone`"""
+    # some name definitions
+    KEYF = major + '_kf'
+    TKEYF = major + '_tkf'
+    major_2 = major.replace('position', 'translation')  # incoherent naming?
+    ANIM_PART = (major_2 + 's' + minor.upper())
+    frames = list(getattr(anim, 'frames_'+major_2))
+    frames.sort()
+    i0 = 0  # previous frame
+    i1 = 0  # next frame
+    while isnan(getattr(getattr(bone, KEYF)[frames[i1]], minor)):  # set the correct next frame
+        i1 += 1
+        if i1 == len(frames):  # failure case
+            for i in frames:
+                setattr(getattr(bone, KEYF)[i], minor, getattr(getattr(bone, KEYF)[frames[0]], minor))
+                setattr(getattr(bone, TKEYF)[i], minor, 0.)
+            break
+    for i in range(len(frames)):  # then process frames one by one
+        if isnan(getattr(getattr(bone, KEYF)[frames[i]], minor)):
+            temp = cubic_interpolator(frames[i0], getattr(getattr(bone, KEYF)[frames[i0]], minor),
+                                      getattr(getattr(bone, TKEYF)[frames[i0]], minor),
+                                      frames[i1], getattr(getattr(bone, KEYF)[frames[i1]], minor),
+                                      getattr(getattr(bone, TKEYF)[frames[i1]], minor),
+                                      frames[i])
+            setattr(getattr(bone, KEYF)[frames[i]], minor, temp[0])
+            setattr(getattr(bone, TKEYF)[frames[i]], minor, temp[1])
+        else:  # reached a new computed frame:
+            if i1 == len(frames):
+                break  # no more frames to calculate
+            i0 = i  # reset the previous and next frames
+            while isnan(getattr(getattr(bone, KEYF)[frames[i1]], minor)) or i1 <= i0:
+                i1 += 1
+                if i1 == len(frames):  # failure case
+                    for j in frames[i0:]:  # only assume remaining frames
+                        setattr(getattr(bone, KEYF)[j], minor, getattr(getattr(bone, KEYF)[frames[i0]], minor))
+                        setattr(getattr(bone, TKEYF)[j], minor, 0.)
+                    break
+
+    if timeOffset not in getattr(bone, KEYF).keys():
+        getattr(bone, KEYF)[timeOffset] = default.copy()
+        getattr(bone, TKEYF)[timeOffset] = default.copy()
+    setattr(getattr(bone, KEYF)[timeOffset], minor, getattr(getattr(bone, KEYF)[frames[0]], minor))
+    # getattr(anim, ANIM_PART)[0].value
+    setattr(getattr(bone, TKEYF)[timeOffset], minor, 0)
+
+    if animationLength > 0:
+        endFrame = timeOffset + animationLength
+
+        if endFrame not in getattr(bone, KEYF).keys():
+            getattr(bone, KEYF)[endFrame] = default.copy()
+            getattr(bone, TKEYF)[endFrame] = default.copy()
+        setattr(getattr(bone, KEYF)[endFrame], minor, getattr(getattr(bone, KEYF)[frames[-1]], minor))
+        # getattr(anim, ANIM_PART)[0].value
+        setattr(getattr(bone, TKEYF)[endFrame], minor, 0)
+
+
+class Bck_in:
     """# <variable anims>
     # -- std::vector<JointAnim>
     # <variable animationLength>
@@ -320,6 +464,7 @@ class Bck:
             self.anims[i].translationsX = self.ReadComp(translations, joint.x.t)
             self.anims[i].translationsY = self.ReadComp(translations, joint.y.t)
             self.anims[i].translationsZ = self.ReadComp(translations, joint.z.t)
+        print(end='')
 
     def LoadBck(self, filePath):
         br = BinaryReader()
@@ -435,10 +580,49 @@ class Bck:
                 #  XCX means no IK: means IK is here by default?
 
             # position correction LATER in the program
-            for j in range(len(anim.rotationsX)):
+            translate_animation(timeOffset, bone, anim, frameScale,
+                      'scale', 'x', mathutils.Vector((nan,nan,nan)))
+            translate_animation(timeOffset, bone, anim, frameScale,
+                      'scale', 'y', mathutils.Vector((nan, nan, nan)))
+            translate_animation(timeOffset, bone, anim, frameScale,
+                      'scale', 'z', mathutils.Vector((nan, nan, nan)))
+            translate_animation(timeOffset, bone, anim, frameScale,
+                      'rotation', 'x', mathutils.Euler((nan, nan, nan), 'XYZ'))
+            translate_animation(timeOffset, bone, anim, frameScale,
+                      'rotation', 'y', mathutils.Euler((nan, nan, nan), 'XYZ'))
+            translate_animation(timeOffset, bone, anim, frameScale,
+                      'rotation', 'z', mathutils.Euler((nan, nan, nan), 'XYZ'))
+            translate_animation(timeOffset, bone, anim, frameScale,
+                      'position', 'x', mathutils.Vector((nan, nan, nan)))
+            translate_animation(timeOffset, bone, anim, frameScale,
+                      'position', 'y', mathutils.Vector((nan, nan, nan)))
+            translate_animation(timeOffset, bone, anim, frameScale,
+                      'position', 'z', mathutils.Vector((nan, nan, nan)))
+
+            complete_animation(timeOffset, bone, anim, self.animationLength,
+                                'scale', 'x', mathutils.Vector((nan, nan, nan)))
+            complete_animation(timeOffset, bone, anim, self.animationLength,
+                                'scale', 'y', mathutils.Vector((nan, nan, nan)))
+            complete_animation(timeOffset, bone, anim, self.animationLength,
+                                'scale', 'z', mathutils.Vector((nan, nan, nan)))
+            complete_animation(timeOffset, bone, anim, self.animationLength,
+                                'rotation', 'x', mathutils.Euler((nan, nan, nan), 'XYZ'))
+            complete_animation(timeOffset, bone, anim, self.animationLength,
+                                'rotation', 'y', mathutils.Euler((nan, nan, nan), 'XYZ'))
+            complete_animation(timeOffset, bone, anim, self.animationLength,
+                                'rotation', 'z', mathutils.Euler((nan, nan, nan), 'XYZ'))
+            complete_animation(timeOffset, bone, anim, self.animationLength,
+                                'position', 'x', mathutils.Vector((nan, nan, nan)))
+            complete_animation(timeOffset, bone, anim, self.animationLength,
+                                'position', 'y', mathutils.Vector((nan, nan, nan)))
+            complete_animation(timeOffset, bone, anim, self.animationLength,
+                                'position', 'z', mathutils.Vector((nan, nan, nan)))
+
+            """for j in range(len(anim.rotationsX)):
                 rot = anim.rotationsX[j]
                 # at time ((rot.time * frameScale) + timeOffset)
                 if int(rot.time * frameScale + timeOffset) not in bone.rotation_kf.keys():
+                    frames.add(int(rot.time * frameScale + timeOffset))
                     bone.rotation_kf[int(rot.time * frameScale + timeOffset)] = mathutils.Euler((nan,nan,nan), 'XYZ')
                     bone.rotation_tkf[int(rot.time * frameScale + timeOffset)] = mathutils.Euler((nan,nan,nan), 'XYZ')
                 bone.rotation_kf[int(rot.time * frameScale + timeOffset)].x = rot.value
@@ -448,6 +632,7 @@ class Bck:
                 rot = anim.rotationsY[j]
                 # at time ((rot.time * frameScale) + timeOffset)
                 if int(rot.time * frameScale + timeOffset) not in bone.rotation_kf.keys():
+                    frames.add(int(rot.time * frameScale + timeOffset))
                     bone.rotation_kf[int(rot.time * frameScale + timeOffset)] = mathutils.Euler((nan,nan,nan), 'XYZ')
                     bone.rotation_tkf[int(rot.time * frameScale + timeOffset)] = mathutils.Euler((nan,nan,nan), 'XYZ')
                 bone.rotation_kf[int(rot.time * frameScale + timeOffset)].y = rot.value
@@ -457,6 +642,7 @@ class Bck:
                 rot = anim.rotationsZ[j]
                 # at time ((rot.time * frameScale) + timeOffset)
                 if int(rot.time * frameScale + timeOffset) not in bone.rotation_kf.keys():
+                    frames.add(int(rot.time * frameScale + timeOffset))
                     bone.rotation_kf[int(rot.time * frameScale + timeOffset)] = mathutils.Euler((nan,nan,nan), 'XYZ')
                     bone.rotation_tkf[int(rot.time * frameScale + timeOffset)] = mathutils.Euler((nan,nan,nan), 'XYZ')
                 bone.rotation_kf[int(rot.time * frameScale + timeOffset)].z = rot.value
@@ -495,7 +681,7 @@ class Bck:
                 self.GetPositionBone(bone).position_tkf[int(t.time * frameScale + timeOffset)].z\
                     = t.tangent
 
-            if includeScaling and True:  # XCX test
+            if includeScaling or True:  # XCX test
                 for j in range(len(anim.scalesX)):
                     s = anim.scalesX[j]
                     # at time ((s.time * frameScale) + timeOffset)
@@ -527,19 +713,110 @@ class Bck:
                     bone.scale_kf[int(s.time * frameScale + timeOffset)].z = s.value  # * 100
                     bone.scale_tkf[int(s.time * frameScale + timeOffset)].z = s.tangent  # * 100
             self.rootBoneOffset = [0, 0, 0]  # -- only the root bone has an offset. bones[1]
+
+            # creating 'missing' rotation data (needed, but clogging)
+            frames = list(frames)
+            frames.sort()
+            
+            i0 = 0  # previous frame
+            i1 = 0  # next frame
+            while isnan(bone.rotation_kf[frames[i1]].x):  # set the correct next frame
+                i1 += 1
+                if i1 == len(frames):  # failure case
+                    for i in frames:
+                        bone.rotation_kf[i].x = bone.rotation_kf[frames[0]].x
+                        bone.rotation_tkf[i].x = 0.
+                    break
+            for i in range(len(frames)):  # then process frames one by one
+                if isnan(bone.rotation_kf[frames[i]].x):
+                    bone.rotation_kf[frames[i]].x, bone.rotation_tkf[frames[i]].x = \
+                    cubic_interpolator(frames[i0], bone.rotation_kf[frames[i0]].x, bone.rotation_tkf[frames[i0]].x,
+                                       frames[i1], bone.rotation_kf[frames[i1]].x, bone.rotation_tkf[frames[i1]].x,
+                                       frames[i])
+                else:  # reached a new computed frame:
+                    if i1 == len(frames):
+                        break  # no more frames to calculate
+                    i0 = i  # reset the previous and next frames
+                    while isnan(bone.rotation_kf[frames[i1]].x) or i1 <= i0:
+                        i1 += 1
+                        if i1 == len(frames):  # failure case
+                            for j in frames[i0:]:  # only assume remaining frames
+                                bone.rotation_kf[j].x = bone.rotation_kf[frames[i0]].x
+                                bone.rotation_tkf[j].x = 0.
+                            break
+
+            i0 = 0  # previous frame
+            i1 = 0  # next frame
+            while isnan(bone.rotation_kf[frames[i1]].y):  # set the correct next frame
+                i1 += 1
+                if i1 == len(frames):  # failure case
+                    for i in frames:
+                        bone.rotation_kf[i].y = bone.rotation_kf[frames[0]].y
+                        bone.rotation_tkf[i].y = 0.
+                    break
+            for i in range(len(frames)):  # then process frames one by one
+                if isnan(bone.rotation_kf[frames[i]].y):
+                    bone.rotation_kf[frames[i]].y, bone.rotation_tkf[frames[i]].y = \
+                        cubic_interpolator(frames[i0], bone.rotation_kf[frames[i0]].y,
+                                           bone.rotation_tkf[frames[i0]].y,
+                                           frames[i1], bone.rotation_kf[frames[i1]].y,
+                                           bone.rotation_tkf[frames[i1]].y,
+                                           frames[i])
+                else:  # reached a new computed frame:
+                    if i1 == len(frames):
+                        break  # nothing left to do
+                    i0 = i  # reset the previous and next frames
+                    while isnan(bone.rotation_kf[frames[i1]].y) or i1 <= i0:
+                        i1 += 1
+                        if i1 == len(frames):  # failure case
+                            for j in frames[i0:]:
+                                bone.rotation_kf[j].y = bone.rotation_kf[frames[i0]].y
+                                bone.rotation_tkf[j].y = 0.
+                            break
+
+            i0 = 0  # previous frame
+            i1 = 0  # next frame
+            while isnan(bone.rotation_kf[frames[i1]].z):  # set the correct next frame
+                i1 += 1
+                if i1 == len(frames):  # failure case
+                    for i in frames:
+                        bone.rotation_kf[i].z = bone.rotation_kf[frames[0]].z
+                        bone.rotation_tkf[i].z = 0.
+                    break
+            for i in range(len(frames)):  # then process frames one by one
+                if isnan(bone.rotation_kf[frames[i]].z):
+                    bone.rotation_kf[frames[i]].z, bone.rotation_tkf[frames[i]].z = \
+                        cubic_interpolator(frames[i0], bone.rotation_kf[frames[i0]].z,
+                                           bone.rotation_tkf[frames[i0]].z,
+                                           frames[i1], bone.rotation_kf[frames[i1]].z,
+                                           bone.rotation_tkf[frames[i1]].z,
+                                           frames[i])
+                else:  # reached a new computed frame:
+                    if i1 == len(frames):
+                        break  # nothing left to do
+                    i0 = i  # reset the previous and next frames
+                    while isnan(bone.rotation_kf[frames[i1]].z) or i1 <= i0:
+                        i1 += 1
+                        if i1 == len(frames):  # failure case
+                            for j in frames[i0:]:
+                                bone.rotation_kf[j].z = bone.rotation_kf[frames[i0]].z
+                                bone.rotation_tkf[j].z = 0.
+                            break
+
         # for i = 1 to bones.count do
 
         # -- IMPORTANT: set all transforms for the first and last frame. prevents errors when frames loaded on after another animation
         # useless for first frame? NO! but use it for the right frame.
-        for i in range(len(bones)):
-            bone = bones[i]
-            anim = self.anims[i]
+        # for i in range(len(bones)):
+        #    bone = bones[i]
+        #    anim = self.anims[i]
+                            
             if timeOffset not in bone.rotation_kf.keys():
-                        bone.rotation_kf[timeOffset] = mathutils.Euler((nan, nan, nan), 'XYZ')
-                        bone.rotation_tkf[timeOffset] = mathutils.Euler((nan, nan, nan), 'XYZ')
-            bone.rotation_kf[timeOffset].x = anim.rotationsX[0].value
-            bone.rotation_kf[timeOffset].y = anim.rotationsY[0].value
-            bone.rotation_kf[timeOffset].z = anim.rotationsZ[0].value
+                bone.rotation_kf[timeOffset] = mathutils.Euler((nan, nan, nan), 'XYZ')
+                bone.rotation_tkf[timeOffset] = mathutils.Euler((nan, nan, nan), 'XYZ')
+            bone.rotation_kf[timeOffset].x = bone.rotation_kf[frames[0]].x  # anim.rotationsX[0].value
+            bone.rotation_kf[timeOffset].y = bone.rotation_kf[frames[0]].y
+            bone.rotation_kf[timeOffset].z = bone.rotation_kf[frames[0]].z
             bone.rotation_tkf[timeOffset].x = 0
             bone.rotation_tkf[timeOffset].y = 0
             bone.rotation_tkf[timeOffset].z = 0
@@ -554,7 +831,7 @@ class Bck:
             posBone.position_tkf[timeOffset].y = 0
             posBone.position_tkf[timeOffset].z = 0
     
-            if includeScaling and True:  # XCX test
+            if includeScaling or True:  # XCX test
                 if timeOffset not in posBone.scale_kf.keys():
                     bone.scale_kf[timeOffset] = mathutils.Vector((nan, nan, nan))
                     bone.scale_tkf[timeOffset] = mathutils.Vector((nan, nan, nan))
@@ -574,9 +851,9 @@ class Bck:
                 if endFrame not in bone.rotation_kf.keys():
                     bone.rotation_kf[endFrame] = mathutils.Euler((nan, nan, nan), 'XYZ')
                     bone.rotation_tkf[endFrame] = mathutils.Euler((nan, nan, nan), 'XYZ')
-                bone.rotation_kf[endFrame].x = anim.rotationsX[-1].value
-                bone.rotation_kf[endFrame].y = anim.rotationsY[-1].value
-                bone.rotation_kf[endFrame].z = anim.rotationsZ[-1].value
+                bone.rotation_kf[endFrame].x = bone.rotation_kf[frames[-1]].x  # anim.rotationsX[0].value
+                bone.rotation_kf[endFrame].y = bone.rotation_kf[frames[-1]].y
+                bone.rotation_kf[endFrame].z = bone.rotation_kf[frames[-1]].z
                 bone.rotation_tkf[endFrame].x = 0
                 bone.rotation_tkf[endFrame].y = 0
                 bone.rotation_tkf[endFrame].z = 0
@@ -591,7 +868,7 @@ class Bck:
                 posBone.position_tkf[endFrame].y = 0
                 posBone.position_tkf[endFrame].z = 0
 
-                if includeScaling and True:  # XCX test
+                if includeScaling or True:  # XCX test
                     if endFrame not in posBone.scale_kf.keys():
                         bone.scale_kf[endFrame] = mathutils.Vector((nan, nan, nan))
                         bone.scale_tkf[endFrame] = mathutils.Vector((nan, nan, nan))
@@ -600,7 +877,148 @@ class Bck:
                     bone.scale_kf[endFrame].z = anim.scalesZ[-1].value
                     bone.scale_tkf[endFrame].x = 0
                     bone.scale_tkf[endFrame].y = 0
-                    bone.scale_tkf[endFrame].z = 0
+                    bone.scale_tkf[endFrame].z = 0"""
+
+
+class Bck_out:
+
+    def __init__(self):
+        self.maxframe=0
+
+    def calcmultiplier(self, anims):
+        ret = 1  # number of total full turns
+
+    def dump_data(self, dst, src):
+        index = BckAnimIndex()
+        index.zero = 0
+        index.count = len(src)
+        if len(src) == 1:
+            if src[0].time or src[0].tangent:  # if non-zero
+                raise ValueError("static animation should be static")
+            if src[0].value in dst:
+                index.index = dst.index(src[0].value)
+            else:
+                dst.append(src[0].value)
+                index.index = len(dst)-1
+
+        else:
+            index.index = len(dst)
+            for com in src:
+                dst.append(com.time)
+                self.maxframe = max(self.maxframe, com.time)
+                dst.append(com.value)
+                dst.append(com.tangent)
+
+        return index
+
+    def calibrate_rotation(self, rots, scale):
+        for j in range(len(rots)):  #
+            rots[j].value = round(rots[j].value / scale)
+            rots[j].tangent = round(rots[j].tangent / scale)
+
+    def write_junk(self, bw, bcount):
+        string = 'Padding '
+        string = string * int(ceil(bcount/len(string)))
+        bw.writeString(string[:bcount])
+
+    def dump_ank1(self, anims, bw):
+
+        Ank1Offset = bw.Position()
+        h = BckAnk1Header()
+        h.angleMultiplier = 1  # self.calcmultiplier(anims)
+        rot_scale = (pow(2., h.angleMultiplier) * pi / 32768.)
+
+        positions = []
+        rotations = []
+        scales = []
+        joints = []
+
+
+        for anim in anims:
+            joint = BckAnimatedJoint()
+            joints.append(joint)
+            joint.x = BckAnimComponent()
+            joint.y = BckAnimComponent()
+            joint.z = BckAnimComponent()
+
+            joint.x.s = self.dump_data(scales, anim.scalesX)
+            joint.y.s = self.dump_data(scales, anim.scalesY)
+            joint.z.s = self.dump_data(scales, anim.scalesZ)
+
+            joint.x.t = self.dump_data(positions, anim.translationsX)
+            joint.y.t = self.dump_data(positions, anim.translationsY)
+            joint.z.t = self.dump_data(positions, anim.translationsZ)
+
+            self.calibrate_rotation(anim.rotationsX, rot_scale)
+            self.calibrate_rotation(anim.rotationsY, rot_scale)
+            self.calibrate_rotation(anim.rotationsZ, rot_scale)
+            joint.x.r = self.dump_data(rotations, anim.rotationsX)
+            joint.y.r = self.dump_data(rotations, anim.rotationsY)
+            joint.z.r = self.dump_data(rotations, anim.rotationsZ)
+
+        h.numJoints = len(joints)
+        h.scaleCount = len(scales)
+        h.rotCount = len(rotations)
+        h.transCount = len(positions)
+        h.offsetToJoints = 64
+        h.offsetToScales = ceil(h.numJoints*3*3*3*2/16)*16 + h.offsetToJoints
+        h.offsetToRots = ceil(h.scaleCount*4/16)*16 + h.offsetToScales
+        h.offsetToTrans = ceil(h.rotCount*2/16)*16 + h.offsetToRots
+        h.animationLength = self.maxframe
+        h.tag = 'ANK1'
+        h.sizeOfSection = h.offsetToTrans + ceil(h.transCount*4/16)*16 +16
+        h.loopFlags = 0  # 0: once, 2: loop
+
+        h.DumpData(bw)
+        self.write_junk(bw, h.offsetToJoints+Ank1Offset - bw.Position())
+        for joint in joints:
+            joint.DumpData(bw)
+        self.write_junk(bw, h.offsetToScales+Ank1Offset - bw.Position())
+        for val in scales:
+            bw.WriteFloat(val)
+        self.write_junk(bw, h.offsetToRots+Ank1Offset - bw.Position())
+        for val in rotations:
+            bw.writeShort(val)
+        self.write_junk(bw, h.offsetToTrans+Ank1Offset - bw.Position())
+        for val in positions:
+            bw.WriteFloat(val)
+        self.write_junk(bw, h.sizeOfSection+ Ank1Offset - bw.Position())
+
+    def dump_bck(self, anims, filePath):
+        bw = BinaryWriter()
+        bw.Open(filePath)
+        #bw.SeekSet(0x20)
+        for _ in range(32):
+            bw.writeByte(0x00)
+        self.dump_ank1(anims, bw)
+        bw.Close()
+
+
+def create_static_animation(frames):
+    anims=[]
+    for fr in frames:
+        anim = BckJointAnim()
+        anims.append(anim)
+        anim.scalesX.append(BckKey())
+        anim.scalesY.append(BckKey())
+        anim.scalesZ.append(BckKey())
+        anim.rotationsX.append(BckKey())
+        anim.rotationsY.append(BckKey())
+        anim.rotationsZ.append(BckKey())
+        anim.translationsX.append(BckKey())
+        anim.translationsY.append(BckKey())
+        anim.translationsZ.append(BckKey())
+
+        anim.scalesX[0].value = fr.sx
+        anim.scalesY[0].value = fr.sy
+        anim.scalesZ[0].value = fr.sz
+        anim.rotationsX[0].value = fr.rx
+        anim.rotationsY[0].value = fr.ry
+        anim.rotationsZ[0].value = fr.rz
+        anim.translationsX[0].value = fr.t.x
+        anim.translationsY[0].value = fr.t.y  # dont reflip translation values
+        anim.translationsZ[0].value = fr.t.z
+    return anims
 
 """
 

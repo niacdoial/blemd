@@ -58,13 +58,13 @@ class ImportBmd(Operator, ImportHelper):
     # List of operator properties, the attributes will be assigned
     # to the class instance from the operator settings before calling.
     sv_anim = BoolProperty(
-        name="Save Animations externally (WIP)",
+        name="Import animations (WIP)",
         description="",
         default=True
         )
 
     frc_cr_bn = BoolProperty(
-        name="force create bones",
+        name="Force create bones",
         description="",
         default=False
         )
