@@ -17,9 +17,6 @@ def round(f):
     else:
         return ceil(f)
 
-max_pos = 0
-timez = ([],[],[])
-
 
 class BckKey:
     # <variable time>
@@ -163,15 +160,10 @@ class BckAnimIndex:
     def __init__(self):  # GENERATED!
         pass
 
-    def LoadData(self, br, type):
-        global max_pos
-        max_pos = max((max_pos, br.Position()))
+    def LoadData(self, br):
         self.count = br.GetSHORT()
         self.index = br.GetSHORT()
         self.zero = br.GetSHORT()
-        if self.count > 1:
-            for i in range(self.count):
-                timez[type].append(self.index+3*i)
 
     def DumpData(self, bw):
         bw.writeShort(self.count)
@@ -194,9 +186,9 @@ class BckAnimComponent:
         self.t= BckAnimIndex()
 
     def LoadData(self, br):
-     self.s.LoadData(br, 0)
-     self.r.LoadData(br, 1)
-     self.t.LoadData(br, 2)
+     self.s.LoadData(br)
+     self.r.LoadData(br)
+     self.t.LoadData(br)
 
     def DumpData(self, bw):
      self.s.DumpData(bw)
@@ -464,7 +456,6 @@ class Bck_in:
             self.anims[i].translationsX = self.ReadComp(translations, joint.x.t)
             self.anims[i].translationsY = self.ReadComp(translations, joint.y.t)
             self.anims[i].translationsZ = self.ReadComp(translations, joint.z.t)
-        print(end='')
 
     def LoadBck(self, filePath):
         br = BinaryReader()
