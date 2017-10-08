@@ -380,6 +380,7 @@ def FanIterator(lst):
         yield (lst[0], lst[com+1], lst[com])  # faces need to be described like this in order to have correct normals
 
 
+# XCX depreciated
 def setNormals(mesh, Faces, nc_to_f_v, normals):
     f_to_rf = [None] * len(mesh.polygons)  # blender faces index to loaded faces index
     for num, com in enumerate(mesh.polygons):  # will be identity _MOST_ of the time

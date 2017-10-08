@@ -45,6 +45,77 @@ from .pseudobones import apply_animation
 from time import time
 
 
+class Prog_params:
+    def __init__(self, filename, boneThickness, allowTextureMirror, forceCreateBones, loadAnimations, exportTextures,
+               exportType, includeScaling, imtype, dvg, use_nodes=False):
+        self.filename = filename
+        self.boneThickness = boneThickness
+        self.allowTextureMirror = allowTextureMirror
+        self.forceCreateBones = forceCreateBones
+        self.loadAnimations = loadAnimations
+        self.exportTextures = exportTextures
+        self.exportType = exportType
+        self.includeScaling = includeScaling
+        self.imtype = imtype
+        self.DEBUGVG = dvg
+        self.use_nodes = use_nodes
+        # secondary parameters (computed)
+        self.createBones = True
+
+
+class LoopRepresentation:
+    def __init__(self):
+        self.vertex = -1
+        self.UVs = [None]*8
+        self.VColors = [None]*2
+        self.normal = None
+
+    def __eq__(self, other):
+        return self.vertex == other.vertex and \
+               self.UVs == other.UVs and \
+               self.VColors == other.VColors and \
+               self.normal == other.normal
+
+
+class FaceRepresentation:
+    def __init__(self):
+        self.loop_start = -1
+        self.material = None
+
+
+class ModelRepresentation:
+    def __init__(self):
+        self.vertices = []
+        self.faces = []
+        self.loops = []
+
+    def toarray(self, type):
+        if type == 'co':
+            ret = array('f', [0.0]*3*len(self.vertices))
+            for num, com in enumerate(self.vertices):
+                ret[3*num] = com.x
+                ret[3*num+1] = com.y
+                ret[3*num+2] = com.z
+        elif type == 'loop_start':
+            ret = array('i')
+            for com in self.faces:
+                ret.append(com.loop_start)
+        elif type == 'normal':
+            ret = array('f', [0.0] * 3 * len(self.loops))
+            for num, com in enumerate(self.loops):
+                ret[3 * num] = com.normal.x
+                ret[3 * num + 1] = -com.normal.z
+                ret[3 * num + 2] = com.normal.y
+        elif type == 'v_indexes':
+            ret = array('i')
+            for com in self.loops:
+                ret.append(com.vertex)
+        else:
+            raise ValueError('wrong array type')
+
+        return ret
+
+
 class BModel:
     """# <variable _boneThickness>
     # <variable inf>
@@ -132,30 +203,23 @@ class BModel:
         self._bmdFilePath = ""
         self._runExtractTexturesCmd = True
         self._currMaterialIndex = 0
-        self.tverts= [[],[],[],[],[],[],[],[]]  # texture vertices
-        self.tv_to_f_v = [[], [], [], [], [], [], [], []]  # texVerts to vertices_faces
-        self._createBones = True
-        self._exportType = 'XFILE'  # XCX: delete those unused vars
-        self._boneThickness = 10
+        self.tverts = [[],[],[],[],[],[],[],[]]  # texture vertices
+        #self.tv_to_f_v = [[], [], [], [], [], [], [], []]  # texVerts to vertices_faces
         self.vertices = []
         self._bones = []
         self._bckPaths = []
-        self._reverseFaces = True
-        self._loadAnimations = True
         self.faceIndex = 0
         self._materialIDS = []
-        self._includeScaling = False
         self._parentBoneIndexs = []
-        self.tFaces = [[],[],[],[],[],[],[],[]]
-        self.faces = []
+        #self.tFaces = [[],[],[],[],[],[],[],[]]
+        #self.faces = []
         self.vertexMultiMatrixEntry = []
         self._allowTextureMirror = False
         self.normals = []
-        self.nFaces = []
-        self.nc_to_f_v = []
-        self.vcFaces = [[], []]  # vertex colors
-        self.cv_to_f_v = [[], []]  # color-vertices to tuple(face, vertex)
-        self._forceCreateBones = False
+        #self.nFaces = []
+        #self.nc_to_f_v = []
+        #self.vcFaces = [[], []]  # vertex colors
+        #self.cv_to_f_v = [[], []]  # color-vertices to tuple(face, vertex)
         self._subMaterials = []
 
     def SetBmdViewExePath(self, value):
@@ -193,82 +257,72 @@ class BModel:
             #    raise ValueError()
             #DosCommand (startpath + cmd)
 
-    def ReverseArray(self, inputArray):
-        i = 0
-        rev = []
-        i = len(inputArray)
-        while i > 0:
-            rev.append(inputArray[i-1])  # corrected!
-            i -= 1
-        # -- inputArray = rev doesn't work
-        return rev
-
     def BuildSingleMesh(self):
         # -----------------------------------------------------------------
         # -- mesh
         print('BuildSMesh : ', time())
-        if self._reverseFaces:
-            self.faces = self.ReverseArray(self.faces)
-            self._materialIDS = self.ReverseArray(self._materialIDS)
+        if False:  #self._reverseFaces and False:
+            self.model.faces = ReverseArray(self.model.faces)
+            self._materialIDS = ReverseArray(self._materialIDS)
             #for com in range(len(self._materialIDS)):
             #    self._materialIDS[com] = len(self._subMaterials)-1-self._materialIDS[com]
             for uv in range(8):
-                self.tFaces[uv] = self.ReverseArray(self.tFaces[uv])
+                self.tFaces[uv] = ReverseArray(self.tFaces[uv])
                 for num, com in enumerate(self.tv_to_f_v[uv]):
                     for num2, com2 in enumerate(com):
-                        com2 = (len(self.faces)-1-com2[0], com2[1])
+                        com2 = (len(self.model.faces)-1-com2[0], com2[1])
                         com[num2] = com2
                     self.tv_to_f_v[uv][num] = com
             # vertex colors are now similar to uv textures
             for cv in range(2):
-                self.vcFaces[cv] = self.ReverseArray(self.vcFaces[cv])
+                self.vcFaces[cv] = ReverseArray(self.vcFaces[cv])
                 for num, com in enumerate(self.cv_to_f_v[cv]):
                     for num2, com2 in enumerate(com):
-                        com2 = (len(self.faces)-1-com2[0], com2[1])
+                        com2 = (len(self.model.faces)-1-com2[0], com2[1])
                         com[num2] = com2
                     self.cv_to_f_v[cv][num] = com
 
-
         # -- TODO: should never have undefined materials
-        for i in range(len(self._materialIDS)):
-            if self._materialIDS[i] is None:
-                pass  # self._materialIDS[i] = -1  # -- not found index
-
-        # -- FIX: Fill missing material IDs
+        #for i in range(len(self._materialIDS)):
+        #    if self._materialIDS[i] is None:
+        #        pass  # self._materialIDS[i] = -1  # -- not found index
 
         if len(self._materialIDS) > 0:
-            for i in range(len(self._materialIDS), len(self.faces)):
-                self._materialIDS.append(None)  # -1)
+            for i in range(len(self._materialIDS), len(self.model.faces)):
+                self._materialIDS.append(None)
         else:
-            self._materialIDS = [-1] * len(self.faces)
+            self._materialIDS = [None] * len(self.model.faces)  # XCX [-1]* ?
 
         for idx in range(len(self.vertices)):
             if self.vertices[idx] is None:
-                self.vertices[idx] = (0, 0, 0)  # XCX should not have to do this
+                self.vertices[idx] = Vector((0, 0, 0))  # XCX should not have to do this
+
         modelMesh = bpy.data.meshes.new(getFilenameFile(self._bmdFilePath))
-        modelMesh.from_pydata(self.vertices, [], self.faces)
+        modelMesh.vertices.add(len(self.model.vertices))
+        modelMesh.vertices.foreach_set('co', self.model.toarray('co'))
+        modelMesh.loops.add(len(self.model.loops))
+        modelMesh.loops.foreach_set('vertex_index', self.model.toarray('v_indexes'))
+        modelMesh.polygons.add(len(self.model.faces))
+        modelMesh.polygons.foreach_set('loop_start', self.model.toarray('loop_start'))
+        modelMesh.polygons.foreach_set('loop_total', array('i', [3]*len(self.model.faces)))
+
         modelMesh.update()
         modelObject = bpy.data.objects.new(getFilenameFile(self._bmdFilePath), modelMesh)
-        #while modelObject.material_slots[0].material is None:
-        #    tempbk = bpy.context.scene.objects.active  # remove empty material slot
-        #    bpy.context.scene.objects.active = modelObject
-        #    modelObject.active_material_index = 0
-        #    bpy.ops.object.material_slot_remove()
-        #    bpy.context.scene.objects.active = tempbk
-        #    del tempbk
         bpy.context.scene.objects.link(modelObject)
+
+        # XCX: find a way to replace that too.
         bm_to_pm = {}  # index shifter: material, get mat index
         for i in range(len(self._subMaterials)):
             add_material(modelObject, self._subMaterials[i])
         errmat = add_err_material(modelObject)
         for num, com in enumerate(modelObject.material_slots):
             bm_to_pm[com.material] = num
-        f_to_rf = [None]*len(self.faces)
-        for num, temp in enumerate(modelMesh.polygons):
-            index = self.faces.index(tuple(temp.vertices))
-            while f_to_rf[index] is not None:
-                index = self.faces.index(tuple(temp.vertices), index+1)
-            f_to_rf[index] = num
+        f_to_rf = list(range(len(self.model.faces)))
+        #for num, temp in enumerate(modelMesh.polygons):
+        #    index = self.model.faces.index(tuple(temp.vertices))
+        #    while f_to_rf[index] is not None:
+        #        index = self.model.faces.index(tuple(temp.vertices), index+1)
+        #    f_to_rf[index] = num
         for num, com in enumerate(self._materialIDS):  # assign materials to faces
             # DEBUG reversed index
             if f_to_rf[num] is not None:
@@ -279,15 +333,11 @@ class BModel:
         #for com in self._materialIDS:
         #    add_material(modelObject, com)
 
-        if len(self._materialIDS) > 0:  # - FIX: Do not set texcoord faces when there are no textures on model.
-            pass
-            # buildTVFaces(modelMesh, False) # XCX
-
         active_uv = None
 
         for uv in range(8):
-            if len(self.tverts[uv]) and len(self.tFaces[uv]):
-                newUVlayer(modelMesh, self.tverts[uv], self.tFaces[uv], self.faces, self.tv_to_f_v[uv])
+            if self.model.loops[0].UVs[uv]:  # len(self.tverts[uv]) and len(self.tFaces[uv]):
+                newUVlayer(modelMesh, self.model, uv)  # self.tverts[uv], self.tFaces[uv], self.faces, self.tv_to_f_v[uv])
                 active_uv = modelMesh.uv_textures[0]
 
         with active_object(modelObject):
@@ -300,16 +350,16 @@ class BModel:
             modelMesh.update()
 
             if len(self.vtx.colors) and len(self.vtx.colors[0]):  #- has colors? fixed.
-                alpha_image = add_vcolor(modelMesh, self.vtx.colors[0], self.cv_to_f_v[0], self.faces, active_uv, 0)
+                alpha_image = add_vcolor(modelMesh, self.model, 0)  # self.vtx.colors[0], self.cv_to_f_v[0], self.faces, active_uv, 0)
                 if len(self.vtx.colors) > 1 and len(self.vtx.colors[1]):  # fixed
-                    add_vcolor(modelMesh, self.vtx.colors[1], self.cv_to_f_v[1], self.faces, active_uv, 1)  # fixed
+                    add_vcolor(modelMesh, self.model, 1)  # self.vtx.colors[1], self.cv_to_f_v[1], self.faces, active_uv, 1)  # fixed
 
 
         # update(modelMesh)
 
         # -----------------------------------------------------------------
 
-        if self._createBones or self.DEBUGVG:
+        if self.params.createBones or self.params.DEBUGVG:
             with active_object(modelObject):
                 mod = modelObject.modifiers.new('Armature', type='ARMATURE')
                 arm = bpy.data.armatures.new(modelObject.name+'_bones')
@@ -338,15 +388,15 @@ class BModel:
                     modelObject.vertex_groups.new(bone.name.fget())
                     # skinOps.addBone(mysk, bone, 0) # XCX DONE?
 
-                if len(self.vertexMultiMatrixEntry) != len(self.vertices):
+                if len(self.vertexMultiMatrixEntry) != len(self.model.vertices):
                     MessageBox("Invalid skin")
                     raise ValueError("E")
-                if self._createBones:
+                if self.params.createBones:
                     # XCX should not need this
                     for idx in range(len(self.vertexMultiMatrixEntry)):
                         if self.vertexMultiMatrixEntry[idx] is None:
                             self.vertexMultiMatrixEntry[idx] = MultiMatrix()
-                    for i in range(len(self.vertices)):
+                    for i in range(len(self.model.vertices)):
                         for num, vg_id in enumerate(self.vertexMultiMatrixEntry[i].indices):
                             modelObject.vertex_groups[vg_id].add([i], self.vertexMultiMatrixEntry[i].weights[num], 'REPLACE')
 
@@ -355,7 +405,7 @@ class BModel:
                         vec = realbone.head
                         grp = modelObject.vertex_groups[bone.name.fget()]
                         # old bone displacement method
-                        #for num in range(len(self.vertices)):
+                        #for num in range(len(self.model.vertices)):
                         #    try:
                         #        with stdout_redirected():  # stop this call to print junk in stdout
                         #            tmp = grp.weight(num)
@@ -376,25 +426,14 @@ class BModel:
         for face in modelMesh.polygons:
             face.use_smooth = True  # normals have effect only if smooth shading
 
-        # for i in range(len(self.vertices)):  # set normals here because they seem to be lost in some calulations
-        #    if self.normals[i] is not None:
-        #        modelMesh.vertices[i].normal = -Vector(self.normals[i])  # XCX normals are recalculated: WTF?
-
-        setNormals(modelMesh, self.faces, self.nc_to_f_v, self.vtx.normals)
-        # for loop in modelMesh.loops:
-        #    if self.normals[loop.vertex_index] is not None:
-        #        loop.normal = Vector(self.normals[loop.vertex_index])  # XCX is the [:] necessary?
-        #    else:
-        #        loop.normal = modelMesh.vertices[loop.vertex_index].normal
-        #    # print(type(loop.normal), loop.normal)
+        # setNormals(modelMesh, self.faces, self.nc_to_f_v, self.vtx.normals)
 
         # create custom data to write normals correctly?
         modelMesh.validate(clean_customdata=False)  # *Very* important to not remove loop normals here!
         modelMesh.update()
 
         # begin not understood black box (where does this thing write to make normals stable?)
-        clnors = array('f', [0.0] * (len(modelMesh.loops) * 3))
-        modelMesh.loops.foreach_get("normal", clnors)
+        clnors = self.model.toarray('normal')
 
         modelMesh.polygons.foreach_set("use_smooth", [True] * len(modelMesh.polygons))
 
@@ -489,7 +528,7 @@ class BModel:
 
         matrixTable =[]
         # -- there should NEVER be more than 20 matrices per packet imo...even 10 sound like a lot...
-        isMatrixWeighted =[]
+        isMatrixWeighted = []
         # -- pos?
         multiMatrixTable = []
         # -- should be same count as matrixTable
@@ -519,6 +558,7 @@ class BModel:
             mat = matrixTable[0]  # corrected
             multiMat = multiMatrixTable[0]
             for primnum, currPrimitive in enumerate(currPacket.primitives):
+                temp_normals = {}
                 for m in range(len(currPrimitive.points)):
                     posIndex = currPrimitive.points[m].posIndex   # fixed
                     if currBatch.attribs.hasMatrixIndices:
@@ -527,25 +567,20 @@ class BModel:
                             MessageBox("WARNING: if (mod currPrimitive.points[m].matrixIndex 3) != 0 then " + str(currPrimitive.points[m].matrixIndex))
                         multiMat = multiMatrixTable[(currPrimitive.points[m].matrixIndex//3)]  # fixed
 
-                    # if currBatch.attribs.hasNormals:  # XCX delete?
-                    #    #if len(self.vtx.normals) > currPrimitive.points[m].normalIndex:
-                    #    normal =mat*self.vtx.normals[currPrimitive.points[m].normalIndex]  # fixed
-                    #    normal.normalize()
-                    #    while len(self.normals) <= posIndex:
-                    #        self.normals.append(None)
-                    #    self.normals[posIndex] = (normal.x, -normal.z, normal.y)
+                    if currBatch.attribs.hasNormals:
+                        temp_normals[currPrimitive.points[m].normalIndex] =\
+                            self.vtx.normals[currPrimitive.points[m].normalIndex].copy()
+                        temp_normals[currPrimitive.points[m].normalIndex].rotate(mat)
 
                     while len(self.vertexMultiMatrixEntry) <= posIndex:
                         self.vertexMultiMatrixEntry.append(None)
                     self.vertexMultiMatrixEntry[posIndex] = multiMat
                     newPos = mat*(self.vtx.positions[posIndex])
-                    while len(self.vertices) <= posIndex:
+                    while len(self.model.vertices) <= posIndex:
                         self.vertices.append(None)
-                    # tempvert = Vector3()
-                    # tempvert.setXYZ(newPos.x, newPos.y, newPos.z)
-                    # tempvert = effP.MultiplyVector(tempvert)
-                    # tempvert.ToMaxScriptPosFlip()  # -- flip order
-                    self.vertices[posIndex] = [newPos.x, -newPos.z, newPos.y]
+                        self.model.vertices.append(None)
+                    self.vertices[posIndex] = Vector((newPos.x, -newPos.z, newPos.y))
+                    self.model.vertices[posIndex] = Vector((newPos.x, -newPos.z, newPos.y))
 
                 # manage primitive type
                 if currPrimitive.type == 0x98:
@@ -556,98 +591,76 @@ class BModel:
                     # GL_TRIANGLE_FAN
                 else:
                     raise ValueError("unknown primitive type")
-                for p1, p2, p3 in iterator:
+                for p0, p1, p2 in iterator:
+                    posIndex0 = p0.posIndex
                     posIndex1 = p1.posIndex
                     posIndex2 = p2.posIndex
-                    posIndex3 = p3.posIndex
 
                     # XCX DEBUG (create debug vertex groups)
-                    if self.DEBUGVG:
+                    if self.params.DEBUGVG:
                         tempvg = self.DEBUGvgroups.get(str(batchid), None)
                         if not tempvg:
                             tempvg = []
                             self.DEBUGvgroups[str(batchid)] = tempvg
+                        tempvg.append(posIndex0)
                         tempvg.append(posIndex1)
                         tempvg.append(posIndex2)
-                        tempvg.append(posIndex3)
                         tempvg = self.DEBUGvgroups.get(str(batchid)+','+str(packnum), None)
                         if not tempvg:
                             tempvg = []
                             self.DEBUGvgroups[str(batchid)+','+str(packnum)] = tempvg
+                        tempvg.append(posIndex0)
                         tempvg.append(posIndex1)
                         tempvg.append(posIndex2)
-                        tempvg.append(posIndex3)
                         tempvg = self.DEBUGvgroups.get(str(batchid)+','+str(packnum)+','+str(primnum), None)
                         if not tempvg:
                             tempvg = []
                             self.DEBUGvgroups[str(batchid)+','+str(packnum)+','+str(primnum)] = tempvg
+                        tempvg.append(posIndex0)
                         tempvg.append(posIndex1)
                         tempvg.append(posIndex2)
-                        tempvg.append(posIndex3)
 
-                    while len(self.faces) <= self.faceIndex:
-                        self.faces.append(None)
-                    if self.faces[self.faceIndex] is not None:
-                        pass
+                    face = FaceRepresentation()
+                    loop_0 = LoopRepresentation()
+                    loop_1 = LoopRepresentation()
+                    loop_2 = LoopRepresentation()
+                    self.model.faces.append(face)
+                    self.model.loops.append(loop_0)
+                    self.model.loops.append(loop_1)
+                    self.model.loops.append(loop_2)
+                    face.loop_start = self.model.loops.index(loop_0)
 
-                    self.faces[self.faceIndex] = (posIndex1, posIndex2, posIndex3)
+                    loop_0.vertex = posIndex0
+                    loop_1.vertex = posIndex1
+                    loop_2.vertex = posIndex2
 
                     # create texture-coordinates data for correct assignation (later)
                     for uv in range(8):
-                        if len(self.tFaces) <= uv:
-                            self.tFaces.append([])
                         if currBatch.attribs.hasTexCoords[uv]:
-                            t1Index = p1.texCoordIndex[uv]  # fixed
-                            t2Index = p2.texCoordIndex[uv]  # fixed
-                            t3Index = p3.texCoordIndex[uv]  # fixed
-                            while len(self.tFaces[uv]) <= self.faceIndex:
-                                self.tFaces[uv].append([None, None, None])
-                            self.tFaces[uv][self.faceIndex] = (t1Index, t2Index, t3Index)
-                            # new UV method needs this
-                            while len(self.tv_to_f_v[uv]) <= max(t1Index, t2Index, t3Index):
-                                self.tv_to_f_v[uv].append([])
-                            self.tv_to_f_v[uv][t1Index].append((self.faceIndex, posIndex1))
-                            self.tv_to_f_v[uv][t2Index].append((self.faceIndex, posIndex2))
-                            self.tv_to_f_v[uv][t3Index].append((self.faceIndex, posIndex3))
+                            loop_0.UVs[uv] = self.tverts[uv][p0.texCoordIndex[uv]]
+                            loop_1.UVs[uv] = self.tverts[uv][p1.texCoordIndex[uv]]
+                            loop_2.UVs[uv] = self.tverts[uv][p2.texCoordIndex[uv]]
 
                     # create normal assignation data
                     if currBatch.attribs.hasNormals:
-                        n1Index = p1.normalIndex  # fixed
-                        n2Index = p2.normalIndex  # fixed
-                        n3Index = p3.normalIndex  # fixed
-                        while len(self.nFaces) <= self.faceIndex:  # XCX nFaces and tFaces not needed?
-                            self.nFaces.append([None, None, None])
-                        self.nFaces[self.faceIndex] = (n1Index, n2Index, n3Index)
-                        # new UV method needs this
-                        while len(self.nc_to_f_v) <= max(n1Index, n2Index, n3Index):
-                            self.nc_to_f_v.append([])
-                        self.nc_to_f_v[n1Index].append((self.faceIndex, posIndex1))
-                        self.nc_to_f_v[n2Index].append((self.faceIndex, posIndex2))
-                        self.nc_to_f_v[n3Index].append((self.faceIndex, posIndex3))
+                        loop_0.normal = temp_normals[p0.normalIndex].copy()
+                        loop_1.normal = temp_normals[p1.normalIndex].copy()
+                        loop_2.normal = temp_normals[p2.normalIndex].copy()
 
                     # materials
                     while len(self._materialIDS) <= self.faceIndex:
                         self._materialIDS.append(None)
+                    face.material = matIndex
                     self._materialIDS[self.faceIndex] = matIndex
                     #self._materialIDS[self.faceIndex] = self._currMaterial
                     # _currMaterialIndex is incremented "too soon"
 
                     # vertex colors
                     for vc in (0, 1):
-                        while len(self.vcFaces[vc]) <= self.faceIndex:
-                            self.vcFaces[vc].append(None)
-                        if currBatch.attribs.hasColors[vc]:  # fixed
-                            c1Index = p1.colorIndex[vc]  # fixed x2
-                            c2Index = p2.colorIndex[vc]  # fixed x2
-                            c3Index = p3.colorIndex[vc]  # fixed x2
-                            while len(self.cv_to_f_v[vc]) <= max(c1Index, c2Index, c3Index):
-                                self.cv_to_f_v[vc].append([])
-                            self.cv_to_f_v[vc][c1Index].append((self.faceIndex, posIndex1))
-                            self.cv_to_f_v[vc][c2Index].append((self.faceIndex, posIndex2))
-                            self.cv_to_f_v[vc][c3Index].append((self.faceIndex, posIndex3))
-                            self.vcFaces[vc][self.faceIndex] = [c1Index, c2Index, c3Index]
-                        else:
-                            self.vcFaces[vc][self.faceIndex] = None
+                        if currBatch.attribs.hasColors[vc]:
+                            loop_0.VColors[vc] = self.vtx.colors[vc][p0.colorIndex[vc]]
+                            loop_1.VColors[vc] = self.vtx.colors[vc][p1.colorIndex[vc]]
+                            loop_2.VColors[vc] = self.vtx.colors[vc][p2.colorIndex[vc]]
                     self.faceIndex += 1
 
                 # end if currPrimitive.type == 0x98
@@ -728,7 +741,7 @@ class BModel:
         #//remove dummy node at root
         if len(sg.children) == 1:
             t = sg.children[0]
-            sg = t  #//does it wotk without the temp value?
+            sg = t  # does it work without the temp value?
         else:
             sg.type = sg.index = -1
             print("buildSceneGraph(): Unexpected size %d", len(sg.children), file=sys.stderr)
@@ -752,19 +765,19 @@ class BModel:
             # build material (old version)
             #matName = self._mat1.stringtable[n.index]  # correced
 
-            if not self.use_nodes:
+            if not self.params.use_nodes:
                 mat = self._mat1.materials[self._mat1.indexToMatIndex[n.index]]  # corrected *2
                 self._currMaterial = build_material(self, self._mat1, mat, self.tex,
                                                     self._images, self.ExtractImages)  # material build, first version
             else:
                 mat = self._mat1V2.materials[self._mat1V2.indexToMatIndex[n.index]]
-                self._currMaterial = create_material(mat)  # XCX XCX mat build second version
+                self._currMaterial = create_material(mat)
 
 
             onDown = mat.flag == 1
             if self._currMaterial is not None:  # mat.texStages[0] != 0xffff:  # do it if any texture has been made
                 # XCX is that the good condition?
-                if self.use_nodes:
+                if self.params.use_nodes:
                     self._currMaterial.name = self._mat1V2.stringtable[n.index]
                 else:
                     self._currMaterial.name = self._mat1.stringtable[n.index]
@@ -811,22 +824,23 @@ class BModel:
 
         sg = SceneGraph()  # prepare scenegraph
         self.buildSceneGraph(self.inf, sg)
+        self.model = ModelRepresentation()
         self.CreateFrameNodes(sg, identity, rootFrameNode)
         print("frame node created", time())
         # -- FIX: Force create bone option allows to generate bones independently of their count
         if len(rootFrameNode.children) == 1 and len(rootFrameNode.children[0].children) == 0 and \
-                                                                        not self._forceCreateBones:
-            self._createBones = False
+                                                                        not self.params.forceCreateBones:
+            self.params.createBones = False
         origWorldBonePos = None
 
-        if self.use_nodes:
-            self._mat1V2.convert(self.tex, self._texturePath + self._texturePrefix)
+        if self.params.use_nodes:
+            self._mat1V2.convert(self.tex, self._texturePath)  # + self.params.texturePrefix)
         # prepare material nodes
 
-        if self._createBones:
-            self._bones = rootFrameNode.CreateBones(self._boneThickness, "")
-            if self._includeScaling:  # - scaling cases IK and number of bones issue
-                rootFrameNode.FixBones(self._boneThickness)
+        if self.params.createBones:
+            self._bones = rootFrameNode.CreateBones(self.params.boneThickness, "")
+            if self.params.includeScaling:  # - scaling cases IK and number of bones issue
+                rootFrameNode.FixBones(self.params.boneThickness)
 
             self._parentBoneIndexs = rootFrameNode.CreateParentBoneIndexs()
             # XCX get rid of this call (^^^^) and what goes with it.
@@ -842,7 +856,7 @@ class BModel:
         self.DrawScenegraph(sg, i)
         modelMesh = self.BuildSingleMesh()
 
-        if self._createBones and self._exportType != 'XFILE' and False:  # XCX this is suspected to be a pile of bullcrap
+        if self.params.createBones and self.params.exportType != 'XFILE' and False:  # XCX this is suspected to be a pile of bullcrap
             chr = self.CreateCharacter(rootFrameNode)
             # --RotateAroundWorld  chr (EulerAngles 90 0 0)
 
@@ -851,14 +865,14 @@ class BModel:
             self._bones[0].parent.fset(d)  # fixed
             d.parent.fset(chr)
         # --RotateAroundWorld modelMesh (EulerAngles 90 0 0) -- e.g. stage, object
-        if self._createBones:  # XCX is this needed?
+        if self.params.createBones:  # XCX is this needed?
             try:
                 dirCreated = os.mkdir(self._bmdDir + "\\Animations")
             except FileExistsError: pass
         bckFiles = []
         errMsg = ""
         # --self._createBones = True
-        if self._createBones and self._loadAnimations:
+        if self.params.createBones and self.params.loadAnimations:
             # fileProperties.addProperty  custom "exportAnimation" True
             _onlyExportAnimations = False
             if _onlyExportAnimations:  # XCX remove this?
@@ -903,13 +917,14 @@ class BModel:
 
                     saveMaxAnimName = self._bmdDir + bckFileName + ".max"  # -- .chr?
                     b = Bck_in()
-                    b.LoadBck(f)
-                    if len(b.anims) != len(self._bones):
+                    b.LoadBck(f, len(self._bones))
+                    if not len(b.anims):  # len(b.anims) != len(self._bones):
+                        # file loader already knows that it won't fit
                         errMsg += bckFileName + "\n"
                     else:
                         endFrame = None
-                        b.AnimateBoneFrames(startFrame, self._bones, 1,
-                                            self._exportType, refBoneRequiresDummyList, self._includeScaling)
+                        b.AnimateBoneFrames(startFrame, self._bones, 1, self.params.exportType,
+                                            refBoneRequiresDummyList, self.params.includeScaling)
 
                         numberOfFrames = b.animationLength
 
@@ -917,7 +932,7 @@ class BModel:
                             numberOfFrames= 1
                         endFrame = startFrame + b.animationLength
 
-                        if self._exportType == 'XFILE' and True:
+                        if self.params.exportType == 'XFILE' or True:
                             kwXPortAnimationName += bckFileName + "," + str(startFrame) + "," + str(numberOfFrames)+ ",1;"
                             startFrame = endFrame + 1
                             animationCount += 1
@@ -949,7 +964,6 @@ class BModel:
             bpy.context.scene.frame_start = 0
             bpy.context.scene.frame_end = startFrame
 
-
             apply_animation(self._bones, self.arm_obj, self.jnt.frames)
 
     def ExtractImages(self, force=False):
@@ -977,7 +991,7 @@ class BModel:
         # -- if using version before 2008 then use DOSCommand and set BmdView.exe into a known path
 
         if (len(tgaFiles) == 0 and len(ddsFiles) == 0) or force:
-            self.TryHiddenDOSCommand("BmdView.exe \"" + self._bmdFilePath+ "\" \"" +
+            self.TryHiddenDOSCommand("BmdView.exe \"" + self._bmdFilePath + "\" \"" +
                                  self._texturePath+ "\\\"", self._bmdViewPathExe)
 
         ddsFiles = getFiles(self._texturePath + "*.dds")
@@ -1054,26 +1068,15 @@ class BModel:
 
     def Import(self, filename, boneThickness, allowTextureMirror, forceCreateBones, loadAnimations, exportTextures,
                exportType, includeScaling, imtype, dvg, use_nodes=False):
-        self.DEBUGVG = dvg
-        self.use_nodes = use_nodes
-        if exportTextures:
-            self._texturePrefix = ""  # XCX useless prefix (maxscript arctefact to pack textures?)
-        else:
-            self._texturePrefix = "_"
+        self.params = Prog_params(filename, boneThickness, allowTextureMirror, forceCreateBones, loadAnimations,
+                                  exportTextures, exportType, includeScaling, imtype, dvg, use_nodes)
+
         self._bckPaths.append("..\\..\\bck\\*.bck")
         self._bckPaths.append("..\\..\\bcks\\*.bck")
         self._bckPaths.append("..\\..\\scrn\\*.bck")
-        # --self._createBones = False
-        self._includeScaling = includeScaling
-        # --self._exportType=XFILE
-        self._exportType = exportType
-        self.imtype = imtype
-        texhelper.MODE = imtype
 
-        self._allowTextureMirror = allowTextureMirror
-        self._forceCreateBones = forceCreateBones
-        self._loadAnimations = loadAnimations
-        self._boneThickness = boneThickness
+        texhelper.MODE = self.params.imtype
+
         # print(filename)
         self.LoadModel(filename)
 

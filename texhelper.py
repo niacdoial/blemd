@@ -99,7 +99,7 @@ def showTextureMap(mat):
                 mat.use_textures[num] = True
 
 
-def newUVlayer(mesh, tverts, tfaces, Faces, tv_to_f_v):
+def newUVlayer_old(mesh, tverts, tfaces, Faces, tv_to_f_v):
     # probably one of the hardest functions to fathom.
     #it's goal is to set the right UV coords to the right UV point.
     # with the fact that most verts had changed index between steps. gah.
@@ -143,50 +143,18 @@ def newUVlayer(mesh, tverts, tfaces, Faces, tv_to_f_v):
                     if mesh.loops[com2].vertex_index == com[1]:
                         uvtex.data[com2].uv = mathutils.Vector(tverts[num][:2])
 
-    # STABLE version (but less precise)
-    #for num, com in enumerate(tfaces):
-    #    com2 = Faces[num]
-    #    uvtex.data[v_rf_to_l[com2[0]] [f_to_rf[num]]].uv = mathutils.Vector((tverts[com[0]][:2]))
-    #    uvtex.data[v_rf_to_l[com2[1]] [f_to_rf[num]]].uv = mathutils.Vector((tverts[com[1]][:2]))
-    #    uvtex.data[v_rf_to_l[com2[2]] [f_to_rf[num]]].uv = mathutils.Vector((tverts[com[2]][:2]))
 
-    # OLD version from now.
+def newUVlayer(mesh, representation, uv_id):
+    """copy UV coordinates from layer `uv_id`, from `representation` to the actual blender mesh"""
 
-    # must make correspond faces and UV faces, so must associate UV_verts to 3D_verts.
-    #rf_to_l = []  # blender faces index to loop indexES
-    #for com in mesh.polygons:
-    #    rf_to_l.append([com2 for com2 in com.loop_indices])
+    num = len(mesh.uv_textures)
+    mesh.uv_textures.new()
+    uvtex = mesh.uv_layers[num]
+    uvtex.name = 'UV '+str(len(mesh.uv_layers)-1)
+    # '-1' because count takes the new layer in account and index starts at 0
 
-    #tf_to_tv = []  # is that part useless?
-    #for com in tfaces:
-    #    tf_to_tv.append((com[0], com[1], com[2]))
-
-    ##
-    #tv_to_v = [-1]*(3*len(tf_to_tv))  # loaded texvert index to loaded vert index (is that identity?)
-    #for num, com in enumerate(tf_to_tv):
-    #    tv_to_v[com[0]] = Faces[num][0]
-    #    tv_to_v[com[1]] = Faces[num][1]
-    #    tv_to_v[com[2]] = Faces[num][2]
-
-    #l_to_v = [com.vertex_index for com in mesh.loops]
-    #v_to_l = [None]*len(mesh.vertices)  # blender vertex index to loop loop index(ES?)
-    #for com in mesh.loops:
-    #    v_to_l[com.vertex_index] = com.index
-
-    #for i in range(len(tverts)):
-    #    if tverts[i] is not None:
-    #        uvtex.data[v_to_l[tv_to_v[i]]].uv = mathutils.Vector(tverts[i][:2])
-    #    else:
-    #        raise ValueError('must implement unused UV verts')
-
-    ## ##--meshop.buildMapFaces modelMesh uv
-
-    #for i in range(len(tfaces)):  # auto-set by blender. but undefined faces are definite sources of complere chaos in UVs
-    #    if tfaces[i] is not None:
-    #        pass
-    #        #meshop.setMapFace(modelMesh, uv, i, tFaces[i]) # XCX
-    #    else:
-    #        raise ValueError("must implement unused UV faces")
+    for num, com in enumerate(representation.loops):
+        uvtex.data[num].uv = com.UVs[uv_id][0:2]
 
 
 def addforcedname(real, fake):

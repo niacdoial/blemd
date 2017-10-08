@@ -8,16 +8,6 @@ import bpy
 from math import nan, pi, isnan, ceil, isclose, floor
 
 
-def round(f):
-    """gets the closest int"""
-    d1 = f-floor(f)
-    d2 = ceil(f)-f
-    if d1 < d2:
-        return floor(f)
-    else:
-        return ceil(f)
-
-
 class BckKey:
     # <variable time>
     # -- float 
@@ -408,13 +398,17 @@ class Bck_in:
                 dst[j].tangent = src[(index.index + 3*j + 2)]
         return dst
 
-    def LoadAnk1(self, br):
+    def LoadAnk1(self, br, jointnum):
         i = 0
         ank1Offset = br.Position()
 
         # -- read header
         h = BckAnk1Header()
         h.LoadData(br)
+
+        if h.numJoints != jointnum:
+            return  # this file will not be used anyway
+
         self.currAnimTime = 0.0
         self.animationLength = h.animationLength
 
@@ -457,7 +451,7 @@ class Bck_in:
             self.anims[i].translationsY = self.ReadComp(translations, joint.y.t)
             self.anims[i].translationsZ = self.ReadComp(translations, joint.z.t)
 
-    def LoadBck(self, filePath):
+    def LoadBck(self, filePath, jointlen):
         br = BinaryReader()
         br.Open(filePath)
         br.SeekSet(0x20)
@@ -475,9 +469,9 @@ class Bck_in:
             br.SeekSet(pos)
 
             if tag == "ANK1":
-                self.LoadAnk1(br)
+                self.LoadAnk1(br, jointlen)
             else:
-                MessageBox("readBck(): Unsupported section " + tag)
+                # MessageBox("readBck(): Unsupported section " + tag)
                 raise ValueError("readBck(): Unsupported section " + tag)
             br.SeekSet(pos)
             i += 1
@@ -571,12 +565,13 @@ class Bck_in:
                 #  XCX means no IK: means IK is here by default?
 
             # position correction LATER in the program
-            translate_animation(timeOffset, bone, anim, frameScale,
-                      'scale', 'x', mathutils.Vector((nan,nan,nan)))
-            translate_animation(timeOffset, bone, anim, frameScale,
-                      'scale', 'y', mathutils.Vector((nan, nan, nan)))
-            translate_animation(timeOffset, bone, anim, frameScale,
-                      'scale', 'z', mathutils.Vector((nan, nan, nan)))
+            if includeScaling:
+                translate_animation(timeOffset, bone, anim, frameScale,
+                          'scale', 'x', mathutils.Vector((nan,nan,nan)))
+                translate_animation(timeOffset, bone, anim, frameScale,
+                          'scale', 'y', mathutils.Vector((nan, nan, nan)))
+                translate_animation(timeOffset, bone, anim, frameScale,
+                          'scale', 'z', mathutils.Vector((nan, nan, nan)))
             translate_animation(timeOffset, bone, anim, frameScale,
                       'rotation', 'x', mathutils.Euler((nan, nan, nan), 'XYZ'))
             translate_animation(timeOffset, bone, anim, frameScale,
@@ -590,12 +585,13 @@ class Bck_in:
             translate_animation(timeOffset, bone, anim, frameScale,
                       'position', 'z', mathutils.Vector((nan, nan, nan)))
 
-            complete_animation(timeOffset, bone, anim, self.animationLength,
-                                'scale', 'x', mathutils.Vector((nan, nan, nan)))
-            complete_animation(timeOffset, bone, anim, self.animationLength,
-                                'scale', 'y', mathutils.Vector((nan, nan, nan)))
-            complete_animation(timeOffset, bone, anim, self.animationLength,
-                                'scale', 'z', mathutils.Vector((nan, nan, nan)))
+            if includeScaling:
+                complete_animation(timeOffset, bone, anim, self.animationLength,
+                                    'scale', 'x', mathutils.Vector((nan, nan, nan)))
+                complete_animation(timeOffset, bone, anim, self.animationLength,
+                                    'scale', 'y', mathutils.Vector((nan, nan, nan)))
+                complete_animation(timeOffset, bone, anim, self.animationLength,
+                                    'scale', 'z', mathutils.Vector((nan, nan, nan)))
             complete_animation(timeOffset, bone, anim, self.animationLength,
                                 'rotation', 'x', mathutils.Euler((nan, nan, nan), 'XYZ'))
             complete_animation(timeOffset, bone, anim, self.animationLength,

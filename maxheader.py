@@ -60,6 +60,17 @@ def MessageBox(string):
     sleep(5)
 
 
+def ReverseArray(inputArray):
+    i = 0
+    rev = []
+    i = len(inputArray)
+    while i > 0:
+        rev.append(inputArray[i-1])  # corrected!
+        i -= 1
+    # -- inputArray = rev doesn't work
+    return rev
+
+
 def HiddenDOSCommand(cmd, startpath=os.getcwd()):
     if os.path.isabs(cmd):
         DosCommand(cmd)

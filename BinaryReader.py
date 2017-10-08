@@ -1,6 +1,7 @@
 #! /usr/bin/python3
 import os
 from .maxheader import MessageBox
+from array import array
 
 def bitshiftu8(val, shifter):
     if val // 256:
@@ -78,40 +79,34 @@ class BinaryReader:
             pass # os.remove(self._tempFileName) # DEBUG: plz uncomment this when tests finished
 
     def DecodeYaz0(self, src, srcSize, dst, uncompressedSize):
-        r = ReturnValue()
-        # -- current read/write positions
+        r = ReturnValue()  # current read/write positions
 
-        validBitCount = 0 # -- u32 number of valid bits left in "code" byte
-        currCodeByte = None # -- u8
+        validBitCount = 0  # u32 number of valid bits left in "code" byte
+        currCodeByte = None  # u8
     
-    
-        while r.dstPos < uncompressedSize :
-                        
-        # -- read new "code" byte if the current one is used up
-        
-            if validBitCount == 0 :
-                if r.srcPos >= srcSize :
+        while r.dstPos < uncompressedSize:
+            # read new "code" byte if the current one is used up
+            if validBitCount == 0:
+                if r.srcPos >= srcSize:
                     return r
-                currCodeByte = src[r.srcPos + 1]
+                currCodeByte = src[r.srcPos]
                 r.srcPos += 1
                 validBitCount = 8
 
-            if (currCodeByte & 0x80) != 0 :
-                # -- straight copy
-              
-                if r.srcPos >= srcSize :
-                                return r
-                dst[r.dstPos + 1] = src[r.srcPos + 1]
+            if (currCodeByte & 0x80) != 0:
+                # straight copy
+                if r.srcPos >= srcSize:
+                    return r
+                dst[r.dstPos] = src[r.srcPos]
                 r.dstPos += 1
                 r.srcPos += 1
 
-            else  :
-              # -- RLE part
-
-                if r.srcPos >= srcSize - 1 :
+            else:
+                # RLE part
+                if r.srcPos >= srcSize - 1:
                     return r
-                byte1 = src[r.srcPos + 1] # -- u8
-                byte2 = src[r.srcPos + 2] # -- u8
+                byte1 = src[r.srcPos]  # u8
+                byte2 = src[r.srcPos + 1]  # u8
 
                 r.srcPos += 2
 
@@ -120,37 +115,37 @@ class BinaryReader:
                 copySource = r.dstPos- (dist + 1)  # -- u32 copySource = r.dstPos - (dist + 1);
 
                 if copySource < 0 :                                        
-                    MessageBox ("copySource < 0 ??? " + str(r.dstPos) +":"+ str(dist) +":"+ str(copySource))
+                    # MessageBox ("copySource < 0 ??? " + str(r.dstPos) +":"+ str(dist) +":"+ str(copySource))
                     raise ValueError("ERROR")
 
-                numBytes = byte1 >> 4 # -- u32  byte1 >> 4
+                numBytes = byte1 >> 4 # u32  byte1 >> 4
               
                 if numBytes == 0 :
                     if r.srcPos >= srcSize :
                         return r
-                    numBytes = src[r.srcPos + 1] + 0x12
+                    numBytes = src[r.srcPos] + 0x12
                     r.srcPos += 1
                 else:
                   numBytes += 2
                 
                 # -- copy run
-                for i in range(1, numBytes+ 1) :
+                for i in range(numBytes) :
                     if r.dstPos >= uncompressedSize:
                         return r
-                    dst[r.dstPos + 1] = dst[copySource + 1]
+                    dst[r.dstPos] = dst[copySource]
                     copySource += 1
                     r.dstPos += 1
         
-         # -- use next bit from "code" byte
-        currCodeByte <<= 1 # -- currCodeByte <<= 1
-        validBitCount-= 1
+            # use next bit from "code" byte
+            currCodeByte <<= 1  # -- currCodeByte <<= 1
+            validBitCount -= 1
         return r
 
     def ReadFixedLengthString(self, len):
         strRead = b""
         for _ in range(len):
             strRead += (self._f.read(1))
-        return strRead.decode('utf-8')
+        return strRead.decode('cp1252')
 
     def ReadDWORD(self):
         w1 = ord(self._f.read(1))
@@ -167,12 +162,12 @@ class BinaryReader:
         # --fseek self._f 0 seek_end
         # --self._size = ftell self._f
         self._f.seek(0)
-        if self._f is None :
+        if self._f is None:
             MessageBox("Unable to open file " + srcPath)
             raise ValueError("Unable to open file " + srcPath)
 
         tag = self.ReadFixedLengthString(4)
-        self._f.seek(0)
+        # self._f.seek(0)
         if tag != "Yaz0":
             return  # -- not compressed, return file directly
 
@@ -180,31 +175,34 @@ class BinaryReader:
         # -- return the uncompressed file
 
         uncompressedSize = self.ReadDWORD()
-        compressedSize = len(self._f.read())- 16 # -- 16 byte header
-        self._f.seek(16) # -- seek to start of data
+        compressedSize = len(self._f.read()) - 8  # -- 16 byte header (including "Yaz0" and size)
+        self._f.seek(16)  # -- seek to start of data
 
-        srcData =[]
+        srcData = array('B')  # [0]*compressedSize  # two arrays of u8s
         # --srcData[compressedSize] = 0 -- Pre-initialize array size
-        dstData =[]
+        dstData = array('B')  # [0]*uncompressedSize
         # --dstData[uncompressedSize] = 0 -- Pre-initialize array size
+
+        for _ in range(uncompressedSize):
+            dstData.append(0)
         for _ in range(compressedSize):
             srcData.append(ord(self._f.read(1)))
         self._f.close()
 
-        for i in range(compressedSize) :
-            if srcData[i]  < 0:
-                MessageBox ("srcData[i]  < 0 ??? " + (str(srcData[i])))
-                raise ValueError("ERROR")
+        #for i in range(compressedSize):
+        #    if srcData[i] < 0:
+                # MessageBox("srcData[i]  < 0 ??? " + (str(srcData[i])))
+        #        raise ValueError("ERROR")
 
         r = self.DecodeYaz0(srcData, compressedSize, dstData, uncompressedSize)
 
         # --write decompressed data to a temporary file and
         # --return handle to this file
-        self._tempFileName = os.path.splitext(srcPath)[0]  + ".tempYaz0"
+        self._tempFileName = os.path.splitext(srcPath)[0] + ".tempYaz0"
 
-        self._f = open(self._tempFileName, "wb") # -- creates file if not found
+        self._f = open(self._tempFileName, "wb")  # -- creates file if not found
         for i in range(r.dstPos):
-            self._f.write(dstData[i])
+            self._f.write(dstData[i].to_bytes(1, 'big'))
         self._f.close()
 
         # -- open temp file for reading
@@ -245,8 +243,8 @@ class BinaryReader:
     def ReadWORD(self):
         w1 = ord(self._f.read(1))
         w2 = ord(self._f.read(1))
-        w = (w1 << 8) | w2 # -- w = (w1 << 8) | w2;
-        if w < 0 :
+        w = (w1 << 8) | w2  # -- w = (w1 << 8) | w2;
+        if w < 0:
             MessageBox("ReadWORD should be unsigned")
             raise ValueError("ReadWORD should be unsigned")
         return w
