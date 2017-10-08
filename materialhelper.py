@@ -49,7 +49,7 @@ def build_material(bmodel, mat1, material, tex, _images, ExtractImages):
         textureName = tex.stringtable[v2]
 
         # --self.textureName = matName
-        fileName = bmodel._texturePath + bmodel._texturePrefix + textureName + ".tga"
+        fileName = bmodel._texturePath + textureName + ".tga"
         bmpFound = OSPath.exists(fileName) or OSPath.exists(fileName[:-4] + '.dds')  # two image types!
 
         # -- messageBox fileName
@@ -121,7 +121,8 @@ def build_material(bmodel, mat1, material, tex, _images, ExtractImages):
 
     return currMaterial
 
-def add_vcolor(mesh, color_layer, cv_to_f_v, Faces, uvlayer, layerID):
+
+def add_vcolor_old(mesh, color_layer, cv_to_f_v, Faces, uvlayer, layerID):
 
     vx_layer = mesh.vertex_colors.new("v_color_"+str(layerID))
     vx_layer_a = mesh.vertex_colors.new("v_color_alpha_"+str(layerID))
@@ -194,3 +195,16 @@ def add_vcolor(mesh, color_layer, cv_to_f_v, Faces, uvlayer, layerID):
             pass
 
     # return alpimg
+
+
+def add_vcolor(mesh, representation, layerID):
+    """copies vertex colors (layer `layerID`) from the representation to the blender mesh"""
+
+    vx_layer = mesh.vertex_colors.new("v_color_"+str(layerID))
+    vx_layer_a = mesh.vertex_colors.new("v_color_alpha_"+str(layerID))
+    # alpimg = bpy.data.images.new(mesh.name+'_vcol_alpha_'+str(layerID), 256, 256)
+    # XCX image method buggy -> disabled
+
+    for num, com in enumerate(representation.loops):
+        vx_layer.data[num].color = mathutils.Color(com.VColors[layerID][:3])
+        vx_layer_a.data[num].color = mathutils.Color(tuple(com.VColors[layerID][3])*3)
