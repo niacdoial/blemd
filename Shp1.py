@@ -20,27 +20,17 @@ class ShpIndex:
 
 
 class ShpPrimitive:
-    # <variable type>
-    # -- u8 
-    # <variable points>
-    # -- vector<ShpIndex>
     def __init__(self):  # GENERATED!
-        self.points= []
+        self.points = []
 # ---------------------------------------------------------------------------------------------------------------------
 
 
 class ShpPacket:
-    # <variable primitives>
-    # -- std::vector<ShpPrimitive>
-    # <variable matrixTable>
-    # -- std::vector<u16> maps attribute matrix index to draw array index
-    # -- Shp1BatchAttrib[] attribs 
-    # -- Packet& dst
-    # <function>
-
-    # -- end function
     def __init__(self):  # GENERATED!
         self.matrixTable= []
+        # maps attribute matrix index to draw array index
+        # -- Shp1BatchAttrib[] attribs
+        # -- Packet& dst
         self.primitives= []
 
     def LoadPacketPrimitives(self, attribs, dataSize, br):
@@ -131,20 +121,16 @@ class ShpAttributes:
     # <variable hasTexCoords>
     # -- bool[8]; 
     def __init__(self):  # GENERATED!
-        self.hasColors= []
-        self.hasTexCoords= []
+        self.hasColors = [False]*2  # Bools[2]
+        self.hasTexCoords = [False]*8  # Bools[8]
 
 # ---------------------------------------------------------------------------------------------------------------------
 # -- Used in dumpBatch
 
 
 class ShpBatch:
-    # <variable attribs>
-    # -- ShpAttributes
-    # <variable packets>
-    # -- std::vector<ShpPacket>
     def __init__(self):  # GENERATED!
-        self.attribs = None
+        self.attribs = None  # ShpAttributes
         self.packets = None
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -152,75 +138,31 @@ class ShpBatch:
 
 
 class Shp1HeaderBatch:
-    """# <variable unknown>
-    # -- u16 seems to be always 0x00ff ("matrix type, unk")
-    # <variable packetCount>
-    # -- u16 number of packets belonging to this batch
-    # --attribs used for the strips in this batch. relative to
-    # --Shp1Header.offsetToBatchAttribs
-    # --Read StripTypes until you encounter an 0x000000ff/0x00000000,
-    # --for all these types indices are included. If, for example,
-    # --a Batch has types (9, 3), (a, 3), (0xff, 0), then for this batch two shorts (= 3)
-    # --are stored per vertex: position index and normal index
-    # <variable offsetToAttribs>
-    # --u16 
-    # <variable firstMatrixData>
-    # --u16 index to first matrix data (packetCount consecutive indices)
-    # <variable firstPacketLocation>
-    # --u16 index to first packet position (packetCount consecutive indices)
-    # <variable unknown3>
-    # --u16 0xffff
-    # <variable unknown4>
-    # --float[7]  great... (seems to match the last 7 floats of joint info sometimes)
-    # --(one unknown float, 6 floats bounding box?)
-    # <function>"""
-
     def __init__(self):  # GENERATED!
         self.unknown4 = []
 
     def LoadData(self, br):
         self.unknown = br.ReadWORD()
+        # seems to be always 0x00ff ("matrix type, unk")
         self.packetCount = br.ReadWORD()
+        # u16 number of packets belonging to this batch
+        # attribs used for the strips in this batch. relative to
+        # Shp1Header.offsetToBatchAttribs
+        # Read StripTypes until you encounter an 0x000000ff/0x00000000,
+        # for all these types indices are included. If, for example,
+        # a Batch has types (9, 3), (a, 3), (0xff, 0), then for this batch two shorts (= 3)
+        # are stored per vertex: position index and normal index
         self.offsetToAttribs = br.ReadWORD()
-        self.firstMatrixData = br.ReadWORD()
-        self.firstPacketLocation = br.ReadWORD()
-        self.unknown3 = br.ReadWORD()
+        self.firstMatrixData = br.ReadWORD()  # index to first matrix data (packetCount consecutive indices)
+        self.firstPacketLocation = br.ReadWORD()  # index to first packet position (packetCount consecutive indices)
+        self.unknown3 = br.ReadWORD()  # 0xffff
         for j in range(7) :
             self.unknown4.append(br.GetFloat())
+        # great... (seems to match the last 7 floats of joint info sometimes)
+        # (one unknown float, 6 floats bounding box?)
 
 
 class Shp1Header:
-    """# <variable tag>
-    # -- char[4]
-    # <variable sizeOfSection>
-    # -- u32 
-    # <variable batchCount>
-    # -- u16 number of batches 
-    # <variable pad>
-    # -- u16 ??
-    # <variable offsetToBatches>
-    # -- u32 should be 0x2c (batch info starts here)
-    # <variable offsetUnknown>
-    # -- u32 ??
-    # <variable zero>
-    # -- u32 ??
-    # <variable offsetToBatchAttribs>
-    # -- u32 batch vertex attrib start
-    # --The matrixTable is an array of u16, which maps from the matrix data indices
-    # --to Drw1Data arrays indices. If a batch contains multiple packets, for the
-    # --2nd, 3rd, ... packet this array may contain 0xffff values, which means that
-    # --the corresponding index from the previous packet should be used.
-    # <variable offsetToMatrixTable>
-    # -- u32 
-    # <variable offsetData>
-    # -- u32 start of the actual primitive data
-    # <variable offsetToMatrixData>
-    # -- u32 
-    # <variable offsetToPacketLocations>
-    # -- u32 offset to packet start/length info
-    # --(all offsets relative to Shp1Header start)
-    # <function>"""
-
     def __init__(self):  # GENERATED!
         pass
 
@@ -233,50 +175,47 @@ class Shp1Header:
         self.offsetUnknown = br.ReadDWORD()
         self.zero = br.ReadDWORD()
         self.offsetToBatchAttribs = br.ReadDWORD()
+        # batch vertex attrib start
+        # The matrixTable is an array of u16, which maps from the matrix data indices
+        # to Drw1Data arrays indices. If a batch contains multiple packets, for the
+        # 2nd, 3rd, ... packet this array may contain 0xffff values, which means that
+        # the corresponding index from the previous packet should be used.
         self.offsetToMatrixTable = br.ReadDWORD()
 
         self.offsetData = br.ReadDWORD()
+        # start of the actual primitive data
         self.offsetToMatrixData = br.ReadDWORD()
         self.offsetToPacketLocations = br.ReadDWORD()
+        # u32 offset to packet start/length info
+        # (all offsets relative to Shp1Header start)
 # ---------------------------------------------------------------------------------------------------------------------
 
 
 class Shp1BatchAttrib:
-    # <variable attrib>
-    # --u32 cf. ArrayFormat.arrayType
-    # <variable dataType>
-    # --u32 cf. ArrayFormat.dataType (always bytes or shorts...)
-    # <function>
-
     def __init__(self):  # GENERATED!
         pass
 
     def LoadData(self, br):
                 
         self.attrib = br.ReadDWORD()
+        # cf. ArrayFormat.arrayType
         self.dataType= br.ReadDWORD()
+        # cf. ArrayFormat.dataType (always bytes or shorts...)
 
-
-        #-----------------------------------------
-        #--for every packet a PacketLocation struct is stored at
-        #--Shp1Header.offsetToPacketLocation + Batch.firstPacketLocation*sizeof(PacketLocation).
-        #--This struct stores where the primitive data for this packet is stored in the
-        #--data block.
+        ###########################################
+        # for every packet a PacketLocation struct is stored at
+        # Shp1Header.offsetToPacketLocation + Batch.firstPacketLocation*sizeof(PacketLocation).
+        # This struct stores where the primitive data for this packet is stored in the
+        # data block.
 
 
 class Shp1PacketLocation:
-    # <variable size>
-    # --u32 size in bytes of packet
-    # <variable offset>
-    # --u32 relative to Shp1Header.offsetData
-    # <function>
-
     def __init__(self):  # GENERATED!
         pass
 
     def LoadData(self, br):
-        self.size = br.ReadDWORD()
-        self.offset = br.ReadDWORD()
+        self.size = br.ReadDWORD()  # size in bytes of packet
+        self.offset = br.ReadDWORD()  # relative to Shp1Header.offsetData
 #---------------------------------------------------------------------------------------------------------------------
 
 
@@ -296,17 +235,6 @@ class Shp1Primitive:
 
 
 class Shp1MatrixData:
-    # --from yaz0r's source (animation stuff)
-    # <variable unknown1>
-    # --u16 
-    # <variable count>
-    # --u16 count many consecutive indices into matrixTable
-    # <variable firstIndex>
-    # --u32 first index into matrix table
-    # <function>
-
-    # <function>
-
     def __init__(self):  # GENERATED!
         pass
 
@@ -314,25 +242,16 @@ class Shp1MatrixData:
         return 8
 
     def LoadData(self, br):
+        # from yaz0r's source (animation stuff)
         self.unknown1 = br.ReadWORD()         # -- TODO: figure this out...
         self.count = br.ReadWORD()
+        # count many consecutive indices into matrixTable
         self.firstIndex = br.ReadDWORD()
+        # first index into matrix table
 # ---------------------------------------------------------------------------------------------------------------------
 
 
 class Shp1:
-    # <variable batches>
-    # -- std::vector<ShpBatch> 
-    # -- return Shp1BatchAttrib[]
-    # <function>
-
-    # -- TODO: unknown data is missing, ...
-    # -- void dumpBatch(const bmd::Batch& batch, const bmd::Shp1Header& h, FILE* f, long baseOffset, Batch& dst)
-    # <function>
-
-    # -- end fn dumpBatch 
-    # <function>
-
     def __init__(self):  # GENERATED!
         self.batches= []
 
@@ -363,15 +282,6 @@ class Shp1:
         dst.attribs.hasPositions = False
         dst.attribs.hasNormals = False
 
-        for i in range(2):
-            if len(dst.attribs.hasColors) <= i:
-                dst.attribs.hasColors.append(None)
-            dst.attribs.hasColors[i] = False
-
-        for i in range(8):
-            if len(dst.attribs.hasTexCoords) <= i:
-                dst.attribs.hasTexCoords.append(None)
-            dst.attribs.hasTexCoords[i] = False
 
         for i in range(len(attribs)):
             if attribs[i].dataType not in (1, 3):
@@ -386,16 +296,9 @@ class Shp1:
             elif attribs[i].attrib == 0xa:
                 dst.attribs.hasNormals = True
             elif attribs[i].attrib == 0xb or attribs[i].attrib == 0xc:
-                dst.attribs.hasColors[(attribs[i].attrib - 0xb)] = True # fixed
-            elif attribs[i].attrib == 0xd or\
-                 attribs[i].attrib == 0xe or\
-                 attribs[i].attrib == 0xf or\
-                 attribs[i].attrib == 0x10 or\
-                 attribs[i].attrib == 0x11 or\
-                 attribs[i].attrib == 0x12 or\
-                 attribs[i].attrib == 0x13 or\
-                 attribs[i].attrib == 0x14:
-                dst.attribs.hasTexCoords[(attribs[i].attrib- 0xd)] = True  # fixed
+                dst.attribs.hasColors[(attribs[i].attrib - 0xb)] = True  # fixed
+            elif attribs[i].attrib >= 0xd and attribs[i].attrib <= 0x14:
+                dst.attribs.hasTexCoords[(attribs[i].attrib - 0xd)] = True  # fixed
             else:
                 print("Warning: shp1, dumpBatch(): unknown attrib %d in batch, it might not display correctly")
                 # -- return; //it's enough to warn

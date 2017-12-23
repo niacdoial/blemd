@@ -168,7 +168,7 @@ class Vtx1:
             # --throw "TODO: testing"
             # --messageBox "3"
 
-        elif af.dataType == 4:  # -- f32
+        elif af.dataType == 4:  # f32
             count = length/4
             if int(count) != count:
                 raise ValueError('invalid count (length not *4)')
@@ -178,7 +178,7 @@ class Vtx1:
             # --throw "TODO: testing2"
             # --print (format "ZZZ % %" length count )
 
-        elif af.dataType == 5:  # -- rgb(a)
+        elif af.dataType == 5:  # rgb(a)
             tmp = []
             # -- size = length
             for _ in range(length):
@@ -364,7 +364,7 @@ class Vtx1:
                 j += 1
 
 
-# small iter-generators to iterate numbers for  GL_strips and GL_fans.
+# small iter-generators to iterate triangles from GL_strips and GL_fans.
 def StripIterator(lst):
     flip = False  # odd faces are in reversed index
     for com in range(len(lst)-2):

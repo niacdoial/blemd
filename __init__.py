@@ -22,7 +22,7 @@ IDE_DEBUG = True
 bl_info = {
     "name": "Import gc/wii bmd format (.bmd)",
     "author": "people from the internet. adapted for blender by Niacdoial, from Avatarus-One's version (see github) full explanation in README",
-    "version": (0, 5, 0),
+    "version": (1, 0, 0),
     "blender": (2, 77, 0),
     "location": "File > Import > Nintendo BMD",
     "description": "Import files in the gc/wii BMD format (.bmd)",
@@ -57,10 +57,19 @@ class ImportBmd(Operator, ImportHelper):
 
     # List of operator properties, the attributes will be assigned
     # to the class instance from the operator settings before calling.
-    sv_anim = BoolProperty(
-        name="Import animations (WIP)",
-        description="",
-        default=True
+
+    #sv_anim = BoolProperty(
+    #    name="Import animations (WIP)",
+    #    description="",
+    #    default=True
+    #    )
+    sv_anim = EnumProperty(
+        name="Import animations(WIP)",
+        description="if yes, choice to chain them or put them in individual actions",
+        items=(('DONT', "do not import animations", ""),
+               ('CHAINED', "import all animations in one single Action object", '(messy, but simple to deal with)'),
+               ('SEPARATE', "One Action per animation file", '(for advanced blender users)')),
+        default='CHAINED'
         )
 
     frc_cr_bn = BoolProperty(
@@ -81,25 +90,17 @@ class ImportBmd(Operator, ImportHelper):
         default=True
         )
 
-    #ic_sc = BoolProperty(
-    #    name="include scaling",
-    #    description="DO NOT USE yet",
-    #    default=False
-    #    )
+    ic_sc = BoolProperty(
+        name="include scaling",
+        description="needed on some models, glitch others",
+        default=True
+        )
 
     dvg = BoolProperty(
         name="DEBUG vertex groups",
         description="DEBUG option. create Vgroups to show the original BMD structure",
         default=False
         )
-
-    #type = EnumProperty(
-    #    name="Import Type",
-    #   description="Choose between two items",
-    #    items=(('XFILE', "x export (games)", ""),),
-    #           #('CHARACTER', "character export (animations)", "")),
-    #    default='XFILE'
-    #    )
 
     imtype = EnumProperty(
         name="Image use type",
@@ -132,7 +133,7 @@ class ImportBmd(Operator, ImportHelper):
         path = OSPath.abspath(OSPath.split(__file__)[0])  # automatically find where we are
         temp.SetBmdViewExePath(path+'\\')  # add backslash for good measure
         temp.Import(self.filepath, self.boneThickness, self.mir_tx, self.frc_cr_bn,
-                    self.sv_anim, self.tx_xp, 'XFILE', True, self.imtype, self.dvg, self.use_nodes)
+                    self.sv_anim, self.tx_xp, 'XFILE', self.ic_sc, self.imtype, self.dvg, self.use_nodes)
         return {'FINISHED'}
 
 

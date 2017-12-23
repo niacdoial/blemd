@@ -1,6 +1,6 @@
 #! /usr/bin/python3
 import os
-from .maxheader import MessageBox
+from .maxheader import MessageBox, newfile
 from array import array
 
 def bitshiftu8(val, shifter):
@@ -21,8 +21,119 @@ class ReturnValue:
     # <variable dstPos>
     # -- int 
     def __init__(self):  # GENERATED!
-        self.srcPos= 0
-        self.dstPos= 0
+        self.srcPos = 0
+        self.dstPos = 0
+
+    def __iadd__(self, other):
+        self.srcPos += other.srcPos
+        self.dstPos += other.dstPos
+
+
+def decodeBlock(src, dst):
+    currCodeByte = None  # u8
+    r = ReturnValue()
+    pos = dst.tell()
+    dst.seek(0, 2)  # end
+
+    currByteCode = src.read(1)
+    if currByteCode == b'':
+        # EOF
+        raise EOFError()
+    r.srcPos += 1
+    for _ in range(8):  # bytecode is for 8 "instructions"
+        if (currCodeByte & 0x80) != 0:
+            # straight copy
+            temp = src.read(1)
+            if temp == b'':
+                break  # EOF
+            dst.write(temp)
+            r.dstPos += 1
+            r.srcPos += 1
+
+        else:
+            # RLE part
+            byte1 = src.read(1)  # u4 + u12, little-end
+            byte2 = src.read(1)  # (second part)
+            r.srcPos += 2
+
+            dist = ((ord(byte1) & 0xF) << 8) | ord(byte2)  # -- u32  ((byte1 & 0xF) << 8) | byte2;
+            copySource = dst.tell() - (dist + 1)  # -- u32 copySource = r.dstPos - (dist + 1);
+
+            if copySource < 0:
+                # MessageBox ("copySource < 0 ??? " + str(r.dstPos) +":"+ str(dist) +":"+ str(copySource))
+                raise ValueError("ERROR")
+
+            numBytes = ord(byte1) >> 4  # u32  byte1 >> 4
+
+            if numBytes == 0:
+                #if r.srcPos >= srcSize:
+                #    return r
+                numBytes = ord(src.read(1)) + 0x12
+                r.srcPos += 1
+            else:
+                numBytes += 2
+
+            # copy run
+            dst.seek(copySource)
+            temp = b''
+            #if r.dstPos >= uncompressedSize:
+            #    return r
+            temp += dst.read(numBytes)
+            r.dstPos += len(temp)
+            dst.seek(0, 2)  # end
+            dst.write(temp)
+
+        # use next bit from "code" byte
+        currCodeByte <<= 1  # currCodeByte <<= 1
+    dst.seek(pos)
+    return r
+
+
+class CompressedStream:
+    def __init__(self, fileobj):
+        self.cf = fileobj
+        self.cursor = ReturnValue
+        self.tempFileName = os.path.splitext(self.cf.name)[0] + ".tempYaz0"
+        newfile(self.tempFileName)
+        self.cursor.dstPos = os.stat(self.tempFileName).st_size
+        self.uf = open(self.tempFileName, 'rb+')
+
+    def read(self, length):
+        while self.cursor.dstPos - self.uf.tell() < length:
+            if self.cursor.srcPos == 0:
+                # in case of existing cached data not long enough, recreate it
+                self.cursor.dstPos = 0
+                self.uf.close()
+                self.uf = open(self.tempFileName, 'wb+')
+            try:
+                self.cursor += decodeBlock(self.cf, self.uf)
+            except Exception as err:
+                print("EOF!!!", err)
+        return self.uf.read(length)
+
+    def close(self):
+        self.cf.close()
+        self.uf.close()
+
+    def tell(self):
+        return self.uf.tell()
+
+    def seek(self, where, mode=0):
+        if mode == 1:  # cursor
+            while where > self.cursor.dstPos - self.uf.tell():
+                self.cursor += decodeBlock(self.cf, self.uf)
+            self.uf.seek(where, 1)
+
+        elif mode == 0:  # from beginning
+            while where > self.cursor.dstPos:
+                self.cursor += decodeBlock(self.cf, self.uf)
+            self.uf.seek(where)
+        else:
+            raise ValueError('plz impelment seek_2 4 copmresed strim')
+
+
+
+
 
 class BinaryReader:
     """# <variable _f>
@@ -75,8 +186,8 @@ class BinaryReader:
 
     def Close(self):
         self._f.close()
-        if hasattr(self,"_tempFileName"):
-            pass # os.remove(self._tempFileName) # DEBUG: plz uncomment this when tests finished
+        if hasattr(self, "_tempFileName"):
+            pass  # os.remove(self._tempFileName) # DEBUG: plz uncomment this when tests finished
 
     def DecodeYaz0(self, src, srcSize, dst, uncompressedSize):
         r = ReturnValue()  # current read/write positions
@@ -112,16 +223,16 @@ class BinaryReader:
 
 
                 dist = ((byte1 & 0xF)<<8) |  byte2 # -- u32  ((byte1 & 0xF) << 8) | byte2;
-                copySource = r.dstPos- (dist + 1)  # -- u32 copySource = r.dstPos - (dist + 1);
+                copySource = r.dstPos - (dist + 1)  # -- u32 copySource = r.dstPos - (dist + 1);
 
-                if copySource < 0 :                                        
+                if copySource < 0:
                     # MessageBox ("copySource < 0 ??? " + str(r.dstPos) +":"+ str(dist) +":"+ str(copySource))
                     raise ValueError("ERROR")
 
-                numBytes = byte1 >> 4 # u32  byte1 >> 4
+                numBytes = byte1 >> 4  # u32  byte1 >> 4
               
-                if numBytes == 0 :
-                    if r.srcPos >= srcSize :
+                if numBytes == 0:
+                    if r.srcPos >= srcSize:
                         return r
                     numBytes = src[r.srcPos] + 0x12
                     r.srcPos += 1
@@ -129,7 +240,7 @@ class BinaryReader:
                   numBytes += 2
                 
                 # -- copy run
-                for i in range(numBytes) :
+                for i in range(numBytes):
                     if r.dstPos >= uncompressedSize:
                         return r
                     dst[r.dstPos] = dst[copySource]
@@ -157,11 +268,12 @@ class BinaryReader:
         d |= w4
         return d
 
-    def Open(self, srcPath):
+    def Open(self, srcPath, compressed_stream=False):
         self._f = open(srcPath, "rb+")
         # --fseek self._f 0 seek_end
         # --self._size = ftell self._f
         self._f.seek(0)
+        self.filesz = os.stat(self._f.fileno()).st_size
         if self._f is None:
             MessageBox("Unable to open file " + srcPath)
             raise ValueError("Unable to open file " + srcPath)
@@ -169,48 +281,46 @@ class BinaryReader:
         tag = self.ReadFixedLengthString(4)
         # self._f.seek(0)
         if tag != "Yaz0":
-            return  # -- not compressed, return file directly
+            return  # not compressed, return file directly
 
-        # -- yaz0-compressed file - uncompress to a temporary file,
-        # -- return the uncompressed file
+        # yaz0-compressed file - uncompress as read, for optimisation, or decompress first
+        elif compressed_stream == False:
 
-        uncompressedSize = self.ReadDWORD()
-        compressedSize = len(self._f.read()) - 8  # -- 16 byte header (including "Yaz0" and size)
-        self._f.seek(16)  # -- seek to start of data
+            uncompressedSize = self.ReadDWORD()
+            compressedSize = len(self._f.read()) - 8  # -- 16 byte header (including "Yaz0" and size)
+            self._f.seek(16)  # -- seek to start of data
 
-        srcData = array('B')  # [0]*compressedSize  # two arrays of u8s
-        # --srcData[compressedSize] = 0 -- Pre-initialize array size
-        dstData = array('B')  # [0]*uncompressedSize
-        # --dstData[uncompressedSize] = 0 -- Pre-initialize array size
+            srcData = array('B')  # [0]*compressedSize  # two arrays of u8s
+            # --srcData[compressedSize] = 0 -- Pre-initialize array size
+            dstData = array('B')  # [0]*uncompressedSize
+            # --dstData[uncompressedSize] = 0 -- Pre-initialize array size
 
-        for _ in range(uncompressedSize):
-            dstData.append(0)
-        for _ in range(compressedSize):
-            srcData.append(ord(self._f.read(1)))
-        self._f.close()
+            for _ in range(uncompressedSize):
+                dstData.append(0)
+            for _ in range(compressedSize):
+                srcData.append(ord(self._f.read(1)))
+            self._f.close()
 
-        #for i in range(compressedSize):
-        #    if srcData[i] < 0:
-                # MessageBox("srcData[i]  < 0 ??? " + (str(srcData[i])))
-        #        raise ValueError("ERROR")
+            r = self.DecodeYaz0(srcData, compressedSize, dstData, uncompressedSize)
 
-        r = self.DecodeYaz0(srcData, compressedSize, dstData, uncompressedSize)
+            # --write decompressed data to a temporary file and
+            # --return handle to this file
+            self._tempFileName = os.path.splitext(srcPath)[0] + ".tempYaz0"
 
-        # --write decompressed data to a temporary file and
-        # --return handle to this file
-        self._tempFileName = os.path.splitext(srcPath)[0] + ".tempYaz0"
+            self._f = open(self._tempFileName, "wb")  # -- creates file if not found
+            for i in range(r.dstPos):
+                self._f.write(dstData[i].to_bytes(1, 'big'))
+            self._f.close()
 
-        self._f = open(self._tempFileName, "wb")  # -- creates file if not found
-        for i in range(r.dstPos):
-            self._f.write(dstData[i].to_bytes(1, 'big'))
-        self._f.close()
+            # -- open temp file for reading
+            self._f = open(self._tempFileName, "rb+")
+            self._f.seek(0)
 
-        # -- open temp file for reading
-        self._f = open(self._tempFileName, "rb+")
-        self._f.seek(0)
+        elif compressed_stream:
+            self._f = CompressedStream(self._f)
 
-    def EOF(self):
-        raise EOFError("NYI")
+    def is_eof(self):
+        return self._f.tell() >= self.filesz
         # return self._f.tell()  >= self._size
 
     def SeekCur(self, offset):

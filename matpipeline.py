@@ -322,34 +322,35 @@ class Node:
                     r_fct = 1
                     g_fct = 1
                     if self.inputs[0].mirrorS:
-                        r_fct = 0.5
-                        texture.repeat_x = 2
+                        # r_fct = 0.5
+                        # texture.repeat_x = 2
                         texture.use_mirror_x = True
                     if self.inputs[0].mirrorT:
-                        g_fct = 0.5
-                        texture.repeat_y = 2
+                        # g_fct = 0.5
+                        # texture.repeat_y = 2
                         texture.use_mirror_y = True
-                    multnode = nodetree.nodes.new('ShaderNodeMixRGB')
-                    multnode.inputs[2].default_value[0] = r_fct
-                    multnode.inputs[2].default_value[1] = g_fct
-                    multnode.inputs[2].default_value[2] = 0
-                    multnode.inputs[0].default_value = 1
-                    multnode.blend_type = 'MULTIPLY'
-                    nodetree.links.new(uv_vect, multnode.inputs[1])
-                    if self.inputs[0].mirrorT:  # scale done around (0,1)
-                        addnode = nodetree.nodes.new('ShaderNodeMixRGB')
-                        addnode.blend_type = 'SUBTRACT'
-                        addnode.inputs[0].default_value = 1
-                        addnode.inputs[1].default_value[0] = 0
-                        addnode.inputs[1].default_value[1] = 1.5
-                        addnode.inputs[1].default_value[2] = 0
-                        nodetree.links.new(multnode.outputs[0], addnode.inputs[2])
-                        nodetree.links.new(addnode.outputs[0], texnode.inputs[0])
-                    else:
-                        nodetree.links.new(multnode.outputs[0], texnode.inputs[0])
+                    #multnode = nodetree.nodes.new('ShaderNodeMixRGB')
+                    #multnode.inputs[2].default_value[0] = r_fct
+                    #multnode.inputs[2].default_value[1] = g_fct
+                    #multnode.inputs[2].default_value[2] = 0
+                    #multnode.inputs[0].default_value = 1
+                    #multnode.blend_type = 'MULTIPLY'
+                    #nodetree.links.new(uv_vect, multnode.inputs[1])
+                    #if self.inputs[0].mirrorT:  # scale done around (0,1)
+                    #    addnode = nodetree.nodes.new('ShaderNodeMixRGB')
+                    #    addnode.blend_type = 'SUBTRACT'
+                    #    addnode.inputs[0].default_value = 1
+                    #    addnode.inputs[1].default_value[0] = 0
+                    #    addnode.inputs[1].default_value[1] = 1.5
+                    #    addnode.inputs[1].default_value[2] = 0
+                    #    nodetree.links.new(multnode.outputs[0], addnode.inputs[2])
+                    #    nodetree.links.new(addnode.outputs[0], texnode.inputs[0])
+                    #else:
+                    #    nodetree.links.new(multnode.outputs[0], texnode.inputs[0])
 
-                else:
-                    nodetree.links.new(uv_vect, texnode.inputs[0])
+                # else:
+                nodetree.links.new(uv_vect, texnode.inputs[0])
+                # endif
                 return texnode.outputs[method]
 
         return node.outputs[0]  # default

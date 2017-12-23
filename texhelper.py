@@ -15,6 +15,13 @@ SPECULAR = 'SPECULAR'
 # used to set mode before calls
 MODE = 'PACKED'
 
+
+def textures_reset():
+    global imported_textures  # avoid crashes when data deleted in blender, but still used here
+    global imported_tslots
+    imported_textures = {}
+    imported_tslots = {}
+
 def getTexImage(mat, fname):
     global imported_tslots
     return imported_tslots[mat][fname].image
@@ -154,7 +161,9 @@ def newUVlayer(mesh, representation, uv_id):
     # '-1' because count takes the new layer in account and index starts at 0
 
     for num, com in enumerate(representation.loops):
-        uvtex.data[num].uv = com.UVs[uv_id][0:2]
+        if com.UVs[uv_id] is not None:
+            uvtex.data[num].uv = com.UVs[uv_id][0:2]
+        # else, will be zero
 
 
 def addforcedname(real, fake):
