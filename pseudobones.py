@@ -189,10 +189,11 @@ instances = {}
 
 
 class Pseudobone:
-    def __init__(self, startpoint, endpoint, z_up):
+    def __init__(self, parentBone, frame, matrix, startpoint, endpoint):
+
+        self._name = None
         ori = endpoint - startpoint
         self.endpoint = endpoint
-        self._name = None
         self.length = math.sqrt(ori.x**2 + ori.y**2 + ori.z**2)
         self.orientation = vect_normalize(ori)
         self.scale = mathutils.Vector((1, 1, 1))
@@ -228,7 +229,7 @@ class Pseudobone:
         def _getparent():
             return self._parent
         def _setparent(val):
-            if (self.parent.fget() is not None) and (self in self.parent.fget().children):
+            if isinstance(self.parent.fget(), Pseudobone) and (self in self.parent.fget().children):
                 self.parent.fget().children.remove(self)
             self._parent = val
             if val is None or isinstance(val, mathutils.Vector):
@@ -241,11 +242,33 @@ class Pseudobone:
             val._parent = holder
         self.children_append = (lambda self2, x: _setinchildren(self, x))
 
-    # def update_r_t(self):
-    #    pass  # will work this out later
+        if isinstance(frame, str):
+            self.name.fset(frame)
+        else:
+            self.jnt_frame = frame
+            self.name.fset(frame.name)
+        self.parent.fset(parentBone)
+        self.matrix = matrix
 
-    # def recalculate_transform(self):
-    #     pass  # procrastinating here too.
+    # defines self.name, self.parent, self.children_append.
+
+    def pre_delete(self):
+        # call before losing variable to avoid memory leak
+        self.parent.fset(None)
+        for com in self.children:
+            com.pre_delete()
+
+    def _tree_to_array(self, dest):
+        """inner function. do not call."""
+        dest.append(self)
+        for com in self.children:
+            com._tree_to_array(dest)
+
+    def tree_to_array(self):
+        """returns a list of all bones"""
+        ret = []
+        self._tree_to_array(ret)
+        return ret
 
 
 def getBoneByName(name):
@@ -264,20 +287,28 @@ def getvct(one, distance, tgt):
 finder = re.compile(r'''pose\.bones\[['"](\w*)['"]\]\.(\w*)''')
 #used to determine what curves belong to what bones
 
-def apply_animation(bones, arm_obj, jntframes):
+
+def apply_animation(bones, arm_obj, jntframes, name=None):
     """apply keyframes from pseudobones to real, armature bones"""
-    if arm_obj.animation_data is None:
-        arm_obj.animation_data_create()
+    if name:
+        arm_obj.animation_data.action = bpy.data.actions.new(arm_obj.name + '_' + name)
+    else:
         arm_obj.animation_data.action = bpy.data.actions.new(arm_obj.name+'_action')
-        bpy.context.scene.frame_current = 0
-        for com in bones:
-            name = com.name.fget()
-            arm_obj.data.bones[name].use_inherit_scale = False  # scale can be applied
-            posebone = arm_obj.pose.bones[name]
-            posebone.rotation_mode = "XZY"  # remember, coords are flipped
-            posebone.keyframe_insert('location')
-            posebone.keyframe_insert('rotation_euler')
-            posebone.keyframe_insert('scale')
+    bpy.context.scene.frame_current = 0
+
+    # warning: here, the `name` var changes meaning
+
+    for com in bones:
+        name = com.name.fget()
+        arm_obj.data.bones[name].use_inherit_scale = False  # scale can be applied
+        posebone = arm_obj.pose.bones[name]
+        posebone.rotation_mode = "XZY"  # remember, coords are flipped
+        bpy.context.scene.frame_current = 1
+        # this keyframe is needed, overwritten anyways
+        # also it is always at 1 because this function is called once per action
+        posebone.keyframe_insert('location')
+        posebone.keyframe_insert('rotation_euler')
+        posebone.keyframe_insert('scale')
     fcurves = arm_obj.animation_data.action.fcurves
     data = {}
 
@@ -385,3 +416,5 @@ def apply_animation(bones, arm_obj, jntframes):
                     bonedict['scale'][2].keyframe_points[-1].handle_left = co + Vector((-1, -tgt.y))
                     bonedict['scale'][2].keyframe_points[-1].handle_right = co + Vector((1, tgt.y))
                     posebone.keyframe_insert('scale', 2)
+
+    return arm_obj.animation_data.action

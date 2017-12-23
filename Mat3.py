@@ -2,24 +2,6 @@
 
 
 class Mat3Header:
-    """# <variable tag>
-    # -- char[4] 'MAT3'
-    # <variable sizeOfSection>
-    # -- u32 
-    # <variable count>
-    # -- u16
-    # <variable pad>
-    # -- u16
-    #
-    #    0 - MatInit array
-    #    1 - array of shorts with 0, 1, 2, ..., count (nearly...sometimes small deviations) -> index into offset[0]
-    #    2 - string table
-    #    3 - divisible by Mat3Header.count - so the Mat3Entries are stored here
-    #    15 - index to texture table?
-    #      # <variable offsets>
-    # -- u32 [30]
-    # <function>"""
-
     def __init__(self):  # GENERATED!
         self.offsets= []
 
@@ -28,46 +10,33 @@ class Mat3Header:
         self.sizeOfSection = br.ReadDWORD()
         self.count = br.ReadWORD()
         self.pad = br.ReadWORD()
+        # 0 - MatInit array
+        # 1 - array of shorts with 0, 1, 2, ..., count (nearly...sometimes small deviations) -> index into offset[0]
+        # 2 - string table
+        # 3 - divisible by Mat3Header.count - so the Mat3Entries are stored here
+        # 15 - index to texture table?
         for _ in range(30):
             self.offsets.append(br.ReadDWORD())
 
 
 class MatInit:
-    # <variable unknown1>
-    # -- u8 [132]
-    # <variable texStages>
-    # -- u16[8]
-    # <variable unknown2>
-    # -- u8 [332 - 132 - 8*2]
-    # <function>
-
     def __init__(self):  # GENERATED!
-        self.unknown1= []
-        self.texStages= []
-        self.unknown2= []
+        self.unknown1 = []
+        self.texStages = []
+        self.unknown2 = []
 
     def LoadData(self, br):
-        for _ in range(132) :
+        for _ in range(132):
             self.unknown1.append(br.GetByte())
         for _ in range(8):
             self.texStages.append(br.ReadWORD())
-        u2Count = 332- 132- 8*2
+        u2Count = 332 - 132 - 8*2
 
         for _ in range(u2Count):
             self.unknown2.append(br.GetByte())
 
 class MatEntry:
-    """#  //(0 - possible values: 1, 4, 253 [1: draw on tree down, 4 on up??])
-    #  //     - related to transparency sorting
-    #  //1 - index into cullModes
-    #  //2 - index into numChans
-    #  //3 - index into texgen counts
-    #  //4 - index into tev counts
-    #  //5 - index into matData6 (?)
-    #  //6 - index into zModes? (quite sure)
-    #  //7 - index into matData7 (?)
-    #  //(still missing stuff: isDirect, zCompLoc,
-    #  //enable/disable blend alphatest depthtest, ...)    # <variable unk>
+    """
     # -- u8[8];
     # -- 0, 1 - index into color1 (e.g. map_delfino3.bmd)
     # -- 6, 7 - index into color2 (e.g. mo.bdl)
@@ -125,6 +94,18 @@ class MatEntry:
     # <function>"""
 
     def __init__(self):  # GENERATED!
+        # (0 - possible values: 1, 4, 253[1: draw on tree down, 4 on up??])
+        #    - related to transparency sorting
+        #  1 - index into cullModes
+        #  2 - index into numChans
+        #  3 - index into texgen counts
+        #  4 - index into tev counts
+        #  5 - index into matData6 (?)
+        #  6 - index into zModes? (quite sure)
+        #  7 - index into matData7 (?)
+        #  //(still missing stuff: isDirect, zCompLoc,
+        #  //enable/disable blend alphatest depthtest, ...)
+
         self.colorS10= []
         self.tevOrderInfo= []
         self.texStages= []
@@ -133,8 +114,15 @@ class MatEntry:
         self.dttMatrices= []
         self.indices2= []
         self.unknown6= []
+        # 0 - fog index (vf_117.bdl)
+        # 1 - alphaComp (vf_117.bdl, yoshi.bmd)
+        # 2 - blendInfo (cl.bdl)
+        # 3 - nbt scale?
         self.constAlphaSel= []
         self.unk= []
+            # 0, 1 - index into color1 (e.g. map_delfino3.bmd)
+            # 6, 7 - index into color2 (e.g. mo.bdl)
+            # 2, 3, 4, 5 - index into chanControls
         self.color3= []
         self.texGenInfo2= []
         self.constColorSel= []
@@ -183,21 +171,13 @@ class MatEntry:
 
 
 class Mat3:
-    """# -- temporary, maps mat index to tex index
-    # <variable texTable>
-    # -- std::vector<int> 
-    # <variable stringtable>
-    # <variable indexToMatIndex>
-    # -- _texStageIndexToTextureIndex, -- used by btp
-    # <variable materials>
-    # -- MatEntry array
-    # <variable texStageIndexToTextureIndex>
-    # <function>"""
-
     def __init__(self):  # GENERATED!
+        # temporary, maps mat index to tex index
         self.texTable= []
         self.materials= []
+        # MatEntry array
         self.texStageIndexToTextureIndex= []
+        # _texStageIndexToTextureIndex, used by btp
         self.indexToMatIndex= []
 
     def LoadData(self, br):
@@ -285,25 +265,6 @@ class Mat3:
             index = br.ReadWORD()
             self.texTable.append(index)
             self.texStageIndexToTextureIndex.append(index)
-
-            # if index > maxTexIndex:
-            #    messageBox (str(self.texTable))
-            #    for i in range(len(tempTexTable)):
-            #        index = br.ReadWORD()
-            #        self.texTable[i] = tempTexTable[i]
-            #
-            #        #if index > maxTexIndex:
-            #        #    maxTexIndex = index
-
-            #
-            #    messageBox (str(len(initData[0].texStages)))
-        #temptable = self.texTable.copy()
-        #for i in range(h.count):
-        #    stage = initData[indexToInitData[i]].texStages[0]
-        #    if stage != 0xffff:
-        #        self.texTable[i] = temptable[stage]
-        #    else:
-        #        self.texTable[i] = 0xffff
 
 
 

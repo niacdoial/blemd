@@ -1,62 +1,24 @@
-#! /usr/bin/python3    --include "BinaryReader.ms"
+#! /usr/bin/python3
 from .BinaryReader import BinaryReader
 from .maxheader import MessageBox
 
 
 class TptHeader:
-    """# <variable tag>
-    # -- char[4]; //'TPT1'
-    # <variable sizeOfSection>
-    # -- u32 
-    # <variable unk>
-    # -- u8  loop type????
-    # <variable pad>
-    # -- u8 
-    # <variable unk2>
-    # -- u16  (shortsPerMaterialAnim - no...sometimes 1 less (?))
-    # <variable numMaterialAnims>
-    # -- u16 
-    # <variable numShorts>
-    # -- u16 (should be product of previous shorts)
-    # <variable offsetToMatAnims>
-    # -- u32  - for each materialAnim: u16 numSorts, u16 firstShort, u32 unk
-    # <variable offsetToShorts>
-    # -- u32 (shorts are texture indices)
-    # <variable offsetToIndexTable>
-    # -- u32 stores for every material to which mat3 index it belongs
-    # <variable offsetToStringTable>
-    # -- u32 
-    # <function>"""
-
-    def __init__(self):  # GENERATED!
-        pass
-
     def LoadData(self, br):
-        self.tag = br.ReadFixedLengthString(4)
+        self.tag = br.ReadFixedLengthString(4)  # 'TPT1'
         self.sizeOfSection = br.ReadDWORD()
-        self.unk = br.GetByte()
+        self.unk = br.GetByte()  # loop type????
         self.pad = br.GetByte()
-        self.unk2 = br.ReadWORD()
+        self.unk2 = br.ReadWORD()  # (shortsPerMaterialAnim - no...sometimes 1 less (?))
         self.numMaterialAnims = br.ReadWORD()
-        self.numShorts = br.ReadWORD()
-        self.offsetToMatAnims = br.ReadDWORD()
-        self.offsetToShorts = br.ReadDWORD()
-        self.offsetToIndexTable = br.ReadDWORD()
-        self.offsetToStringTable= br.ReadDWORD()
+        self.numShorts = br.ReadWORD()  # (should be product of previous shorts)
+        self.offsetToMatAnims = br.ReadDWORD()  # for each materialAnim: u16 numSorts, u16 firstShort, u32 unk
+        self.offsetToShorts = br.ReadDWORD()  # (shorts are texture indices)
+        self.offsetToIndexTable = br.ReadDWORD()  # stores for every material to which mat3 index it belongs
+        self.offsetToStringTable = br.ReadDWORD()
 
 
 class MatAnim:
-    # <variable count>
-    # -- u16
-    # <variable firstIndex>
-    # --  u16
-    # <variable unknown>
-    # -- u32 
-    # <function>
-
-    def __init__(self):  # GENERATED!
-        pass
-
     def LoadData(self, br):
         self.count = br.ReadWORD()
         self.firstIndex = br.ReadWORD()
@@ -78,11 +40,9 @@ class Btp:
     # <function>
 
     def __init__(self):  # GENERATED!
-        self.anims= []
+        self.anims = []
 
     def LoadData(self, br):
-                
-
         tpt1Offset = br.Position()
         # --size_t i;
 
@@ -117,16 +77,16 @@ class Btp:
 
         # --read animations
         # -- btp.self.anims.resize(h.numMaterialAnims);
-        br.SeekSet (tpt1Offset + header.offsetToMatAnims)
+        br.SeekSet(tpt1Offset + header.offsetToMatAnims)
 
-        for i in range(header.numMaterialAnims) :
+        for i in range(header.numMaterialAnims):
             # --messageBox stringtable
             mAnim = MatAnim()
             mAnim.LoadData(br)
             # --anims[i] = anim
 
             if mAnim.unknown != 0x00ffffff:
-                raise ValueError(("btp: "+str(mAnim.unknown)+
+                raise ValueError(("btp: "+str(mAnim.unknown) +
                                  " instead of 0x00ffffff for mat anim nr "+str(i)))
 
             # --anims[i].indexToMat3Table = matAnimIndexToMat3Index[i]
@@ -148,27 +108,21 @@ class Btp:
             # btp.anims[i].indices.begin());
 
     def LoadBTP(self, filePath):
-                
         br = BinaryReader()
         br.Open(filePath)
         br.SeekSet(0x20)
 
-        # -- local size = 0
-        # -- local tag -- char[4];
-        # -- local t = 0
-
-        # --do
-        # --(
-        # -- br.SeekCur size
         pos = br.Position()
         tag = br.ReadFixedLengthString(4)
         size = br.ReadDWORD()
-
+        # do
+        # (
+        # br.SeekCur size
         if size < 8:
             size = 8  # -- prevent endless loop on corrupt data
         br.SeekSet(pos)
-        # --if(feof(f)) then -- need to check how to test in maxscript. Use fseek  end, get pos, compare to current position ????
-        # --	break
+        if br.is_eof():
+            return  # Error
 
         if tag == "TPT1":
             self.LoadData(br)
@@ -176,7 +130,7 @@ class Btp:
             MessageBox("readBck(): Unsupported section " + tag)
             raise ValueError("readBck(): Unsupported section " + tag)
         br.SeekSet(pos)
-        # --) while not EOF br._f
+        # ) while not EOF br._f
         br.Close()
 
 

@@ -1,11 +1,5 @@
 #! /usr/bin/python3
 class _StringHelper:
-    # <function>
-
-    # <function>
-
-    # <function>
-
     def __init__(self):  # GENERATED!
         pass
 

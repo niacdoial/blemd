@@ -6,12 +6,6 @@ using blender (blender.org)
 HOW TO USE: this section was too long, and moved to MANUAL.txt
 
 
-then, grab blender and unzip the contents of this repository in "<path to blender>/2.XX/scripts/addons_contrib/blemd"
-(please note that while another path may also work, "blemd" MUST be the name of the last folder, which the one containing all the '.py' files
-from there, you will be able to enable it  in the add-ons tab of the settings(it is in the "testing" category yet),
-and use it in file->import->nintendo BMD
-
-
 HISTORY:
 His history is long, and incredibly hard to trace.
 

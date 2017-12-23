@@ -12,7 +12,7 @@ class ImageHeader:
     #      # <variable wrapS>
     # <variable wrapT>
     # -- u8
-    # --TODO: unknow fields
+    # --TODO: unknown fields
     def __init__(self):  # GENERATED!
         pass
 # ------------------------------------------------------------------------------------------------

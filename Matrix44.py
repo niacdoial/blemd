@@ -189,24 +189,25 @@ def Mad(r, m, f):
     return r
 
 
-def LocalMatrix(jnt, i):
-    # - returns Matrix44f
+def LocalMatrix(jnt, i, use_scale):
     scale_vector = Vector((jnt.frames[i].sx, jnt.frames[i].sy, jnt.frames[i].sz))
     sx = Matrix.Scale(scale_vector.x, 4, Vector((1, 0, 0)))
     sy = Matrix.Scale(scale_vector.y, 4, Vector((0, 1, 0)))
     sz = Matrix.Scale(scale_vector.z, 4, Vector((0, 0, 1)))
 
-    # --TODO: I don't  know which of these two return values are the right ones
-    # --(if it's the first, then what is scale used for at all?)
+    # TODO: I don't  know which of these two return values are the right ones
+    # (if it's the first, then what is scale used for at all?)
 
-    # --looks wrong in certain circumstances...
-    return jnt.matrices[i]  # -- this looks better with vf_064l.bdl (from zelda)
-    return jnt.matrices[i]*sz*sy*sx   # -- this looks a bit better with mario's bottle_in animation
+    # looks wrong in certain circumstances...
+    if use_scale:
+        return jnt.matrices[i] * sz * sy * sx  # this looks a bit better with mario's bottle_in animation
+    else:
+        return jnt.matrices[i]  # this looks better with vf_064l.bdl (from zelda)
+
 
 
 def FrameMatrix(f):
     t = Matrix.Translation(Vector((f.t.x, f.t.y, f.t.z)))
-    # s = Matrix.Scale
     r = Euler((f.rx, f.ry, f.rz), 'XYZ').to_matrix().to_4x4()
     res = t*r
     return res
@@ -215,7 +216,7 @@ def FrameMatrix(f):
 def updateMatrix(frame, parentmatrix):
     return parentmatrix*FrameMatrix(frame)
 
-def updateMatrixTable(evp, drw, jnt, currPacket, multiMatrixTable, matrixTable, isMatrixWeighted):
+def updateMatrixTable(evp, drw, jnt, currPacket, multiMatrixTable, matrixTable, isMatrixWeighted, use_scale):
     global dataholder
     for n in range(len(currPacket.matrixTable)):
         index = currPacket.matrixTable[n]
@@ -252,7 +253,7 @@ def updateMatrixTable(evp, drw, jnt, currPacket, multiMatrixTable, matrixTable, 
                     # --if (mm.indices[r] != 0) then
                     # -- (
                     sm1 = evp.matrices[mm.indices[r]]  # corrected(r]+1) # -- const Matrix44f
-                    sm2 = LocalMatrix(jnt, mm.indices[r])  # corrected (r]+1)
+                    sm2 = LocalMatrix(jnt, mm.indices[r], use_scale)  # corrected (r]+1)
                     sm3 = sm2*sm1
                     # )
                     # else

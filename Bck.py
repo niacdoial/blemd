@@ -453,7 +453,8 @@ class Bck_in:
 
     def LoadBck(self, filePath, jointlen):
         br = BinaryReader()
-        br.Open(filePath)
+        br.Open(filePath)  #, compressed_stream=True)
+        # optimise, since it will likely not be completely read
         br.SeekSet(0x20)
         size = 0
         i = 0
@@ -507,7 +508,7 @@ class Bck_in:
         # XCX
         time = (t - keys[i].time) /(keys[i].time- keys[i].time)         # -- scale to [0, 1]
         #return mathutils.interpolate(keys[i- 1].value,keys[i- 1].tangent,keys[i].value,keys[i].tangent,time)
-        return self.Interpolate(keys[i].value,keys[i].tangent,keys[i].value,keys[i].tangent,time)
+        return self.Interpolate(keys[i].value, keys[i].tangent, keys[i].value, keys[i].tangent, time)
 
     # still nope.
     def AnimateJnt(self, jnt, deltaTime):
@@ -548,26 +549,17 @@ class Bck_in:
         # --	throw (curBone.name + " unable to scale ( " +(scaleValue as string)+" ) bones with more than one child bone")"""
 
     # GOT it!
-    def AnimateBoneFrames(self, timeOffset, bones, frameScale, exportType, refBoneRequiresDummyList, includeScaling):
+    def AnimateBoneFrames(self, timeOffset, bones, frameScale, includeScaling):
         # --alert (bones.count as string)
 
         for i in range(len(bones)):
             bone = bones[i]
             anim = self.anims[i]
 
-            # -- animated bones require scaling helper
-            if (len(anim.scalesX) > 1 or len(anim.scalesY) > 1 or len(anim.scalesZ) > 1):
-                pass  # refBoneRequiresDummyList[i] = True  # -- bone.name
-                # XCX no dummy bones!
-
-            if (len(anim.translationsX) > 1 or len(anim.translationsY) > 1 or len(anim.translationsZ) > 1):
-                pass  #bone.boneEnable = False  # -- allow moving bone without affecting parent bone
-                #  XCX means no IK: means IK is here by default?
-
             # position correction LATER in the program
             if includeScaling:
                 translate_animation(timeOffset, bone, anim, frameScale,
-                          'scale', 'x', mathutils.Vector((nan,nan,nan)))
+                          'scale', 'x', mathutils.Vector((nan, nan, nan)))
                 translate_animation(timeOffset, bone, anim, frameScale,
                           'scale', 'y', mathutils.Vector((nan, nan, nan)))
                 translate_animation(timeOffset, bone, anim, frameScale,
@@ -604,267 +596,6 @@ class Bck_in:
                                 'position', 'y', mathutils.Vector((nan, nan, nan)))
             complete_animation(timeOffset, bone, anim, self.animationLength,
                                 'position', 'z', mathutils.Vector((nan, nan, nan)))
-
-            """for j in range(len(anim.rotationsX)):
-                rot = anim.rotationsX[j]
-                # at time ((rot.time * frameScale) + timeOffset)
-                if int(rot.time * frameScale + timeOffset) not in bone.rotation_kf.keys():
-                    frames.add(int(rot.time * frameScale + timeOffset))
-                    bone.rotation_kf[int(rot.time * frameScale + timeOffset)] = mathutils.Euler((nan,nan,nan), 'XYZ')
-                    bone.rotation_tkf[int(rot.time * frameScale + timeOffset)] = mathutils.Euler((nan,nan,nan), 'XYZ')
-                bone.rotation_kf[int(rot.time * frameScale + timeOffset)].x = rot.value
-                bone.rotation_tkf[int(rot.time * frameScale + timeOffset)].x = rot.tangent
-
-            for j in range(len(anim.rotationsY)):
-                rot = anim.rotationsY[j]
-                # at time ((rot.time * frameScale) + timeOffset)
-                if int(rot.time * frameScale + timeOffset) not in bone.rotation_kf.keys():
-                    frames.add(int(rot.time * frameScale + timeOffset))
-                    bone.rotation_kf[int(rot.time * frameScale + timeOffset)] = mathutils.Euler((nan,nan,nan), 'XYZ')
-                    bone.rotation_tkf[int(rot.time * frameScale + timeOffset)] = mathutils.Euler((nan,nan,nan), 'XYZ')
-                bone.rotation_kf[int(rot.time * frameScale + timeOffset)].y = rot.value
-                bone.rotation_tkf[int(rot.time * frameScale + timeOffset)].y = rot.tangent
-
-            for j in range(len(anim.rotationsZ)):
-                rot = anim.rotationsZ[j]
-                # at time ((rot.time * frameScale) + timeOffset)
-                if int(rot.time * frameScale + timeOffset) not in bone.rotation_kf.keys():
-                    frames.add(int(rot.time * frameScale + timeOffset))
-                    bone.rotation_kf[int(rot.time * frameScale + timeOffset)] = mathutils.Euler((nan,nan,nan), 'XYZ')
-                    bone.rotation_tkf[int(rot.time * frameScale + timeOffset)] = mathutils.Euler((nan,nan,nan), 'XYZ')
-                bone.rotation_kf[int(rot.time * frameScale + timeOffset)].z = rot.value
-                bone.rotation_tkf[int(rot.time * frameScale + timeOffset)].z = rot.tangent
-
-            for j in range(len(anim.translationsX)):
-                t = anim.translationsX[j]
-                # at time ((t.time * frameScale) + timeOffset)
-                if int(t.time * frameScale + timeOffset) not in self.GetPositionBone(bone).position_kf.keys():
-                    self.GetPositionBone(bone).position_kf[int(t.time * frameScale + timeOffset)] = mathutils.Vector((nan,nan,nan))
-                    self.GetPositionBone(bone).position_tkf[int(t.time * frameScale + timeOffset)] = mathutils.Vector((nan,nan,nan))
-                self.GetPositionBone(bone).position_kf[int(t.time * frameScale + timeOffset)].x\
-                    = t.value
-                self.GetPositionBone(bone).position_tkf[int(t.time * frameScale + timeOffset)].x\
-                    = t.tangent
-
-            for j in range(len(anim.translationsY)):
-                t = anim.translationsY[j]
-                # at time ((t.time * frameScale) + timeOffset)
-                if int(t.time * frameScale + timeOffset) not in self.GetPositionBone(bone).position_kf.keys():
-                    self.GetPositionBone(bone).position_kf[int(t.time * frameScale + timeOffset)] = mathutils.Vector((nan,nan,nan))
-                    self.GetPositionBone(bone).position_tkf[int(t.time * frameScale + timeOffset)] = mathutils.Vector((nan,nan,nan))
-                self.GetPositionBone(bone).position_kf[int(t.time * frameScale + timeOffset)].y\
-                    = t.value
-                self.GetPositionBone(bone).position_tkf[int(t.time * frameScale + timeOffset)].y\
-                    = t.tangent
-
-            for j in range(len(anim.translationsZ)):
-                t = anim.translationsZ[j]
-                # at time ((t.time * frameScale) + timeOffset)
-                if int(t.time * frameScale + timeOffset) not in self.GetPositionBone(bone).position_kf.keys():
-                    self.GetPositionBone(bone).position_kf[int(t.time * frameScale + timeOffset)] = mathutils.Vector((nan,nan,nan))
-                    self.GetPositionBone(bone).position_tkf[int(t.time * frameScale + timeOffset)] = mathutils.Vector((nan,nan,nan))
-                self.GetPositionBone(bone).position_kf[int(t.time * frameScale + timeOffset)].z\
-                    = t.value
-                self.GetPositionBone(bone).position_tkf[int(t.time * frameScale + timeOffset)].z\
-                    = t.tangent
-
-            if includeScaling or True:  # XCX test
-                for j in range(len(anim.scalesX)):
-                    s = anim.scalesX[j]
-                    # at time ((s.time * frameScale) + timeOffset)
-                    self.ValidateScale(bone, s.value)
-                    # in coordsys local
-                    if int(s.time * frameScale + timeOffset) not in bone.scale_kf.keys():
-                        bone.scale_kf[int(s.time * frameScale + timeOffset)] = mathutils.Vector((nan,nan,nan))
-                        bone.scale_tkf[int(s.time * frameScale + timeOffset)] = mathutils.Vector((nan,nan,nan))
-                    bone.scale_kf[int(s.time * frameScale + timeOffset)].x = s.value  # * 100 3dsmax has a percent scale
-                    bone.scale_tkf[int(s.time * frameScale + timeOffset)].x = s.tangent  # * 100 3dsmax has a percent scale
-                    #)
-
-                for j in range(len(anim.scalesY)):
-                    s = anim.scalesY[j]
-                    #at time ((s.time * frameScale) + timeOffset)
-                    self.ValidateScale(bone, s.value)
-                    #in coordsys local
-                    if int(s.time * frameScale + timeOffset) not in bone.scale_kf.keys():
-                        bone.scale_kf[int(s.time * frameScale + timeOffset)] = mathutils.Vector((nan,nan,nan))
-                        bone.scale_tkf[int(s.time * frameScale + timeOffset)] = mathutils.Vector((nan,nan,nan))
-                    bone.scale_kf[int(s.time * frameScale + timeOffset)].y = s.value  # * 100
-                    bone.scale_tkf[int(s.time * frameScale + timeOffset)].y = s.tangent  # * 100
-                for j in range(len(anim.scalesZ)):
-                    s = anim.scalesZ[j]
-                    self.ValidateScale(bone, s.value)
-                    if int(s.time * frameScale + timeOffset) not in bone.scale_kf.keys():
-                        bone.scale_kf[int(s.time * frameScale + timeOffset)] = mathutils.Vector((nan,nan,nan))
-                        bone.scale_tkf[int(s.time * frameScale + timeOffset)] = mathutils.Vector((nan, nan, nan))
-                    bone.scale_kf[int(s.time * frameScale + timeOffset)].z = s.value  # * 100
-                    bone.scale_tkf[int(s.time * frameScale + timeOffset)].z = s.tangent  # * 100
-            self.rootBoneOffset = [0, 0, 0]  # -- only the root bone has an offset. bones[1]
-
-            # creating 'missing' rotation data (needed, but clogging)
-            frames = list(frames)
-            frames.sort()
-            
-            i0 = 0  # previous frame
-            i1 = 0  # next frame
-            while isnan(bone.rotation_kf[frames[i1]].x):  # set the correct next frame
-                i1 += 1
-                if i1 == len(frames):  # failure case
-                    for i in frames:
-                        bone.rotation_kf[i].x = bone.rotation_kf[frames[0]].x
-                        bone.rotation_tkf[i].x = 0.
-                    break
-            for i in range(len(frames)):  # then process frames one by one
-                if isnan(bone.rotation_kf[frames[i]].x):
-                    bone.rotation_kf[frames[i]].x, bone.rotation_tkf[frames[i]].x = \
-                    cubic_interpolator(frames[i0], bone.rotation_kf[frames[i0]].x, bone.rotation_tkf[frames[i0]].x,
-                                       frames[i1], bone.rotation_kf[frames[i1]].x, bone.rotation_tkf[frames[i1]].x,
-                                       frames[i])
-                else:  # reached a new computed frame:
-                    if i1 == len(frames):
-                        break  # no more frames to calculate
-                    i0 = i  # reset the previous and next frames
-                    while isnan(bone.rotation_kf[frames[i1]].x) or i1 <= i0:
-                        i1 += 1
-                        if i1 == len(frames):  # failure case
-                            for j in frames[i0:]:  # only assume remaining frames
-                                bone.rotation_kf[j].x = bone.rotation_kf[frames[i0]].x
-                                bone.rotation_tkf[j].x = 0.
-                            break
-
-            i0 = 0  # previous frame
-            i1 = 0  # next frame
-            while isnan(bone.rotation_kf[frames[i1]].y):  # set the correct next frame
-                i1 += 1
-                if i1 == len(frames):  # failure case
-                    for i in frames:
-                        bone.rotation_kf[i].y = bone.rotation_kf[frames[0]].y
-                        bone.rotation_tkf[i].y = 0.
-                    break
-            for i in range(len(frames)):  # then process frames one by one
-                if isnan(bone.rotation_kf[frames[i]].y):
-                    bone.rotation_kf[frames[i]].y, bone.rotation_tkf[frames[i]].y = \
-                        cubic_interpolator(frames[i0], bone.rotation_kf[frames[i0]].y,
-                                           bone.rotation_tkf[frames[i0]].y,
-                                           frames[i1], bone.rotation_kf[frames[i1]].y,
-                                           bone.rotation_tkf[frames[i1]].y,
-                                           frames[i])
-                else:  # reached a new computed frame:
-                    if i1 == len(frames):
-                        break  # nothing left to do
-                    i0 = i  # reset the previous and next frames
-                    while isnan(bone.rotation_kf[frames[i1]].y) or i1 <= i0:
-                        i1 += 1
-                        if i1 == len(frames):  # failure case
-                            for j in frames[i0:]:
-                                bone.rotation_kf[j].y = bone.rotation_kf[frames[i0]].y
-                                bone.rotation_tkf[j].y = 0.
-                            break
-
-            i0 = 0  # previous frame
-            i1 = 0  # next frame
-            while isnan(bone.rotation_kf[frames[i1]].z):  # set the correct next frame
-                i1 += 1
-                if i1 == len(frames):  # failure case
-                    for i in frames:
-                        bone.rotation_kf[i].z = bone.rotation_kf[frames[0]].z
-                        bone.rotation_tkf[i].z = 0.
-                    break
-            for i in range(len(frames)):  # then process frames one by one
-                if isnan(bone.rotation_kf[frames[i]].z):
-                    bone.rotation_kf[frames[i]].z, bone.rotation_tkf[frames[i]].z = \
-                        cubic_interpolator(frames[i0], bone.rotation_kf[frames[i0]].z,
-                                           bone.rotation_tkf[frames[i0]].z,
-                                           frames[i1], bone.rotation_kf[frames[i1]].z,
-                                           bone.rotation_tkf[frames[i1]].z,
-                                           frames[i])
-                else:  # reached a new computed frame:
-                    if i1 == len(frames):
-                        break  # nothing left to do
-                    i0 = i  # reset the previous and next frames
-                    while isnan(bone.rotation_kf[frames[i1]].z) or i1 <= i0:
-                        i1 += 1
-                        if i1 == len(frames):  # failure case
-                            for j in frames[i0:]:
-                                bone.rotation_kf[j].z = bone.rotation_kf[frames[i0]].z
-                                bone.rotation_tkf[j].z = 0.
-                            break
-
-        # for i = 1 to bones.count do
-
-        # -- IMPORTANT: set all transforms for the first and last frame. prevents errors when frames loaded on after another animation
-        # useless for first frame? NO! but use it for the right frame.
-        # for i in range(len(bones)):
-        #    bone = bones[i]
-        #    anim = self.anims[i]
-                            
-            if timeOffset not in bone.rotation_kf.keys():
-                bone.rotation_kf[timeOffset] = mathutils.Euler((nan, nan, nan), 'XYZ')
-                bone.rotation_tkf[timeOffset] = mathutils.Euler((nan, nan, nan), 'XYZ')
-            bone.rotation_kf[timeOffset].x = bone.rotation_kf[frames[0]].x  # anim.rotationsX[0].value
-            bone.rotation_kf[timeOffset].y = bone.rotation_kf[frames[0]].y
-            bone.rotation_kf[timeOffset].z = bone.rotation_kf[frames[0]].z
-            bone.rotation_tkf[timeOffset].x = 0
-            bone.rotation_tkf[timeOffset].y = 0
-            bone.rotation_tkf[timeOffset].z = 0
-            posBone = self.GetPositionBone(bone)
-            if timeOffset not in posBone.position_kf.keys():
-                posBone.position_kf[timeOffset] = mathutils.Vector((nan, nan, nan))
-                posBone.position_tkf[timeOffset] = mathutils.Vector((nan, nan, nan))
-            posBone.position_kf[timeOffset].x = anim.translationsX[0].value
-            posBone.position_kf[timeOffset].y = anim.translationsY[0].value
-            posBone.position_kf[timeOffset].z = anim.translationsZ[0].value
-            posBone.position_tkf[timeOffset].x = 0
-            posBone.position_tkf[timeOffset].y = 0
-            posBone.position_tkf[timeOffset].z = 0
-    
-            if includeScaling or True:  # XCX test
-                if timeOffset not in posBone.scale_kf.keys():
-                    bone.scale_kf[timeOffset] = mathutils.Vector((nan, nan, nan))
-                    bone.scale_tkf[timeOffset] = mathutils.Vector((nan, nan, nan))
-                bone.scale_kf[timeOffset].x = anim.scalesX[0].value
-                bone.scale_kf[timeOffset].y = anim.scalesY[0].value
-                bone.scale_kf[timeOffset].z = anim.scalesZ[0].value
-                bone.scale_tkf[timeOffset].x = 0
-                bone.scale_tkf[timeOffset].y = 0
-                bone.scale_tkf[timeOffset].z = 0
-        if self.animationLength > 0:
-            endFrame = timeOffset + self.animationLength
-
-            for i in range(len(bones)):
-                bone = bones[i]
-                anim = self.anims[i]
-
-                if endFrame not in bone.rotation_kf.keys():
-                    bone.rotation_kf[endFrame] = mathutils.Euler((nan, nan, nan), 'XYZ')
-                    bone.rotation_tkf[endFrame] = mathutils.Euler((nan, nan, nan), 'XYZ')
-                bone.rotation_kf[endFrame].x = bone.rotation_kf[frames[-1]].x  # anim.rotationsX[0].value
-                bone.rotation_kf[endFrame].y = bone.rotation_kf[frames[-1]].y
-                bone.rotation_kf[endFrame].z = bone.rotation_kf[frames[-1]].z
-                bone.rotation_tkf[endFrame].x = 0
-                bone.rotation_tkf[endFrame].y = 0
-                bone.rotation_tkf[endFrame].z = 0
-                posBone = self.GetPositionBone(bone)
-                if endFrame not in posBone.position_kf.keys():
-                    posBone.position_kf[endFrame] = mathutils.Vector((nan, nan, nan))
-                    posBone.position_tkf[endFrame] = mathutils.Vector((nan, nan, nan))
-                posBone.position_kf[endFrame].x = anim.translationsX[-1].value
-                posBone.position_kf[endFrame].y = anim.translationsY[-1].value
-                posBone.position_kf[endFrame].z = anim.translationsZ[-1].value
-                posBone.position_tkf[endFrame].x = 0
-                posBone.position_tkf[endFrame].y = 0
-                posBone.position_tkf[endFrame].z = 0
-
-                if includeScaling or True:  # XCX test
-                    if endFrame not in posBone.scale_kf.keys():
-                        bone.scale_kf[endFrame] = mathutils.Vector((nan, nan, nan))
-                        bone.scale_tkf[endFrame] = mathutils.Vector((nan, nan, nan))
-                    bone.scale_kf[endFrame].x = anim.scalesX[-1].value
-                    bone.scale_kf[endFrame].y = anim.scalesY[-1].value
-                    bone.scale_kf[endFrame].z = anim.scalesZ[-1].value
-                    bone.scale_tkf[endFrame].x = 0
-                    bone.scale_tkf[endFrame].y = 0
-                    bone.scale_tkf[endFrame].z = 0"""
 
 
 class Bck_out:

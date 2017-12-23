@@ -3,25 +3,6 @@
 
 
 class Drw1Header:
-    """# <variable tag>
-    # -- char[4]
-    # <variable sizeOfSection>
-    # -- u32 
-    # <variable count>
-    # -- u16  
-    # <variable pad>
-    # -- u16 
-    # --stores for each matrix if it's weighted (normal (0)/skinned (1) matrix types)
-    # <variable offsetToIsWeighted>
-    # -- u32 
-    # --for normal (0) matrices, this is an index into the global matrix
-    # --table (which stores a matrix for every joint). for skinned
-    # --matrices (1), I'm not yet totally sure how this works (but it's
-    # --probably an offset into the Evp1-array)
-    # <variable offsetToData>
-    # -- u32 
-    # <function>"""
-
     def __init__(self):  # GENERATED!
         pass
 
@@ -30,17 +11,16 @@ class Drw1Header:
         self.sizeOfSection = br.ReadDWORD()
         self.count = br.ReadWORD()
         self.pad = br.ReadWORD()
+        # stores for each matrix if it's weighted (normal (0)/skinned (1) matrix types)
         self.offsetToIsWeighted = br.ReadDWORD()
+        # for normal (0) matrices, this is an index into the global matrix
+        # table (which stores a matrix for every joint). for skinned
+        # matrices (1), I'm not yet totally sure how this works (but it's
+        # probably an offset into the Evp1-array)
         self.offsetToData = br.ReadDWORD()
   
 
 class Drw1:
-    # <variable isWeighted>
-    # -- std::vector<bool> isWeighted;
-    # <variable data>
-    # -- std::vector<u16> data;
-    # <function>
-
     def __init__(self):  # GENERATED!
         self.data= []
         self.isWeighted= []

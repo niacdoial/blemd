@@ -3,24 +3,9 @@ from .Matrix44 import *
 from mathutils import Matrix
 
 class Evp1Header:
-    """# <variable tag>
-    # -- char[4]  'EVP1'
-    # <variable sizeOfSection>
-    # -- u32 
-    # <variable count>
-    # -- u16 
-    # <variable pad>
-    # -- u16 
-    # --0 - count many bytes, each byte describes how many bones belong to this index
-    # --1 - sum over all bytes in 0 many shorts (index into some joint stuff? into matrix table?)
-    # --2 - bone weights table (as many floats as shorts in 1)
-    # --3 - matrix table (matrix is 3x4 float array)
-    # <variable offsets>
-    # -- u32[4]
-    # <function>"""
 
     def __init__(self):  # GENERATED!
-        self.offsets= []
+        self.offsets = []
 
     def LoadData(self, br):
                 
@@ -28,31 +13,25 @@ class Evp1Header:
         self.sizeOfSection = br.ReadDWORD()
         self.count = br.ReadWORD()
         self.pad = br.ReadWORD()
+        # 0 - count many bytes, each byte describes how many bones belong to this index
+        # 1 - sum over all bytes in 0 many shorts (index into some joint stuff? into matrix table?)
+        # 2 - bone weights table (as many floats as shorts in 1)
+        # 3 - matrix table (matrix is 3x4 float array)
 
         for _ in range(4):
             self.offsets.append(br.ReadDWORD())
 
 
 class MultiMatrix:
-    # <variable weights>
-    # -- std::vector<float> ;
-    # <variable indices>
-    # -- std::vector<u16> indices; //indices into Evp1.matrices (?)
     def __init__(self):  # GENERATED!
-        self.weights= []
-        self.indices= []
+        self.weights = []
+        self.indices = []  # indices into Evp1.matrices (?)
 
 
 class Evp1:
-    # <variable weightedIndices>
-    # -- std::vector<MultiMatrix> ;
-    # <variable matrices>
-    # -- std::vector<Matrix44f> ;
-    # <function>
-
     def __init__(self):  # GENERATED!
-        self.matrices= []
-        self.weightedIndices= []
+        self.matrices = []
+        self.weightedIndices = []
 
     def LoadData(self, br):
 

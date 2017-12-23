@@ -206,5 +206,7 @@ def add_vcolor(mesh, representation, layerID):
     # XCX image method buggy -> disabled
 
     for num, com in enumerate(representation.loops):
-        vx_layer.data[num].color = mathutils.Color(com.VColors[layerID][:3])
-        vx_layer_a.data[num].color = mathutils.Color(tuple(com.VColors[layerID][3])*3)
+        if com.VColors[layerID] is not None:
+            vx_layer.data[num].color = mathutils.Color(com.VColors[layerID][:3])
+            vx_layer_a.data[num].color = mathutils.Color((com.VColors[layerID][3],)*3)
+        # else, will be white

@@ -7,7 +7,7 @@ import sys
 from contextlib import contextmanager
 
 
-IDE = True
+IDE = False  # is changed by test launcher
 
 
 @contextmanager
@@ -40,7 +40,7 @@ def stdout_redirected(to=os.devnull):
                                              # CLOEXEC may be different
 
 
-@contextmanager  # XCX use me!
+@contextmanager
 def active_object(obj):
     act_bk = bpy.context.scene.objects.active
     bpy.context.scene.objects.active = obj
@@ -51,13 +51,13 @@ def active_object(obj):
 
 
 def MessageBox(string):
+    print(string, file=sys.stderr, end='')
     if IDE:
-        print(string, file=sys.stderr, end='')
-        input()
+        input('press any key to continue')
         return
-    drawer = (lambda obj, context: obj.layout.label(string))
-    bpy.context.window_manager.popup_menu(drawer, 'message box', icon='ERROR')
-    sleep(5)
+    #drawer = (lambda obj, context: obj.layout.label(string))
+    #bpy.context.window_manager.popup_menu(drawer, 'message box', icon='ERROR')
+    #sleep(5)
 
 
 def ReverseArray(inputArray):
@@ -81,14 +81,20 @@ def HiddenDOSCommand(cmd, startpath=os.getcwd()):
 def DosCommand(cmd):
     if not os.path.isabs(cmd):
         cmd = os.path.abspath(cmd)
-    if cmd[-2] == '\\':  # NO! causes incorrect path
-        cmd = cmd[:-2] # + "\" "  # XCX need to replace ?
-    print(subprocess.check_output(cmd, stderr=subprocess.STDOUT).decode())
+    if cmd[-2] == '\\':  # NO! ending with two backslashes causes incorrect path
+        cmd = cmd[:-2]
+    temp = subprocess.check_output(cmd, stderr=subprocess.STDOUT).decode()
+    print(temp)
     # shell output in bytes
 
 
 def getFilenamePath(path):
     return os.path.split(path)[0] + os.path.sep
+
+
+def newfile(name):
+    if not getFiles(name):  # if it doesn't exist
+        open(name, 'ab').close()  # create file
 
 
 def getFilenameFile(path):
