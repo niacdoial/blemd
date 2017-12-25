@@ -71,18 +71,20 @@ def ReverseArray(inputArray):
     return rev
 
 
-def HiddenDOSCommand(cmd, startpath=os.getcwd()):
-    if os.path.isabs(cmd):
-        DosCommand(cmd)
-    else:
-        DosCommand(startpath+cmd)
+def HiddenDOSCommand(exefile, args, startpath=os.getcwd()):
+    if not os.path.isabs(exefile):
+        exefile = os.path.abspath(startpath + exefile)
+
+    if ' ' in exefile:  # whitespace: quotes needed
+        exefile = '"' + exefile + '"'
+
+    args = ['"' + com + '"' for com in args]
+    # do not change original data, and add quotes on args
+
+    DosCommand(exefile + ' ' + ' '.join(args))
 
 
 def DosCommand(cmd):
-    if not os.path.isabs(cmd):
-        cmd = os.path.abspath(cmd)
-    if cmd[-2] == '\\':  # NO! ending with two backslashes causes incorrect path
-        cmd = cmd[:-2]
     temp = subprocess.check_output(cmd, stderr=subprocess.STDOUT).decode()
     print(temp)
     # shell output in bytes
