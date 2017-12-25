@@ -12,6 +12,7 @@
 #include <cstdlib>
 #include <iostream>
 #include <fstream>
+#include <sstream>
 #include <string>
 #include <vector>
 #include <cassert>
@@ -131,16 +132,25 @@ inline void writeWORD_le(FILE* f, u16 v)
 	fwrite(&v, 2, 1, f);
 }
 
-inline void writeSHORT_le(FILE* f, s16 v)
+inline void writeSHORT_le(ostream& f, s16 v)
 {
 	toSHORT_le(v);
-	fwrite(&v, 2, 1, f);
+	f.write((char*)&v, 2);
 }
 
-inline void writeDWORD_le(FILE* f, u32 v)
+inline void writeDWORD_le(ostream& f, u32 v)
 {
 	toDWORD_le(v);
-	fwrite(&v, 4, 1, f);
+	f.write((char*)&v, 4);
+}
+
+inline std::wstring to_wstr(std::string str)
+{
+	std::wstringstream sstr;
+	const char *temp = str.c_str();
+	sstr << temp;
+	//delete[] temp;
+	return sstr.str();
 }
 
 struct Tex1Header
@@ -1061,11 +1071,11 @@ struct TgaHeader
 		descriptor(0){}
 };
 
-void writeColorCaps(FILE* f, const ColorCaps& cc)
+void writeColorCaps(ostream& f, const ColorCaps& cc)
 {
 	writeDWORD_le(f, cc.size);
 	writeDWORD_le(f, cc.flags);
-	fwrite(cc.fourCC, 1, 4, f);
+	f.write(cc.fourCC, 4);
 	writeDWORD_le(f, cc.rgbBitCount);
 	writeDWORD_le(f, cc.rBitMask);
 	writeDWORD_le(f, cc.gBitMask);
@@ -1073,9 +1083,9 @@ void writeColorCaps(FILE* f, const ColorCaps& cc)
 	writeDWORD_le(f, cc.aBitMask);
 }
 
-void writeDdsHeader(FILE* f, const DdsHeader& h)
+void writeDdsHeader(ostream& f, const DdsHeader& h)
 {
-	fwrite(h.type, 1, 4, f);
+	f.write(h.type, 4);
 	writeDWORD_le(f, h.size);
 	writeDWORD_le(f, h.flags);
 	writeDWORD_le(f, h.height);
@@ -1091,22 +1101,22 @@ void writeDdsHeader(FILE* f, const DdsHeader& h)
 		writeDWORD_le(f, h.unused2[j]);
 }
 
-void writeTgaHeader(FILE* f, const TgaHeader& h)
+void writeTgaHeader(ostream& f, const TgaHeader& h)
 {
-	fwrite(&h.identsize, 1, 1, f);
-	fwrite(&h.colourmaptype, 1, 1, f);
-	fwrite(&h.imagetype, 1, 1, f);
+	f.write((char*)&h.identsize, 1);
+	f.write((char*)&h.colourmaptype, 1);
+	f.write((char*)&h.imagetype, 1);
 
 	writeSHORT_le(f, h.colourmapstart);
 	writeSHORT_le(f, h.colourmaplength);
-	fwrite(&h.colourmapbits, 1, 1, f);
+	f.write((char*)&h.colourmapbits, 1);
 
 	writeSHORT_le(f, h.xstart);
 	writeSHORT_le(f, h.ystart);
 	writeSHORT_le(f, h.width);
 	writeSHORT_le(f, h.height);
-	fwrite(&h.bits, 1, 1, f);
-	fwrite(&h.descriptor, 1, 1, f);
+	f.write((char*)&h.bits, 1);
+	f.write((char*)&h.descriptor, 1);
 }
 
 void i8a8ToRgba8(u8* dest, const u8* src, int w, int h)
@@ -1163,7 +1173,7 @@ DdsHeader createDdsHeader(int w, int h, int numMips)
 	return ret;
 }
 
-void saveTextureDds(const std::string& filename, const Image& img)
+void saveTextureDds(const std::wstring& filename, const Image& img)
 {
 	DdsHeader h = createDdsHeader(img.width, img.height, img.mipmaps.size());
 	switch (img.format)
@@ -1193,24 +1203,26 @@ void saveTextureDds(const std::string& filename, const Image& img)
 		break;
 	}
 
-	FILE* file = NULL;
-	fopen_s(&file, filename.c_str(), "wb");
-	if (file == NULL)
+	ofstream file(filename, ios::binary);
+	if (!file.good())
+	{
 		return;
+	}
 
 	writeDdsHeader(file, h);
-	fwrite(&img.imageData[0], 1, img.imageData.size(), file);
-	fclose(file);
+	file.write((char*)&img.imageData[0], img.imageData.size());
+	file.close();
 }
 
-void saveTextureTga(const std::string& filename, const Image& img)
+void saveTextureTga(const std::wstring& filename, const Image& img)
 {
 	TgaHeader h(img.width, img.height);
 
-	FILE* file = NULL;
-	fopen_s(&file, filename.c_str(), "wb");
-	if (file == NULL)
+	ofstream file(filename, ios::binary);
+	if (!file.good())
+	{
 		return;
+	}
 
 	if (img.format == I8)
 	{
@@ -1225,7 +1237,7 @@ void saveTextureTga(const std::string& filename, const Image& img)
 		//std::copy(img.imageData.begin(), img.imageData.begin() + data.size(),
 		//	data.begin());
 		flipVertical(data, h.width, h.height, 1);
-		fwrite(&data[0], 1, data.size(), file);
+		file.write((char*)&data[0], data.size());
 	}
 	else
 	{
@@ -1253,14 +1265,14 @@ void saveTextureTga(const std::string& filename, const Image& img)
 		//data is top-down, targa stores bottom up
 		flipVertical(data, h.width, h.height, 4);
 
-		fwrite(&data[0], 1, data.size(), file);
+		file.write((char*)&data[0], data.size());
 	}
 
-	fclose(file);
+	file.close();
 }
 
 void saveTexture(IMAGETYPE imgType, const Image& img,
-	const std::string& filename, bool doMirrorX, bool doMirrorY)
+	const std::wstring& filename, bool doMirrorX, bool doMirrorY)
 {
 	Image tmp, tmp2;
 	const Image* imageToUse = &img;
@@ -1273,17 +1285,17 @@ void saveTexture(IMAGETYPE imgType, const Image& img,
 	switch (imgType)
 	{
 	case DDS:
-		saveTextureDds(filename + ".dds", *imageToUse);
+		saveTextureDds(filename + L".dds", *imageToUse);
 		break;
 	case TGA:
-		saveTextureTga(filename + ".tga", *imageToUse);
+		saveTextureTga(filename + L".tga", *imageToUse);
 		break;
 	}
 }
 
 
-std::string g_name;
-std::string g_folder;
+std::wstring g_name;
+std::wstring g_folder;
 
 
 
@@ -1341,17 +1353,17 @@ void readBmd(std::istream& f)
 
 			//create dummy file to make sure everybody sees the failure:
 			//sprintf_s<2048>(filename, "%s %d FAILED: %s %d.dds", g_name, k, strings[k].c_str(), tx.format);
-			string filename = g_folder + strings[k] + string(".ERROR");
+			wstring filename = g_folder + to_wstr(strings[k])+ wstring(L".ERROR");
 
-			FILE* outF;
-			fopen_s(&outF, filename.c_str(), "wb");
-			fclose(outF);
+			ofstream outF;
+			outF.open(filename, ios::binary);
+			outF.close();
 
 			continue;
 		}
 
 		//sprintf_s<2048>(filename, "%s %d %s %d.dds", g_name, k, strings[k].c_str(), tx.format);
-		std::string filename = g_folder + strings[k];
+		std::wstring filename = g_folder + to_wstr(strings[k]);
 
 		Image tempImage;
 		loadAndConvertImage(f, tx, t, tempImage);
@@ -1362,7 +1374,7 @@ void readBmd(std::istream& f)
 
 //it's supposed to be:
 //int main(int argc, wchar_t* argv[])
-int _tmain(int argc, char* argv[])
+int _tmain(int argc, wchar_t* argv[])
 {
 	for (int k = 0; k < argc; k++)
 	{
@@ -1380,29 +1392,34 @@ int _tmain(int argc, char* argv[])
 			// do not break here
 		case 1:
 			cout << "0 : " << argv[0] << endl;
-			break;
+			//g_name = L"C:\\Users\\Liam\\Downloads\\kmdl\\archive\\bmwr\\al.bmd";
+			//g_folder = L"C:\\Users\\Liam\\Downloads\\kmdl\\archive\\bmwr\\al\\Textures\\";
+			//break;
 			return EXIT_FAILURE;
 		}
 	}
-	g_name = argv[1]; //"C:\\ZeldaModels\\appTest\\henna.bmd"; // argv[1];
-	g_folder = argv[2];
-	std::string g_folder2 = g_folder;  // this is a "ghost" for debugging purposes
+	else
+	{
+		g_name = argv[1]; //"C:\\ZeldaModels\\appTest\\henna.bmd"; // argv[1];
+		g_folder = argv[2];
+	}
+	std::wstring g_folder2 = g_folder;  // this is a "ghost" for debugging purposes
 	if (g_folder[g_folder.size() - 1] == '\"')
 	{
 		//cout << "g_folder: " << g_folder2;
 		g_folder.erase(g_folder.end() - 1);
-		cout << "g_folder: " << g_folder;
+		wcout << "g_folder: " << g_folder;
 	}
 	if (g_folder[g_folder.size() - 1] != '\\')
 	{
-		g_folder += string("\\");
+		g_folder += wstring(L"\\");
 	}
-	cout << "textures: " << g_folder << endl;
+	wcout << "textures: " << g_folder << endl;
 
 	std::ifstream is(g_name, ios_base::binary);
 	if (!(is.is_open() || is.good()))
 	{
-		cout << "cannot open file " << g_name << endl;
+		wcout << "cannot open file " << g_name << endl;
 		return EXIT_FAILURE;
 	}
 

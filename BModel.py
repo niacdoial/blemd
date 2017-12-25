@@ -222,15 +222,15 @@ class BModel:
                                                    "included in the zip file into the given path.")
             raise ValueError("ERROR")
 
-    def TryHiddenDOSCommand(self, cmd, startpath):
+    def TryHiddenDOSCommand(self, exefile, args, startpath):
                 
         # --print "###################"
         # --print cmd
         # --print startpath
         try:
-            MaxH.HiddenDOSCommand(cmd, startpath=startpath)
+            MaxH.HiddenDOSCommand(exefile, args, startpath=startpath)
         except MaxH.subprocess.CalledProcessError as err:
-            pass
+            print(err)
 
     def BuildSingleMesh(self):
         # -----------------------------------------------------------------
@@ -418,7 +418,7 @@ class BModel:
             os.mkdir(self._bmdDir)
         except FileExistsError:
             pass
-        self._texturePath = self._bmdDir + "Textures\\"
+        self._texturePath = self._bmdDir + "Textures"
 
         br.SeekSet(0x20)
 
@@ -873,9 +873,10 @@ class BModel:
         # -- don't use DOSCommand. Doesn't support spaces in full exe path. e.g. C:Program files\
         # -- if using version before 2008 then use DOSCommand and set BmdView.exe into a known path
 
-        if (len(tgaFiles) == 0 and len(ddsFiles) == 0) or force:
-            self.TryHiddenDOSCommand("BmdView.exe \"" + self._bmdFilePath + "\" \"" +
-                                 self._texturePath+ "\\\"", self._bmdViewPathExe)
+        if len(self._images) == 0 or force:
+            self.TryHiddenDOSCommand("BmdView.exe",
+                                     [self._bmdFilePath, self._texturePath+'\\'],
+                                     self._bmdViewPathExe)
 
         ddsFiles = MaxH.getFiles(self._texturePath + "*.dds")
         # -- create tga file and delete dds file
