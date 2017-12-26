@@ -755,7 +755,7 @@ class BModel:
         origWorldBonePos = None
 
         if self.params.use_nodes:
-            self._mat1V2.convert(self.tex, self._texturePath)  # + self.params.texturePrefix)
+            self._mat1V2.convert(self.tex, self._texturePath+'\\')  # + self.params.texturePrefix)
         # prepare material nodes
 
         if self.params.createBones:
@@ -864,8 +864,8 @@ class BModel:
         except FileExistsError:
             pass
         # -- if no tga files are found then extract the
-        tgaFiles = MaxH.getFiles(self._texturePath + "*.tga")
-        ddsFiles = MaxH.getFiles(self._texturePath + "*.dds")
+        tgaFiles = MaxH.getFiles(self._texturePath + "\\*.tga")
+        ddsFiles = MaxH.getFiles(self._texturePath + "\\*.dds")
 
         self._images = tgaFiles+ddsFiles
 
@@ -878,16 +878,16 @@ class BModel:
                                      [self._bmdFilePath, self._texturePath+'\\'],
                                      self._bmdViewPathExe)
 
-        ddsFiles = MaxH.getFiles(self._texturePath + "*.dds")
+        ddsFiles = MaxH.getFiles(self._texturePath + "\\*.dds")
         # -- create tga file and delete dds file
-        for f in MaxH.getFiles(self._texturePath + "*.dds"):
+        for f in MaxH.getFiles(self._texturePath + "\\*.dds"):
             TexH.addforcedname(f, f[:-4]+'.tga')
 
         # TODO: need to update BmdView.exe to process all file formats like BmdView2
         errorMessage = "Error generating dds / tga image file(s).\
                        Use BmdView2 to export the missing tga file(s)\
                        then delete the *.ERROR file(s) and run the importer again"
-        errorFiles = MaxH.getFiles(self._texturePath + "*.ERROR")
+        errorFiles = MaxH.getFiles(self._texturePath + "\\*.ERROR")
         for f in errorFiles:
             errorMessage += f + "\n"  # report file
             MaxH.newfile(f[:-6]+'.dds')  # and avoid crashes in the future
