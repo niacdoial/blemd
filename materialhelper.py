@@ -49,7 +49,7 @@ def build_material(bmodel, mat1, material, tex, _images, ExtractImages):
         textureName = tex.stringtable[v2]
 
         # --self.textureName = matName
-        fileName = bmodel._texturePath + textureName + ".tga"
+        fileName = OSPath.join(bmodel._texturePath, textureName + ".tga")
         bmpFound = OSPath.exists(fileName) or OSPath.exists(fileName[:-4] + '.dds')  # two image types!
 
         # -- messageBox fileName

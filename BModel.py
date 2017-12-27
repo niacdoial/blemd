@@ -418,7 +418,7 @@ class BModel:
             os.mkdir(self._bmdDir)
         except FileExistsError:
             pass
-        self._texturePath = self._bmdDir + "Textures"
+        self._texturePath = self._bmdDir + "Textures\\"
 
         br.SeekSet(0x20)
 
@@ -755,7 +755,7 @@ class BModel:
         origWorldBonePos = None
 
         if self.params.use_nodes:
-            self._mat1V2.convert(self.tex, self._texturePath+'\\')  # + self.params.texturePrefix)
+            self._mat1V2.convert(self.tex, self._texturePath)  # + self.params.texturePrefix)
         # prepare material nodes
 
         if self.params.createBones:
@@ -773,10 +773,10 @@ class BModel:
         self.DrawScenegraph(sg, i)
         modelMesh = self.BuildSingleMesh()
 
-        if self.params.createBones:  # XCX is this needed?
-            try:
-                os.mkdir(self._bmdDir + "\\Animations")
-            except FileExistsError: pass
+        #if self.params.createBones:  # XCX is this needed?
+        #    try:
+        #        os.mkdir(self._bmdDir + "\\Animations")
+        #    except FileExistsError: pass
 
         if self.params.createBones and self.params.loadAnimations:
             print("animations: ", time())
@@ -864,8 +864,8 @@ class BModel:
         except FileExistsError:
             pass
         # -- if no tga files are found then extract the
-        tgaFiles = MaxH.getFiles(self._texturePath + "\\*.tga")
-        ddsFiles = MaxH.getFiles(self._texturePath + "\\*.dds")
+        tgaFiles = MaxH.getFiles(self._texturePath + "*.tga")
+        ddsFiles = MaxH.getFiles(self._texturePath + "*.dds")
 
         self._images = tgaFiles+ddsFiles
 
@@ -875,19 +875,19 @@ class BModel:
 
         if len(self._images) == 0 or force:
             self.TryHiddenDOSCommand("BmdView.exe",
-                                     [self._bmdFilePath, self._texturePath+'\\'],
+                                     [self._bmdFilePath, self._texturePath],
                                      self._bmdViewPathExe)
 
-        ddsFiles = MaxH.getFiles(self._texturePath + "\\*.dds")
+        ddsFiles = MaxH.getFiles(self._texturePath + "*.dds")
         # -- create tga file and delete dds file
-        for f in MaxH.getFiles(self._texturePath + "\\*.dds"):
+        for f in MaxH.getFiles(self._texturePath + "*.dds"):
             TexH.addforcedname(f, f[:-4]+'.tga')
 
         # TODO: need to update BmdView.exe to process all file formats like BmdView2
         errorMessage = "Error generating dds / tga image file(s).\
                        Use BmdView2 to export the missing tga file(s)\
                        then delete the *.ERROR file(s) and run the importer again"
-        errorFiles = MaxH.getFiles(self._texturePath + "\\*.ERROR")
+        errorFiles = MaxH.getFiles(self._texturePath + "*.ERROR")
         for f in errorFiles:
             errorMessage += f + "\n"  # report file
             MaxH.newfile(f[:-6]+'.dds')  # and avoid crashes in the future
