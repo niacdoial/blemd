@@ -3,6 +3,8 @@ import os
 from .maxheader import MessageBox
 from math import log2, floor
 import sys
+import logging
+log = logging.getLogger('bpy.ops.import_mesh.bmd.fileOut')
 
 
 def bitshiftu8(val, shifter):
@@ -91,7 +93,7 @@ class BinaryWriter:
         # --self._size = ftell self._f
         self._f.seek(0)
         if self._f is None:
-            MessageBox("Unable to open file " + srcPath)
+            log.fatal("Unable to open file " + srcPath)
             raise ValueError("Unable to open file " + srcPath)
 
     def EOF(self):
@@ -123,7 +125,7 @@ class BinaryWriter:
 
     def writeWord(self, v):
         if v < 0:
-            MessageBox("ReadWORD should be unsigned")
+            log.fatal("ReadWORD should be unsigned")
             raise ValueError("ReadWORD should be unsigned")
         # w1 = chr((v & 0xff00) >> 8).encode()
         # w2 = chr(v & 0x00ff).encode()
@@ -165,7 +167,7 @@ class BinaryWriter:
         else:
             e = int(floor(log2(v/0x1000000))+1 + 150)
         if e < 0 or e > 0xff:
-            print("float off range, assuming zero", file=sys.stderr)
+            log.warning("float off range, assuming zero")
             e = 0
             m = 0
 

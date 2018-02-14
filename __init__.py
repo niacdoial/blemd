@@ -3,21 +3,53 @@ if "bpy" in locals():  # trick to reload module on f8-press in blender
 else:
     LOADED = False
 import bpy
-if LOADED:
-    unregister()
-    from importlib import reload
-    del BModel
-    reload(BModule)
 
-    from .BModel import BModel
+log_out = None
+
+import logging.config
+import io
+
+
+def config_logging():
+    global log_out
+    log_out = io.StringIO()
+    logging.config.dictConfig({
+        'version': 1,
+        'formatters': {'default': {'format': '%(asctime)-15s %(levelname)8s %(name)s %(message)s'},
+                       'short': {'format': '%(levelname)-8s %(name)s %(message)s'}},
+        'handlers': {
+            'console': {
+                'class': 'logging.StreamHandler',  # 'logging.ReloadingHandler',
+                'formatter': 'default',
+                # 'place': 'sys.stdout',
+                'stream': 'ext://sys.stderr'},
+            'pipe': {
+                'class': 'logging.StreamHandler',
+                'formatter': 'short',
+                'level': 'WARNING',
+                'stream': log_out}},
+        'root': {
+            'level': 'INFO',
+            'handlers': ['console', 'pipe']}
+    })
+
+
+if LOADED:
+    from importlib import reload
+    reload(BModel)
+    reload(MaxH)
+
 else:
-    from importlib import import_module
-    from .BModel import BModel
-    BModule = import_module('.BModel', "blemd")
+    if not logging.root.handlers:
+        # if this list is not empty, logging is configured.
+        # here, it isn't
+        config_logging()
+    import blemd.maxheader as MaxH
+    import blemd.BModel
 del LOADED
 
-import os.path as OSPath
-IDE_DEBUG = True
+IDE_DEBUG = False
+log = logging.getLogger('bpy.ops.import_mesh.bmd')
 
 bl_info = {
     "name": "Import gc/wii bmd format (.bmd)",
@@ -36,6 +68,7 @@ __version__ = '.'.join([str(s) for s in bl_info['version']])
 
 # ImportHelper is a helper class, defines filename and
 # invoke() function which calls the file selector.
+import os.path as OSPath
 from bpy_extras.io_utils import ImportHelper
 from bpy.props import StringProperty, BoolProperty, EnumProperty, IntProperty
 from bpy.types import Operator
@@ -72,6 +105,12 @@ class ImportBmd(Operator, ImportHelper):
         default='CHAINED'
         )
 
+    use_nodes = BoolProperty(
+        name="use complete materials",
+        description="use complete (glsl) materials (converted into nodes). Hard to export.",
+        default=False
+    )
+
     frc_cr_bn = BoolProperty(
         name="Force create bones",
         description="",
@@ -84,10 +123,21 @@ class ImportBmd(Operator, ImportHelper):
         default=True
         )
 
-    tx_xp = BoolProperty(
-        name="Export textures",
-        description="why does this option even exist?",
-        default=True
+    tx_pck = EnumProperty(
+        name="Pack textures",
+        description="choose if textures should be inside the blender file or referenced by it",
+        items=(('DONT', 'reference external files', ''),
+               ('DO', 'pack images in blender file', ''),
+               ('PNG', 'pack images IN PNG FORMAT', 'conversion is made by blender')),
+        default='DO'
+        )
+
+    imtype = EnumProperty(
+        name="Image use type",
+        description="Choose packed images, native format image, or targa converted ones",
+        items=(('TGA', "targa files", ""),
+               ('DDS', "dds files", 'this format feels legacy')),
+        default='TGA'
         )
 
     ic_sc = BoolProperty(
@@ -102,16 +152,6 @@ class ImportBmd(Operator, ImportHelper):
         default=False
         )
 
-    imtype = EnumProperty(
-        name="Image use type",
-        description="Choose packed images, native format image, or targa converted ones",
-        items=(('TARGA', "targa files", ""),
-               ('PACKED', "packed dds files", ''),
-               ('AS_PNG', "packed dds files as png ones", ''),
-               ('NATIVE', 'dds files', '')),
-        default='PACKED'
-        )
-
     boneThickness = IntProperty(
         name="bone length",
         description="from 5 to 100 (usually)",
@@ -122,19 +162,28 @@ class ImportBmd(Operator, ImportHelper):
         default=10
     )
 
-    use_nodes = BoolProperty(
-        name="use node materials",
-        description="use complete (glsl) materials (converted into nodes), hard to export.",
-        default=False
-    )
-
     def execute(self, context):
-        temp = BModel()
+        global log_out
+        retcode = 'FINISHED'
+        temp = BModel.BModel()
         path = OSPath.abspath(OSPath.split(__file__)[0])  # automatically find where we are
         temp.SetBmdViewExePath(path+'\\')  # add backslash for good measure
-        temp.Import(self.filepath, self.boneThickness, self.mir_tx, self.frc_cr_bn,
-                    self.sv_anim, self.tx_xp, 'XFILE', self.ic_sc, self.imtype, self.dvg, self.use_nodes)
-        return {'FINISHED'}
+        try:
+            temp.Import(self.filepath, self.use_nodes, self.imtype, self.tx_pck, self.mir_tx,
+                        self.sv_anim, self.ic_sc, self.frc_cr_bn, self.boneThickness, self.dvg)
+        except Exception as err:
+            log.critical('An error happened. If it wasn\'t reported before, here it is: %s', err)
+            retcode = 'ERROR'
+            raise
+        finally:
+            message = log_out.getvalue()
+            log_out.truncate(0)
+            if message:
+                if retcode == 'ERROR':
+                    self.report({'ERROR'}, message)
+                else:
+                    self.report({'WARNING'}, message)
+        return {retcode}
 
 
 # Only needed if you want to add into a dynamic menu

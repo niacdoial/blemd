@@ -3,7 +3,7 @@ from mathutils import Vector, Euler, Matrix
 import bpy
 import math
 import re
-
+# import weakref
 
 def vect_normalize(vect):
     length = math.sqrt(vect.x**2 + vect.y**2 + vect.z**2)
@@ -240,7 +240,7 @@ class Pseudobone:
         def _setinchildren(holder, val):
             list.append(holder.children, val)
             val._parent = holder
-        self.children_append = (lambda self2, x: _setinchildren(self, x))
+        # self.children_append = (lambda self2, x: _setinchildren(self, x))
 
         if isinstance(frame, str):
             self.name.fset(frame)

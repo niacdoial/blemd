@@ -1,6 +1,8 @@
 import sys
 import bpy
 from .matpipeline import createMaterialSystem
+import logging
+log = logging.getLogger('bpy.ops.import_mesh.bmd.matv2')
 
 
 def arrayresize(L, s):
@@ -176,11 +178,11 @@ class Mat3:
     def LoadData(self, br):
         dumpMat3(br, self)
 
-    def convert(self, tex1, texpath):
+    def convert(self, tex1, texpath, ext):
         matnum = len(self.materialbases)
         self.materials = [None]*matnum
         for index in range(matnum):
-            self.materials[index] = createMaterialSystem(index, self, tex1, texpath)
+            self.materials[index] = createMaterialSystem(index, self, tex1, texpath, ext)
             self.materials[index].flag = self.materialbases[index].flag  # for scenegraph use
 
 class BMD_namespace:
@@ -540,7 +542,7 @@ def displayData(out, str, f, offset, size, space=-1):
 
 def displayTevStage(out, f, offset, size):
     if size % 20 != 0:
-        print("TevStage has wrong size", file=sys.stderr)
+        log.warning("TevStage has wrong size")
         return
 
     old = f.Position()
@@ -874,14 +876,14 @@ def dumpMat3(f, dst):
 
     isMat2 = (h.tag == 'MAT2')
     if isMat2:
-        print("Model contains MAT2 block instead of MAT3", file=sys.stderr)
+        log.info("Model contains MAT2 block instead of MAT3")
 
     # //read stringtable
     # //vector<string> stringtable;
     dst.stringtable = f.ReadStringTable(mat3Offset + h.offsets[2])
     if h.count != len(dst.stringtable):
-        print("mat3: number of strings (%d) doesn't match number of elements (%d)",
-              len(dst.stringtable), h.count, file=sys.stderr)
+        log.warning("number of strings (%d) doesn't match number of elements (%d)",
+              len(dst.stringtable), h.count)
 
     # //compute max length of each subsection
     # //(it's probably better to check the maximal indices
@@ -1006,17 +1008,17 @@ def dumpMat3(f, dst):
     # assert (sizeof(bmd::MatIndirectTexturingEntry) == 312)
     f.SeekSet(mat3Offset + h.offsets[3])
     if lengths[3] % 312 != 0:
-        print("mat3: indirect texturing block size no multiple of 312: %d", lengths[3], file=sys.stderr)
+        log.warning("indirect texturing block size no multiple of 312: %d", lengths[3])
     elif lengths[3] / 312 != h.count:
-        print("mat3: number of ind texturing blocks (%d) doesn't match number of materials (%d)",
-              lengths[3] / 312, h.count, file=sys.stderr)
+        log.warning("number of ind texturing blocks (%d) doesn't match number of materials (%d)",
+              lengths[3] / 312, h.count)
     else:
         for i in range(h.count):
             indEntry = BMD_namespace.MatIndirectTexturingEntry()
             readMatIndirectTexturingEntry(f, indEntry)
             # //...
             if g_defaultIndirectEntry != indEntry:
-                print("found different ind tex block", file=sys.stderr)
+                log.warning("found different ind tex block")
 
     # //offsets[10] (read texGenCounts)
     f.SeekSet(mat3Offset + h.offsets[10])
@@ -1041,7 +1043,7 @@ def dumpMat3(f, dst):
 
     # //offset[13] (texmtxinfo debug)
     if (lengths[13] % (100) != 0):
-        print("ARGH: unexpected texmtxinfo lengths[13]: %d", lengths[13], file=sys.stderr)
+        log.warning("unexpected texmtxinfo lengths[13]: %d", lengths[13])
     else:
         f.SeekSet(mat3Offset + h.offsets[13])
 
@@ -1050,13 +1052,13 @@ def dumpMat3(f, dst):
             readTexMtxInfo(f, info)
 
             if (info.unk != 0x0100):  # //sometimes violated
-                print("(mat3texmtx) %x instead of 0x0100", info.unk, file=sys.stderr)
+                log.info("(mat3texmtx) %x instead of 0x0100", info.unk)
             if (info.pad != 0xffff):
-                print("(mat3texmtx) %x instead of 0xffff", info.pad, file=sys.stderr)
+                log.info("(mat3texmtx) %x instead of 0xffff", info.pad)
             if (info.unk2 != 0x0000):
-                print("(mat3texmtx) %x instead of 0x0000", info.unk2, file=sys.stderr)
+                log.info("(mat3texmtx) %x instead of 0x0000", info.unk2)
             if (info.pad2 != 0xffff):
-                print("(mat3texmtx) %x instead of 2nd 0xffff", info.pad2, file=sys.stderr)
+                log.info("(mat3texmtx) %x instead of 2nd 0xffff", info.pad2)
 
     # //offsets[13] (read texMtxInfo)
     f.SeekSet(mat3Offset + h.offsets[13])
@@ -1353,9 +1355,13 @@ def dumpMat3(f, dst):
 
 
 def create_material(msys):
-    material = bpy.data.materials.new('stupid_name_that_will_be_erased_in_a_moment')
-    material.use_nodes = True
-    material.use_transparency = True
-    material.transparency_method = 'Z_TRANSPARENCY'
-    msys.export(material.node_tree)
+    if msys.material is not None:  # then there is already a material
+        material = msys.material.copy()
+    else:
+        material = bpy.data.materials.new('stupid_name_that_will_be_erased_in_a_moment')
+        material.use_nodes = True
+        material.use_transparency = True
+        material.transparency_method = 'Z_TRANSPARENCY'
+        msys.export(material.node_tree)
+        msys.material = material
     return material

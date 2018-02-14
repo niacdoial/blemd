@@ -13,6 +13,8 @@ from time import time
 
 import bpy
 from mathutils import Matrix, Vector, Euler, Color
+import logging
+log = logging.getLogger('bpy.ops.import_mesh.bmd.main')
 
 if LOADED:
     for module in (BinaryReader, Mat44, Inf1, Vtx1, Shp1, Jnt1, Evp1, Drw1,
@@ -40,24 +42,21 @@ else:
 del LOADED
 
 
-
-
 class Prog_params:
     def __init__(self, filename, boneThickness, allowTextureMirror, forceCreateBones, loadAnimations, animationType,
-                 exportTextures, exportType, includeScaling, imtype, dvg, use_nodes=False):
+                 packTextures, includeScaling, imtype, dvg, use_nodes=False):
         self.filename = filename
         self.boneThickness = boneThickness
         self.allowTextureMirror = allowTextureMirror
         self.forceCreateBones = forceCreateBones
         self.loadAnimations = loadAnimations
         self.animationType = animationType
-        # self.exportTextures = exportTextures
-        # self.exportType = exportType
+        self.packTextures = packTextures
         self.includeScaling = includeScaling
         self.imtype = imtype
         self.DEBUGVG = dvg
         self.use_nodes = use_nodes
-        # secondary parameters (computed)
+        # secondary parameters (computed later on)
         self.createBones = True
 
 
@@ -218,7 +217,7 @@ class BModel:
     def SetBmdViewExePath(self, value):
         self._bmdViewPathExe = value
         if not OSPath.exists(self._bmdViewPathExe + "BmdView.exe"):                        
-            MaxH.MessageBox(self._bmdViewPathExe + "BmdView.exe not found. Place the BmdView.exe file"
+            log.fatal(self._bmdViewPathExe + "BmdView.exe not found. Place the BmdView.exe file"
                                                    "included in the zip file into the given path.")
             raise ValueError("ERROR")
 
@@ -230,12 +229,12 @@ class BModel:
         try:
             MaxH.HiddenDOSCommand(exefile, args, startpath=startpath)
         except MaxH.subprocess.CalledProcessError as err:
-            print(err)
+            log.warning('subprocess error: %s. Expect missing/glitchy textures', err)
 
     def BuildSingleMesh(self):
         # -----------------------------------------------------------------
         # -- mesh
-        print('BuildSMesh : ', time())
+        log.debug('BuildSMesh point reached')
         """if False:  #self._reverseFaces and False:
             self.model.faces = ReverseArray(self.model.faces)
             self._materialIDS = ReverseArray(self._materialIDS)
@@ -285,27 +284,36 @@ class BModel:
         bpy.context.scene.objects.link(modelObject)
 
         # XCX: find a way to replace that too.
-        bm_to_pm = {}  # index shifter: material, get mat index
-        for i in range(len(self._subMaterials)):
-            MatH.add_material(modelObject, self._subMaterials[i])
-        errmat = MatH.add_err_material(modelObject)
-        for num, com in enumerate(modelObject.material_slots):
-            bm_to_pm[com.material] = num
-        f_to_rf = list(range(len(self.model.faces)))
-        for num, com in enumerate(self._materialIDS):  # assign materials to faces
-            # DEBUG reversed index
-            if f_to_rf[num] is not None:
-                if com is not None:
-                    modelMesh.polygons[f_to_rf[num]].material_index = com  # bm_to_pm[com]
-                else:
-                    modelMesh.polygons[f_to_rf[num]].material_index = bm_to_pm[errmat]
+        try:
+            bm_to_pm = {}  # index shifter: material, get mat index
+            for i in range(len(self._subMaterials)):
+                MatH.add_material(modelObject, self._subMaterials[i])
+            errmat = MatH.add_err_material(modelObject)
+            for num, com in enumerate(modelObject.material_slots):
+                bm_to_pm[com.material] = num
+            f_to_rf = list(range(len(self.model.faces)))
+            for num, com in enumerate(self._materialIDS):  # assign materials to faces
+                # DEBUG reversed index
+                if f_to_rf[num] is not None:
+                    if com is not None:
+                        modelMesh.polygons[f_to_rf[num]].material_index = com  # bm_to_pm[com]
+                    else:
+                        modelMesh.polygons[f_to_rf[num]].material_index = bm_to_pm[errmat]
+        except Exception as err:
+            log.warning('Materials couldn\'t be completely applied (error is %s)', err)
 
         active_uv = None
 
         for uv in range(8):
             if self.model.hasTexCoords[uv]:
-                TexH.newUVlayer(modelMesh, self.model, uv)
-        active_uv = modelMesh.uv_textures[0]
+                try:
+                    TexH.newUVlayer(modelMesh, self.model, uv)
+                except Exception as err:
+                    log.warning('Couldn\'t create UV layer %d (error is %s)', uv, err)
+        try:
+            active_uv = modelMesh.uv_textures[0]
+        except Exception as err:
+            pass  # it will be fixed later anyways
 
         with MaxH.active_object(modelObject):
             if not active_uv:
@@ -316,89 +324,102 @@ class BModel:
 
             if self.model.hasColors[0]:
                 # if len(self.vtx.colors) and len(self.vtx.colors[0]):  # has colors?
-                alpha_image = MatH.add_vcolor(modelMesh, self.model, 0)
+                try:
+                    alpha_image = MatH.add_vcolor(modelMesh, self.model, 0)
+                except Exception as err:
+                    log.warning('Vertex color layer 0 failed (error is %s)', err)
             if self.model.hasColors[1]:
                 # if len(self.vtx.colors) > 1 and len(self.vtx.colors[1]):
-                MatH.add_vcolor(modelMesh, self.model, 1)
+                try:
+                    MatH.add_vcolor(modelMesh, self.model, 1)
+                except Exception as err:
+                    log.warning('Vertex color layer 1 failed (error is %s)', err)
         # update(modelMesh)
 
         # -----------------------------------------------------------------
 
         if self.params.createBones or self.params.DEBUGVG:
-            with MaxH.active_object(modelObject):
-                mod = modelObject.modifiers.new('Armature', type='ARMATURE')
-                arm = bpy.data.armatures.new(modelObject.name+'_bones')
-                self.arm_obj = arm_obj = bpy.data.objects.new(modelObject.name+'_armature', arm)
-                bpy.context.scene.objects.link(arm_obj)
-                modelObject.parent = arm_obj
-                mod.object = arm_obj
-                bpy.context.scene.update()
+            try:
+                with MaxH.active_object(modelObject):
+                    mod = modelObject.modifiers.new('Armature', type='ARMATURE')
+                    arm = bpy.data.armatures.new(modelObject.name+'_bones')
+                    self.arm_obj = arm_obj = bpy.data.objects.new(modelObject.name+'_armature', arm)
+                    bpy.context.scene.objects.link(arm_obj)
+                    modelObject.parent = arm_obj
+                    mod.object = arm_obj
+                    bpy.context.scene.update()
 
-            with MaxH.active_object(arm_obj):
-                bpy.ops.object.mode_set(mode='EDIT')
-                for bone in self._bones:
-                    arm.edit_bones.new(bone.name.fget())
-                    if isinstance(bone.parent.fget(), PBones.Pseudobone):
-                        if bone.parent.fget().name.fget() not in [temp.name.fget() for temp in self._bones]:
-                            tempbone = arm.edit_bones.new(bone.parent.fget().name.fget())
-                            if bone.parent.fget().parent.fget() is not None:
-                                tempbone.parent = arm.edit_bones[bone.parent.fget().parent.fget().name.fget()]
-                            tempbone.head = Vector(bone.parent.fget().position)
-                            tempbone.tail = Vector(bone.parent.fget().endpoint)
-                for bone in self._bones:
-                    realbone = arm.edit_bones[bone.name.fget()]
-                    if isinstance(bone.parent.fget(), PBones.Pseudobone):
-                        realbone.parent = arm.edit_bones[bone.parent.fget().name.fget()]
-                    realbone.head = Vector(bone.position)
-                    realbone.tail = Vector(bone.endpoint)
-                    modelObject.vertex_groups.new(bone.name.fget())
-
-                if len(self.vertexMultiMatrixEntry) != len(self.model.vertices):
-                    MaxH.MessageBox("Invalid skin")
-                    raise ValueError("E")
-                if self.params.createBones:
-                    # XCX should not need this
-                    for idx in range(len(self.vertexMultiMatrixEntry)):
-                        if self.vertexMultiMatrixEntry[idx] is None:
-                            self.vertexMultiMatrixEntry[idx] = Mat44.MultiMatrix()
-                    for i in range(len(self.model.vertices)):
-                        for num, vg_id in enumerate(self.vertexMultiMatrixEntry[i].indices):
-                            modelObject.vertex_groups[vg_id].add([i], self.vertexMultiMatrixEntry[i].weights[num], 'REPLACE')
-
+                with MaxH.active_object(arm_obj):
+                    bpy.ops.object.mode_set(mode='EDIT')
+                    for bone in self._bones:
+                        arm.edit_bones.new(bone.name.fget())
+                        if isinstance(bone.parent.fget(), PBones.Pseudobone):
+                            if bone.parent.fget().name.fget() not in [temp.name.fget() for temp in self._bones]:
+                                tempbone = arm.edit_bones.new(bone.parent.fget().name.fget())
+                                if bone.parent.fget().parent.fget() is not None:
+                                    tempbone.parent = arm.edit_bones[bone.parent.fget().parent.fget().name.fget()]
+                                tempbone.head = Vector(bone.parent.fget().position)
+                                tempbone.tail = Vector(bone.parent.fget().endpoint)
                     for bone in self._bones:
                         realbone = arm.edit_bones[bone.name.fget()]
-                        vec = realbone.head
-                        grp = modelObject.vertex_groups[bone.name.fget()]
-                for com in self.DEBUGvgroups.keys():  # DEBUG vertex groups to fix UVs
-                    vg = modelObject.vertex_groups.new(com)
-                    vg.add(self.DEBUGvgroups[com], 1, 'REPLACE')
+                        if isinstance(bone.parent.fget(), PBones.Pseudobone):
+                            realbone.parent = arm.edit_bones[bone.parent.fget().name.fget()]
+                        realbone.head = Vector(bone.position)
+                        realbone.tail = Vector(bone.endpoint)
+                        modelObject.vertex_groups.new(bone.name.fget())
 
-                bpy.context.scene.update()
-                bpy.ops.object.mode_set(mode='OBJECT')
+                    if len(self.vertexMultiMatrixEntry) != len(self.model.vertices):
+                        log.warning("Invalid skin")
+                        raise ValueError("E")
+                    if self.params.createBones:
+                        # XCX should not need this
+                        for idx in range(len(self.vertexMultiMatrixEntry)):
+                            if self.vertexMultiMatrixEntry[idx] is None:
+                                self.vertexMultiMatrixEntry[idx] = Mat44.MultiMatrix()
+                        for i in range(len(self.model.vertices)):
+                            for num, vg_id in enumerate(self.vertexMultiMatrixEntry[i].indices):
+                                modelObject.vertex_groups[vg_id].add([i], self.vertexMultiMatrixEntry[i].weights[num], 'REPLACE')
+
+                        for bone in self._bones:
+                            realbone = arm.edit_bones[bone.name.fget()]
+                            vec = realbone.head
+                            grp = modelObject.vertex_groups[bone.name.fget()]
+                    for com in self.DEBUGvgroups.keys():  # DEBUG vertex groups to fix UVs
+                        vg = modelObject.vertex_groups.new(com)
+                        vg.add(self.DEBUGvgroups[com], 1, 'REPLACE')
+
+                    bpy.context.scene.update()
+                    bpy.ops.object.mode_set(mode='OBJECT')
+
+            except Exception as err:
+                log.warning('Animation bones not created. Animtions will fail. (error is %s)', err)
 
         modelMesh.update()
 
-        modelMesh.create_normals_split()  # does this stabilize normals?
+        try:
+            modelMesh.create_normals_split()  # does this stabilize normals?
 
-        for face in modelMesh.polygons:
-            face.use_smooth = True  # normals have effect only if smooth shading
+            for face in modelMesh.polygons:
+                face.use_smooth = True  # normals have effect only if smooth shading
 
-        # create custom data to write normals correctly?
-        modelMesh.update()
+            # create custom data to write normals correctly?
+            modelMesh.update()
 
-        # begin not understood black box (where does this thing write to make normals stable?)
-        clnors = self.model.toarray('normal')
+            # begin not understood black box (where does this thing write to make normals stable?)
+            clnors = self.model.toarray('normal')
 
-        modelMesh.polygons.foreach_set("use_smooth", [True] * len(modelMesh.polygons))
+            modelMesh.polygons.foreach_set("use_smooth", [True] * len(modelMesh.polygons))
 
-        modelMesh.normals_split_custom_set(tuple(
-                                                 zip(*(iter(clnors),) * 3)
-                                                ))
-        modelMesh.use_auto_smooth = True
-        modelMesh.show_edge_sharp = True
-        # end not understood black box
+            modelMesh.normals_split_custom_set(tuple(
+                                                     zip(*(iter(clnors),) * 3)
+                                                    ))
+            modelMesh.use_auto_smooth = True
+            modelMesh.show_edge_sharp = True
+            # end not understood black box
 
-        # modelMesh.validate(clean_customdata=False)  # only validate now, if at all
+            # modelMesh.validate(clean_customdata=False)  # only validate now, if at all
+        except Exception as err:
+            log.warning('Normals weren\'t set (error is %s)', err)
         modelMesh.update()
 
         return modelMesh
@@ -406,7 +427,7 @@ class BModel:
     def LoadModel(self, filePath):
         """loads mesh data from file"""
 
-        print("Load : ", time())
+        log.debug("Load : ")
         # -- load model
         br = BinaryReader.BinaryReader()
         br.Open(filePath)
@@ -418,7 +439,7 @@ class BModel:
             os.mkdir(self._bmdDir)
         except FileExistsError:
             pass
-        self._texturePath = self._bmdDir + "Textures\\"
+        self._texturePath = self._bmdDir + "Textures"
 
         br.SeekSet(0x20)
 
@@ -523,7 +544,7 @@ class BModel:
                     if currBatch.attribs.hasMatrixIndices:
                         mat = matrixTable[(currPrimitive.points[m].matrixIndex//3)]
                         if currPrimitive.points[m].matrixIndex % 3:
-                            MaxH.MessageBox("WARNING: if (mod currPrimitive.points[m].matrixIndex 3) != 0 then " +
+                            log.warning("if (mod currPrimitive.points[m].matrixIndex 3) != 0 then " +
                                        str(currPrimitive.points[m].matrixIndex))
                         multiMat = multiMatrixTable[(currPrimitive.points[m].matrixIndex//3)]  # fixed
 
@@ -641,6 +662,8 @@ class BModel:
             fstartPoint = Vector(fstartPoint.xzy)
             fstartPoint.y *= -1
 
+
+
             bone = PBones.Pseudobone(parentBone, f, effP,
                                      fstartPoint,
                                      fstartPoint+Vector((0, self.params.boneThickness, 0)))
@@ -678,7 +701,7 @@ class BModel:
                 t.index = n.index
                 sg.children.append(t)
             else:
-                print("buildSceneGraph(): unexpected node type %d", n.type, file=sys.stderr)
+                log.warning("buildSceneGraph(): unexpected node type %d", n.type)
             i += 1
 
         # note: this code can only be reached by the top level function,
@@ -688,7 +711,7 @@ class BModel:
             return sg.children[0]
         else:
             sg.type = sg.index = -1
-            print("buildSceneGraph(): Unexpected size %d", len(sg.children), file=sys.stderr)
+            log.warning("buildSceneGraph(): Unexpected size %d", len(sg.children))
         return 0
 
     def DrawScenegraph(self, sg, parentMatrix, onDown=True, matIndex=0):
@@ -698,7 +721,7 @@ class BModel:
 
         n = sg
 
-        if n.type == 0x10:  # -joint
+        if n.type == 0x10:  # joint
             self.jnt.matrices[n.index] = Mat44.updateMatrix(self.jnt.frames[n.index], effP)  # XCX update matrix needed?
             effP = self.jnt.matrices[n.index]  # setup during CreateFrameNodes
             self.jnt.frames[n.index].incr_matrix = effP
@@ -707,18 +730,21 @@ class BModel:
             matIndex=n.index
 
             # build material (old version)
-            #matName = self._mat1.stringtable[n.index]
+            try:
+                if not self.params.use_nodes:
+                    mat = self._mat1.materials[self._mat1.indexToMatIndex[n.index]]  # corrected *2
+                    self._currMaterial = MatH.build_material(self, self._mat1, mat, self.tex)
+                    # material build, first version
+                else:
+                    mat = self._mat1V2.materials[self._mat1V2.indexToMatIndex[n.index]]
+                    self._currMaterial = Mat3V2.create_material(mat)
+            except Exception as err:
+                log.warning('Material not built correctly (error is %s)', err)
+                self._currMaterial = None
+            finally:
+                onDown = (mat.flag == 1)
 
-            if not self.params.use_nodes:
-                mat = self._mat1.materials[self._mat1.indexToMatIndex[n.index]]  # corrected *2
-                self._currMaterial = MatH.build_material(self, self._mat1, mat, self.tex,
-                                                    self._images, self.ExtractImages)  # material build, first version
-            else:
-                mat = self._mat1V2.materials[self._mat1V2.indexToMatIndex[n.index]]
-                self._currMaterial = Mat3V2.create_material(mat)
 
-
-            onDown = mat.flag == 1
             if self._currMaterial is not None:  # mat.texStages[0] != 0xffff:  # do it if any texture has been made
                 # XCX is that the good condition?
                 if self.params.use_nodes:
@@ -740,26 +766,33 @@ class BModel:
             self.DrawBatch(n.index, matIndex)  # fixed
 
     def DrawScene(self):
-        print("DrawScene : ", time())
+        log.debug("DrawScene point reached")
 
-        sg = Inf1.SceneGraph()  # prepare scenegraph
-        sg = self.buildSceneGraph(self.inf, sg)
-        self.model = ModelRepresentation()
-        rootBone = self.CreateBones(sg, Matrix.Identity(4), None)
-        # remove dummy root bone:
-        print("frame node created", time())
-        # -- FIX: Force create bone option allows to generate bones independently of their count
-        if len(rootBone.children) == 1 and len(rootBone.children[0].children) == 0 and \
-                                                                        not self.params.forceCreateBones:
-            self.params.createBones = False
-        origWorldBonePos = None
+        try:
+            sg = Inf1.SceneGraph()  # prepare scenegraph
+            sg = self.buildSceneGraph(self.inf, sg)
+            self.model = ModelRepresentation()
+            rootBone = self.CreateBones(sg, Matrix.Identity(4), None)
+            # remove dummy root bone:
+            log.debug("frame node created")
+            # -- FIX: Force create bone option allows to generate bones independently of their count
+            if len(rootBone.children) == 1 and len(rootBone.children[0].children) == 0 and \
+                                                                            not self.params.forceCreateBones:
+                self.params.createBones = False
+            origWorldBonePos = None
+        except Exception as err:
+            log.critical('Scenegraph (mesh description) is bad. stopping... (error is %s)', err)
+            raise
 
-        if self.params.use_nodes:
-            self._mat1V2.convert(self.tex, self._texturePath)  # + self.params.texturePrefix)
-        # prepare material nodes
+        try:
+            if self.params.use_nodes:
+                self._mat1V2.convert(self.tex, self._texturePath, '.'+self.params.imtype.lower())
+                # + self.params.texturePrefix)
+                # prepare material nodes
+        except Exception as err:
+            log.warning('node (GLSL) materials went wrong. They will be missing. (error is %s)', err)
 
         if self.params.createBones:
-            #self._bones = rootFrameNode.CreateBones(self.params.boneThickness, "")
             self._bones = rootBone.tree_to_array()
 
             origWorldBonePos = self._bones[0].position  # fixed
@@ -770,16 +803,19 @@ class BModel:
             d.rotate(Euler((90, 0, 0), 'XZY'))
         i = Matrix.Identity(4)
 
-        self.DrawScenegraph(sg, i)
-        modelMesh = self.BuildSingleMesh()
-
-        #if self.params.createBones:  # XCX is this needed?
-        #    try:
-        #        os.mkdir(self._bmdDir + "\\Animations")
-        #    except FileExistsError: pass
+        try:
+            self.DrawScenegraph(sg, i)
+        except Exception as err:
+            log.critical('Mesh description in scene graph is nonsensical. (error is %s)', err)
+            raise
+        try:
+            modelMesh = self.BuildSingleMesh()
+        except Exception as err:
+            log.critical('mesh couldn\'t be built (error is %s)', err)
+            raise
 
         if self.params.createBones and self.params.loadAnimations:
-            print("animations: ", time())
+            log.debug("animations: ")
             animationCount = 1  # default pose at frame 0
 
             startFrame = 1
@@ -796,26 +832,33 @@ class BModel:
                 bckFiles += MaxH.getFiles(self._bmdDir + bckPath)
             for f in bckFiles:
                 bckFileName = MaxH.getFilenameFile(f)
-                # savePath = self._bmdDir + "Animations\\" + bckFileName + ".anm"
-
-                # saveMaxAnimName = self._bmdDir + bckFileName + ".max"  # -- .chr?
                 b = Bck.Bck_in()
-                b.LoadBck(f, len(self._bones))
+                try:
+                    b.LoadBck(f, len(self._bones))
+                except Exception as err:
+                    log.warning('an animation file was corrupted. (error is %s)', err)
+                    continue
+
                 if not len(b.anims):
                     # file loader already knows that it won't fit
                     errMsg += bckFileName + "\n"
                 else:
                     if self.params.animationType == 'SEPARATE':
-                        b.AnimateBoneFrames(1, self._bones, 1, self.params.includeScaling)
-                        action = PBones.apply_animation(self._bones, self.arm_obj, self.jnt.frames, bckFileName)
-                        for com in self._bones:
-                            com.position_kf = {}
-                            com.position_tkf = {}
-                            com.rotation_kf = {}
-                            com.rotation_tkf = {}
-                            com.scale_kf = {}
-                            com.scale_tkf = {}
-                        bpy.context.scene.frame_end = startFrame + b.animationLength + 100
+                        try:
+                            b.AnimateBoneFrames(1, self._bones, 1, self.params.includeScaling)
+                            action = PBones.apply_animation(self._bones, self.arm_obj, self.jnt.frames, bckFileName)
+                        except Exception as err:
+                            log.warning('animation file doesn\'t apply as expected (error is %s)', err)
+                            continue
+                        finally:
+                            for com in self._bones:
+                                com.position_kf = {}
+                                com.position_tkf = {}
+                                com.rotation_kf = {}
+                                com.rotation_tkf = {}
+                                com.scale_kf = {}
+                                com.scale_tkf = {}
+                        bpy.context.scene.frame_end = startFrame + b.animationLength + 5
                         # (create space to insert strip)
                         try:
                             track.strips.new(bckFileName+'_strip', startFrame, action)
@@ -831,7 +874,11 @@ class BModel:
                         # add action to NLA compilation
 
                     elif self.params.animationType == 'CHAINED':
-                        b.AnimateBoneFrames(startFrame, self._bones, 1, self.params.includeScaling)
+                        try:
+                            b.AnimateBoneFrames(startFrame, self._bones, 1, self.params.includeScaling)
+                        except Exception as err:
+                            log.warning('Animation file doesn\'t apply as expected (error is %s)', err)
+                            continue
                     numberOfFrames = b.animationLength
                     if b.animationLength <= 0:
                         numberOfFrames = 1
@@ -844,16 +891,19 @@ class BModel:
             if self.params.animationType == 'CHAINED':
                 bpy.context.scene.frame_start = 0
                 bpy.context.scene.frame_end = startFrame
-                PBones.apply_animation(self._bones, self.arm_obj, self.jnt.frames)
+                try:
+                    PBones.apply_animation(self._bones, self.arm_obj, self.jnt.frames)
+                except Exception as err:
+                    log.warning('Animation doesn\'t apply as expected. Change animation importation parameters'
+                                'to isolate faulty file (error is %s)', err)
 
             elif self.params.animationType == 'SEPARATE':
                 self.arm_obj.animation_data.action = None
 
     def ExtractImages(self, force=False):
                 
-        imageType = ".tga"
+        imageExt = '.' + self.params.imtype.lower()
 
-        bmdViewExe = self._bmdViewPathExe + "BmdView.exe"
         bmdPath = MaxH.getFilenamePath(self._bmdFilePath) + MaxH.getFilenameFile(self._bmdFilePath)
         try:
             os.mkdir(bmdPath)
@@ -863,37 +913,24 @@ class BModel:
             os.mkdir(self._texturePath)
         except FileExistsError:
             pass
-        # -- if no tga files are found then extract the
-        tgaFiles = MaxH.getFiles(self._texturePath + "*.tga")
-        ddsFiles = MaxH.getFiles(self._texturePath + "*.dds")
 
-        self._images = tgaFiles+ddsFiles
-
-        # -- cannot use shellLaunch because it doesn't wait for a return value
-        # -- don't use DOSCommand. Doesn't support spaces in full exe path. e.g. C:Program files\
-        # -- if using version before 2008 then use DOSCommand and set BmdView.exe into a known path
+        self._images = MaxH.getFiles(self._texturePath + "\\*" + imageExt)
 
         if len(self._images) == 0 or force:
-            self.TryHiddenDOSCommand("BmdView.exe",
-                                     [self._bmdFilePath, self._texturePath],
+            self.TryHiddenDOSCommand("BmdView",
+                                     [self._bmdFilePath, self._texturePath, self.params.imtype],
                                      self._bmdViewPathExe)
-
-        ddsFiles = MaxH.getFiles(self._texturePath + "*.dds")
-        # -- create tga file and delete dds file
-        for f in MaxH.getFiles(self._texturePath + "*.dds"):
-            TexH.addforcedname(f, f[:-4]+'.tga')
 
         # TODO: need to update BmdView.exe to process all file formats like BmdView2
         errorMessage = "Error generating dds / tga image file(s).\
                        Use BmdView2 to export the missing tga file(s)\
                        then delete the *.ERROR file(s) and run the importer again"
-        errorFiles = MaxH.getFiles(self._texturePath + "*.ERROR")
+        errorFiles = MaxH.getFiles(self._texturePath + "\\*.ERROR")
         for f in errorFiles:
             errorMessage += f + "\n"  # report file
-            MaxH.newfile(f[:-6]+'.dds')  # and avoid crashes in the future
-            TexH.addforcedname(f, f[:-4] + '.tga')
+            MaxH.newfile(f[:-6] + imageExt)  # and avoid crashes in the future
         if len(errorFiles) != 0:
-            MaxH.MessageBox(errorMessage)
+            log.warning(errorMessage)
             return False
 
         return True
@@ -951,38 +988,46 @@ class BModel:
         print("</TextureAnimation>", file=fBTP)
         fBTP.close()
 
-    def Import(self, filename, boneThickness, allowTextureMirror, forceCreateBones, loadAnimations, exportTextures,
-               exportType, includeScaling, imtype, dvg, use_nodes=False):
+    def Import(self, filename, use_nodes, imtype, packTextures, allowTextureMirror, loadAnimations, includeScaling,
+               forceCreateBones, boneThickness, dvg):
         self.params = Prog_params(filename, boneThickness, allowTextureMirror, forceCreateBones,
                                   loadAnimations != 'DONT', loadAnimations,
-                                  exportTextures, exportType, includeScaling, imtype, dvg, use_nodes)
+                                  packTextures,  includeScaling, imtype, dvg, use_nodes)
 
         self._bckPaths.append("..\\..\\bck\\*.bck")
         self._bckPaths.append("..\\..\\bcks\\*.bck")
         self._bckPaths.append("..\\..\\scrn\\*.bck")
 
-        TexH.MODE = self.params.imtype
+        TexH.MODE = self.params.packTextures
         TexH.textures_reset()  # avoid use of potentially deleted data
 
         # print(filename)
-        self.LoadModel(filename)
+        try:
+            self.LoadModel(filename)
+        except Exception as err:
+            log.critical('Could not load bmd file: looks corrupted (error is %s)', err)
+            raise
 
         bmdPath = "".join(OSPath.splitext(self._bmdFilePath)) + "\\"  # generates dir name from file name?
         try:
             os.mkdir(bmdPath)
         except FileExistsError:
             pass
-        try:
-            os.mkdir(self._texturePath)
-        except FileExistsError:
-            pass
 
         #  XCX this should not be needed vvv
         # if (not exportTextures) or (exportTextures and self.ExtractImages()):
         if True:
-            self.ExtractImages()
+            try:
+                self.ExtractImages()
+            except Exception as err:
+                log.warning('Could not extract images. This could be the cause of a plugin crash'
+                            ' later on (error is %s)', err)
             self.DrawScene()
-        self.CreateBTPDataFile()
+
+        try:
+            self.CreateBTPDataFile()
+        except Exception as err:
+            log.warning('couldn\'t export BTP animations into xml files. Model should beave normally nevertheless')
 
     def __del__(self):
         if self._bones:

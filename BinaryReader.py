@@ -2,6 +2,8 @@
 import os
 from .maxheader import MessageBox, newfile
 from array import array
+import logging
+log = logging.getLogger('bpy.ops.import_mesh.bmd.fileIn')
 
 def bitshiftu8(val, shifter):
     if val // 256:
@@ -108,7 +110,7 @@ class CompressedStream:
             try:
                 self.cursor += decodeBlock(self.cf, self.uf)
             except Exception as err:
-                print("EOF!!!", err)
+                log.warning("reached compressed stream EOF: %s", err)
         return self.uf.read(length)
 
     def close(self):
@@ -275,7 +277,7 @@ class BinaryReader:
         self._f.seek(0)
         self.filesz = os.stat(self._f.fileno()).st_size
         if self._f is None:
-            MessageBox("Unable to open file " + srcPath)
+            log.fatal("Unable to open file " + srcPath)
             raise ValueError("Unable to open file " + srcPath)
 
         tag = self.ReadFixedLengthString(4)
@@ -355,7 +357,7 @@ class BinaryReader:
         w2 = ord(self._f.read(1))
         w = (w1 << 8) | w2  # -- w = (w1 << 8) | w2;
         if w < 0:
-            MessageBox("ReadWORD should be unsigned")
+            log.fatal("ReadWORD should be unsigned")
             raise ValueError("ReadWORD should be unsigned")
         return w
 

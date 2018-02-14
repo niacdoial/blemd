@@ -1,19 +1,20 @@
 import bpy
 import bpy_extras
 import mathutils
-from .maxheader import getFilenameFile
+from .maxheader import getFilenameFile, stdout_redirected
+import logging
+log = logging.getLogger('bpy.ops.import_mesh.bmd.texhelper')
 
 
 imported_tslots = {}
 imported_textures = {}
-force_names = {}
 
 DIFFUSE = 'DIFFUSE'
 ALPHA = 'ALPHA'
 SPECULAR = 'SPECULAR'
 
 # used to set mode before calls
-MODE = 'PACKED'
+MODE = 'DO'
 
 
 def textures_reset():
@@ -24,7 +25,11 @@ def textures_reset():
 
 def getTexImage(mat, fname):
     global imported_tslots
-    return imported_tslots[mat][fname].image
+    try:
+        return imported_tslots[mat][fname].image
+    except Exception as err:
+        log.warning('Could not find desired image (%s ; %s)  in database', mat, fname)
+        return None
 
 
 def getTexSlot(mat, fname):
@@ -33,28 +38,26 @@ def getTexSlot(mat, fname):
             if com.texture == imported_tslots[mat][fname]:
                 return com
 
-def newtex_tex(fname, _loaded_images=[], export_function=(lambda: None)):
+def newtex_tex(fname):
     global forced_names
     global imported_textures
     global MODE
     if fname in imported_textures.keys():
         return imported_textures[fname]
 
-    if fname in force_names.keys():
-        img = force_names[fname]
-    else:
-        # if fname not in _loaded_images:  # XCX is this useless?
-        #    export_function(force=True)
-        img = bpy.data.images.load(fname)
-    if MODE == 'PACKED':
-        img.pack()
-    elif MODE == 'AS_PNG':
-        img.pack(as_png=True)
-    elif MODE == 'TARGA':
-        tgaconvert(img)
     tex = bpy.data.textures.new(getFilenameFile(fname) + '_texture', type='IMAGE')
+    try:
+        img = bpy.data.images.load(fname)
+        if MODE == 'DO':
+            img.pack()
+        elif MODE == 'PNG':
+            img.pack(as_png=True)
+        #elif MODE == 'TARGA':
+        #    tgaconvert(img)
+        tex.image = img
+    except Exception as err:
+        log.warning('Problem with image %s (error is %s)', fname, err)
 
-    tex.image = img
     tex.use_interpolation = True
     tex.filter_type = 'EWA'
     tex.filter_size = 1
@@ -63,14 +66,14 @@ def newtex_tex(fname, _loaded_images=[], export_function=(lambda: None)):
     imported_textures[fname] = tex
     return tex
 
-def newtex_tslot(fname, type, mat, _loaded_images=[], export_function=(lambda: None)):
+def newtex_tslot(fname, type, mat):
     global imported_tslots
     if mat in imported_tslots.keys() and fname in imported_tslots[mat].keys():
         tex = imported_tslots[mat][fname]
         matslot = getTexSlot(mat, fname)
     else:
         mat.name = getFilenameFile(fname)+'_material'
-        tex = newtex_tex(fname, _loaded_images, export_function)
+        tex = newtex_tex(fname)
         matslot = mat.texture_slots.add()
         matslot.texture = tex
         matslot.texture_coords = 'UV'
@@ -91,64 +94,11 @@ def newtex_tslot(fname, type, mat, _loaded_images=[], export_function=(lambda: N
         matslot.use_map_color_spec = True
 
 
-def tgaconvert(img):
-    img.pack()
-    img.filepath_raw = img.filepath_raw[:-3]+'tga'
-    img.file_format = 'TARGA'
-    img.packed_files[0].filepath = img.packed_files[0].filepath[:-3]+'tga'
-    img.unpack(method='WRITE_ORIGINAL')
-
-
 def showTextureMap(mat):
     for num, com in enumerate(mat.texture_slots):
         if com is not None:
             if com.texture.type == 'IMAGE':
                 mat.use_textures[num] = True
-
-
-def newUVlayer_old(mesh, tverts, tfaces, Faces, tv_to_f_v):
-    # probably one of the hardest functions to fathom.
-    #it's goal is to set the right UV coords to the right UV point.
-    # with the fact that most verts had changed index between steps. gah.
-
-    num = len(mesh.uv_textures)
-    mesh.uv_textures.new()
-    uvtex = mesh.uv_layers[num]
-    uvtex.name = 'UV '+str(len(mesh.uv_layers)-1)
-    # '-1' because count takes the new layer in account and index starts at 0
-
-    # ##--meshop.setNumMapVerts modelMesh uv tverts[uv].count
-
-    # verts in Faces and mesh.polygons are aligned
-    # so are the face of Faces and tFaces
-
-    #verts are aligned. are faces too?
-    f_to_rf = [None]*len(mesh.polygons)  # blender faces index to loaded faces index
-    for num, com in enumerate(mesh.polygons):  # will be identity _MOST_ of the time
-        index = Faces.index(tuple(com.vertices))
-        while f_to_rf[index] is not None:
-            index = Faces.index(tuple(com.vertices), index+1)
-        f_to_rf[index] = num
-    # -- TODO: should never have undefined texture faces
-    #for f, rf in enumerate(f_to_rf):
-    #    f_to_l[f] = rf_to_l[rf]
-    #    rf_to_tf[rf] = f  # f_to_tf[f]
-        # rf_to_v = [com.vertices for com in mesh.polygons]
-    v_rf_to_l = []
-    for com in range(len(mesh.vertices)):
-        v_rf_to_l.append({})
-    for num, com in enumerate(mesh.polygons):
-        for com2 in com.loop_indices:
-            l_id = mesh.loops[com2].index
-            v_rf_to_l[mesh.loops[com2].vertex_index][num] = l_id
-
-    # those lines are a new method.
-    for num, com0 in enumerate(tv_to_f_v):
-        for com in com0:
-            if f_to_rf[com[0]] is not None:
-                for com2 in mesh.polygons[f_to_rf[com[0]]].loop_indices:
-                    if mesh.loops[com2].vertex_index == com[1]:
-                        uvtex.data[com2].uv = mathutils.Vector(tverts[num][:2])
 
 
 def newUVlayer(mesh, representation, uv_id):
@@ -164,13 +114,4 @@ def newUVlayer(mesh, representation, uv_id):
         if com.UVs[uv_id] is not None:
             uvtex.data[num].uv = com.UVs[uv_id][0:2]
         # else, will be zero
-
-
-def addforcedname(real, fake):
-    global force_names
-    if fake in force_names.keys():
-        return
-    img = bpy.data.images.load(real)
-    img.pack()
-    force_names[fake] = img
 
