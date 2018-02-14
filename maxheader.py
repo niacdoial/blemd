@@ -5,7 +5,9 @@ from time import sleep
 import subprocess
 import sys
 from contextlib import contextmanager
+import logging
 
+log = logging.getLogger('bpy.ops.import_mesh.bmd.maxH')
 
 IDE = False  # is changed by test launcher
 
@@ -51,7 +53,7 @@ def active_object(obj):
 
 
 def MessageBox(string):
-    print(string, file=sys.stderr, end='')
+    log.warning(string)
     if IDE:
         input('press any key to continue')
         return
@@ -72,6 +74,15 @@ def ReverseArray(inputArray):
 
 
 def HiddenDOSCommand(exefile, args, startpath=os.getcwd()):
+	# this is the function to edit to adapt the program for non-windows platforms
+	# just add an 'elif' to the  if/else block below, in which `exefile` is adapted
+	# (from 'path/to/bmdview' to 'path/to/bmdview.exe' in this example)
+	
+    if sys.platform[:3].lower() == "win":  # windows: use EXE
+        exefile += '.exe'
+    else:
+        raise RuntimeError('For now, image extraction only works on windows')
+
     if not os.path.isabs(exefile):
         exefile = os.path.abspath(startpath + exefile)
 
@@ -86,7 +97,7 @@ def HiddenDOSCommand(exefile, args, startpath=os.getcwd()):
 
 def DosCommand(cmd):
     temp = subprocess.check_output(cmd, stderr=subprocess.STDOUT).decode()
-    print(temp)
+    log.info("subprocess output %s", temp)
     # shell output in bytes
 
 

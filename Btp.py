@@ -1,6 +1,7 @@
 #! /usr/bin/python3
 from .BinaryReader import BinaryReader
-from .maxheader import MessageBox
+import logging
+log = logging.getLogger('bpy.ops.import_mesh.bmd.btp')
 
 
 class TptHeader:
@@ -127,7 +128,7 @@ class Btp:
         if tag == "TPT1":
             self.LoadData(br)
         else:
-            MessageBox("readBck(): Unsupported section " + tag)
+            log.warning("readBck(): Unsupported section " + tag)
             raise ValueError("readBck(): Unsupported section " + tag)
         br.SeekSet(pos)
         # ) while not EOF br._f

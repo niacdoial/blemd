@@ -1,5 +1,7 @@
 #! /usr/bin/python3
 from .maxheader import MessageBox
+import logging
+log = logging.getLogger('bpy.ops.import_mesh.bmd.shp1')
 
 
 class ShpIndex:
@@ -64,11 +66,11 @@ class ShpPacket:
                         if attribs[k].dataType == 1:  # -- s8
                             val = br.GetByte()
                             readBytes += 1
-                        elif attribs[k].dataType == 3: # -- s16
+                        elif attribs[k].dataType == 3:  # -- s16
                             val = br.ReadWORD()
                             readBytes += 2
                         else:
-                            MessageBox("X shp1: got invalid data type in packet. should never happen because dumpBatch() should check this before calling dumpPacket()")
+                            log.warning("X shp1: got invalid data type in packet. should never happen because dumpBatch() should check this before calling dumpPacket()")
                             raise ValueError("ERROR")
 
                         # -- set appropriate index
@@ -286,7 +288,7 @@ class Shp1:
         for i in range(len(attribs)):
             if attribs[i].dataType not in (1, 3):
                 # --print "Warning: shp1, dumpBatch(): unknown attrib data type %d, skipping batch"
-                MessageBox("Warning: shp1, dumpBatch(): unknown attrib data type %d, skipping batch")
+                log.warning("shp1, dumpBatch(): unknown attrib data type %d, skipping batch")
                 return None
 
             if attribs[i].attrib == 0:
@@ -300,7 +302,7 @@ class Shp1:
             elif attribs[i].attrib >= 0xd and attribs[i].attrib <= 0x14:
                 dst.attribs.hasTexCoords[(attribs[i].attrib - 0xd)] = True  # fixed
             else:
-                print("Warning: shp1, dumpBatch(): unknown attrib %d in batch, it might not display correctly")
+                log.warning("shp1, dumpBatch(): unknown attrib %d in batch, it might not display correctly")
                 # -- return; //it's enough to warn
         # -- end for i=1 to attribs.count do
 

@@ -1,6 +1,8 @@
 from mathutils import Color, Vector
-from math import log2
+import os.path as OSPath
 from .texhelper import newtex_tex
+import logging
+log = logging.getLogger('bpy.ops.import_mesh.bmd.matpipeline')
 import bpy
 
 class Holder:
@@ -407,6 +409,8 @@ class MaterialSpace:
 
         self.flag = 0  # scenegraph use
 
+        self.material = None  # used for mat sys that are used several times
+
     # those functions are used for node computation
     def getRegFromId(self, id):
         if id == 0:
@@ -471,7 +475,7 @@ class MaterialSpace:
                 val = (8-konst)/8
                 return Node(data=Color((val,val,val)))
             elif konst < 0xc:
-                print("getColorOp(): unknown konst", hex(konst))
+                log.warn("getColorOp(): unknown konst %x", konst)
                 return Node(data=Color((1,0,0)))
 
             konst -= 0xc
@@ -488,7 +492,7 @@ class MaterialSpace:
                 return Node('get_3b', var)
         else:
             if op != 15:
-                print("Unknown colorIn", op)
+                log.warning("Unknown colorIn %d", op)
             return Node(data=Color((0, 0, 0)))
 
     def getAlphaIn(self, op, konst, info):
@@ -508,7 +512,7 @@ class MaterialSpace:
             if konst <= 7:
                 return Node(data=(8-konst)/8)
             elif konst < 0x10:
-                print("getColorOp(): unknown konst", hex(konst))
+                log.warn("getColorOp(): unknown konst %x", konst)
                 return Node(data=0.0)
             konst -= 0x10
             var = self.konsts[(konst % 4) * 2]
@@ -539,7 +543,7 @@ class MaterialSpace:
                 ret = Node(data=val)
             ret = dest + ret
         else:
-            print("getMods(): unknown bias", bias)
+            log.warning("getMods(): unknown bias %d", bias)
             if type == 1:
                 ret = Node(data=Color((0,0,0)))
             else:
@@ -554,7 +558,7 @@ class MaterialSpace:
         elif scale == 3:
             ret *= (Node('triple', Node(data=0.5)), 0.5)[type]
         else:
-            print("getMods(): unknown scale", scale)
+            log.warning("getMods(): unknown scale %d", scale)
 
         if clamp:
             ret = Node('clamp', ret)
@@ -574,7 +578,7 @@ class MaterialSpace:
                 dest.data = ins[3] + dest.data
             else:
                 dest.data = ins[3] - dest.data
-                print("getOp(): op 1 might not work")
+                log.warning("getOp(): op 1 might not work")
 
             dest.data = self.getMods(dest.data, bias, scale, clamp, type)
             return
@@ -615,7 +619,7 @@ class MaterialSpace:
 
                 #out << getMods(dest, 0, scale, clamp, type);
                 if(bias != 3 or scale != 1 or clamp != 1):
-                   print("getOp() comp0: unexpected bias %d, scale %d, clamp %d"% (bias, scale, clamp))
+                    log.warning("getOp() comp0: unexpected bias %d, scale %d, clamp %d", bias, scale, clamp)
 
                 dest.data=None
                 return
@@ -635,13 +639,13 @@ class MaterialSpace:
 
                 # out << getMods(dest, 0, scale, clamp, type)
                 if bias != 3 or scale != 1 or clamp != 1:
-                  print("getOp() comp0: unexpected bias %d, scale %d, clamp %d" % (bias, scale, clamp))
+                    log.warning("getOp() comp0: unexpected bias %d, scale %d, clamp %d", bias, scale, clamp)
 
                 return
             # //TODO: gnd.bdl uses 0xe on type == 0
 
         else:
-            print("getOp(): unsupported op", op)
+            log.warning("getOp(): unsupported op %d", op)
             if type == 0:
               dest.data = None  # " = vec3(0., 1., 0.); //(unsupported)";
             else:
@@ -688,18 +692,18 @@ def writeTexGen(material, texGen, i, matbase, mat3):
             dst = Node(data=1)  #(texGen.matrix - 0x1e)/3)  # XCX get the right matrix
             # XCX trap: do not set this node with this value: act as multiplier right now
         else:
-            print("writeTexGen() type "+str(texGen.texGenType)+": unsupported matrix"+hex(texGen.matrix))
+            log.warning("writeTexGen() type %s: unsupported matrix %x", texGen.texGenType, texGen.matrix)
 
         if (texGen.texGenSrc >=4 and texGen.texGenSrc <=11):
             dst = dst*Node(data='uv'+str(texGen.texGenSrc-4))
         elif texGen.texGenSrc == 0:
-            print("writeTexGen() type 0: Found src 0, might not yet work (use transformed or untransformed pos?)")
+            log.warning("writeTexGen() type 0: Found src 0, might not yet work (use transformed or untransformed pos?)")
             dst = dst*Node(data='pos')
         elif texGen.texGenSrc == 1:
-            print("writeTexGen() type 0: Found src 1, might not yet work (use transformed or untransformed normal?)")
+            log.warning("writeTexGen() type 0: Found src 1, might not yet work (use transformed or untransformed normal?)")
             dst = dst*Node(data='nor')
         else:
-            print("writeTexGen() type %d: unsupported src 0x%x", texGen.texGenType, texGen.texGenSrc)
+            log.warning("writeTexGen() type %d: unsupported src 0x%x", texGen.texGenType, texGen.texGenSrc)
             dst = Node(data=Vector((0,0,0)))  # "null" vector
 
         # dirty hack(doesn't work with animations for example) (TODO):
@@ -713,11 +717,11 @@ def writeTexGen(material, texGen, i, matbase, mat3):
 
     elif texGen.texGenType == 0xa:
         if (texGen.matrix != 0x3c):
-            print("writeTexGen() type 0xa: unexpected matrix", hex(texGen.matrix))
+            log.warning("writeTexGen() type 0xa: unexpected matrix %x", texGen.matrix)
         if (texGen.texGenSrc != 0x13):
-            print("writeTexGen() type 0xa: unexpected src", hex(texGen.texGenSrc))
+            log.warning("writeTexGen() type 0xa: unexpected src %x", texGen.texGenSrc)
 
-        print("writeTexGen(): Found type 0xa (SRTG), doesn't work right yet")
+        log.warning("writeTexGen(): Found type 0xa (SRTG), doesn't work right yet")
 
         #// t << "sphereMap*vec4(gl_NormalMatrix*gl_Normal, 1.0)";
 
@@ -731,13 +735,13 @@ def writeTexGen(material, texGen, i, matbase, mat3):
         #// out << "  " << dest << " = vec4(0.0, 0.0, 0.0, 0.0); //(unsupported)\n";
         #out << "  " << dest << " = color; //(not sure...)\n";
     else:
-        print("writeTexGen: unsupported type", hex(texGen.texGenType))
+        log.warning("writeTexGen: unsupported type %x", hex(texGen.texGenType))
         #out << "  " << dest << " = vec4(0.0, 0.0, 0.0, 0.0); //(unsupported texgentype)\n"
 
     material.texcoords[i] = dst
 
 
-def createMaterialSystem(index, mat3, tex1, texpath):
+def createMaterialSystem(index, mat3, tex1, texpath, extension):
     # ## vertex shader part: ###########
     currMat = mat3.materialbases[index]
     material = MaterialSpace()
@@ -768,7 +772,7 @@ def createMaterialSystem(index, mat3, tex1, texpath):
         if currMat.texStages[i] != 0xffff:
             texId = mat3.texStageIndexToTextureIndex[currMat.texStages[i]]
             currTex =tex1.texHeaders[texId]
-            material.textures[i] = Sampler(texpath+tex1.stringtable[texId]+'.tga')
+            material.textures[i] = Sampler(OSPath.join(texpath, tex1.stringtable[texId] + extension))
             material.textures[i].setTexWrapMode(currTex.wrapS, currTex.wrapT)  # XCX set min/mag filters
 
     # konst colors
@@ -780,7 +784,7 @@ def createMaterialSystem(index, mat3, tex1, texpath):
 
         if (konstColor > 7 and konstColor < 0xc
            or konstAlpha > 7 and konstAlpha < 0x10):
-            print("createFragmentShaderString: Invalid color sel")
+            log.warning("createFragmentShaderString: Invalid color sel")
             continue  # should never happen
 
         if (konstColor > 7
@@ -842,6 +846,7 @@ def createMaterialSystem(index, mat3, tex1, texpath):
 
 MIX_GROUP_NODETREE_C = None
 MIX_GROUP_NODETREE_A = None
+
 def get_mixgroup(type):
     global MIX_GROUP_NODETREE_C
     global MIX_GROUP_NODETREE_A

@@ -5,6 +5,8 @@ from .maxheader import MessageBox
 from .pseudobones import getBoneByName, Pseudobone, cubic_interpolator
 import mathutils
 import bpy
+import logging
+log = logging.getLogger('bpy.ops.import_mesh.bmd.bck')
 from math import nan, pi, isnan, ceil, isclose, floor
 
 
@@ -381,7 +383,7 @@ class Bck_in:
             # --TODO: biawatermill01.bck doesn't work, so the "zero"
             # --value is obviously something important
         if index.count <= 0:
-            print("Warning: readComp(): count is <= 0")
+            log.warning("readComp(): count is <= 0")
         elif index.count == 1:
             dst.append(None)
             dst[0] = BckKey()  # fixed 4 lines

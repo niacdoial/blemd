@@ -34,7 +34,7 @@ def add_err_material(obj):
     return mat
 
 
-def build_material(bmodel, mat1, material, tex, _images, ExtractImages):
+def build_material(bmodel, mat1, material, tex):
 
     currMaterial = None  # materials may not be defined
     stage = material.texStages[0]  # XCX multiples textures
@@ -53,7 +53,7 @@ def build_material(bmodel, mat1, material, tex, _images, ExtractImages):
         bmpFound = OSPath.exists(fileName) or OSPath.exists(fileName[:-4] + '.dds')  # two image types!
 
         # -- messageBox fileName
-        newtex_tslot(fileName, 'DIFFUSE', currMaterial, _images, ExtractImages)
+        newtex_tslot(fileName, 'DIFFUSE', currMaterial)
         img = getTexImage(currMaterial, fileName)
 
         # --gc()
@@ -73,7 +73,7 @@ def build_material(bmodel, mat1, material, tex, _images, ExtractImages):
 
         if hasAlpha:
             # self._currMaterial.twoSided = True # -- anything with alpha is always two sided?
-            newtex_tslot(fileName, 'ALPHA', currMaterial, _images, ExtractImages)
+            newtex_tslot(fileName, 'ALPHA', currMaterial)
 
         showTextureMap(currMaterial)  # -- display self.texture in view
 

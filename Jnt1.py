@@ -2,6 +2,8 @@
 from .maxheader import MessageBox
 from mathutils import Vector
 from math import pi
+import logging
+log = logging.getLogger('bpy.ops.import_mesh.bmd.jnt1')
 
 class Jnt1Header:
     def __init__(self):  # GENERATED!
@@ -99,7 +101,7 @@ class Jnt1:
 
 
         if len(stringTable) != header.count :
-            MessageBox("jnt1: number of strings doesn't match number of joints")
+            log.warning("jnt1: number of strings doesn't match number of joints")
             raise ValueError("jnt1: number of strings doesn't match number of joints")
 
 

@@ -2,6 +2,8 @@
 from mathutils import Vector
 from .maxheader import MessageBox
 import mathutils
+import logging
+log = logging.getLogger('bpy.ops.import_mesh.bmd.vtx1')
 
 
 class VertColor:
@@ -17,7 +19,7 @@ class VertColor:
         pass
 
     def SetRGBA(self, ri, gi, bi, ai):
-        MessageBox("useless func!")
+        log.debug("useless func!")
         # -- TODO
         # --self.r = (unsigned char)(ri + .5f);
         # --self.g = (unsigned char)(gi + .5f);
@@ -186,7 +188,7 @@ class Vtx1:
             # --messageBox "Vtx1: af.dataType == 5. NYI"
 
         else:
-            MessageBox("vtx1: unknown array data type %d" %af.dataType)
+            log.warning("unknown array data type %d", af.dataType)
 
         # --print "DATA: "
         # --print data
@@ -204,14 +206,14 @@ class Vtx1:
                     pos = Vector((data[k], data[k+1], 0))
                     self.positions.append(pos)
                     k += 2
-                MessageBox("Vtx1: DT %d %d. Needs testings"%(af.dataType, af.componentCount))
+                log.info("DT %d %d. Needs testings", af.dataType, af.componentCount)
 
             elif af.componentCount == 1:  # -- xyz
 
                 self.positions = []
                 posCount = len(data) / 3
                 if int(posCount) != posCount:
-                    print("wouldhaveraised_pos ({} is not *3)".format(len(data)))
+                    log.info("wouldhaveraised_pos (%d is not *3)", len(data))
                     for com in range(int(posCount - int(posCount)*3)):
                         data.append(None)
                 #raise ValueError('invalid posCount (length not *3)')
@@ -236,14 +238,14 @@ class Vtx1:
             # --messagebox (format "DT % %" af.dataType af.componentCount)
 
             else:
-                MessageBox("vtx1: unsupported componentCount for self.positions array")
+                log.warning("unsupported componentCount for self.positions array")
                 # --messageBox (format "vtx1: unsupported componentCount for self.positions array: %" af.componentCount)
 
         elif af.arrayType == 0xa:  # -- normals TODO: Test [0xa=10]
             if af.componentCount == 0:  # -- xyz
                 normalsCount = len(data) // 3
                 if normalsCount != len(data):
-                    print("wouldhaveraised_nor ({} is not *3)".format(len(data)))
+                    log.info("wouldhaveraised_nor (%d is not *3)", len(data))
                 self.normals = []
                 # -- arrays.self.normals.resize(data.size()/3);
                 k = 0
@@ -284,7 +286,7 @@ class Vtx1:
                     k += 4
 
             else:
-                MessageBox("vtx1: unsupported componentCount for self.colors array")
+                log.warning("unsupported componentCount for self.colors array")
         # -- texcoords 0 - 7 [13]
 
         elif af.arrayType == 0xd or\
@@ -311,7 +313,7 @@ class Vtx1:
             elif af.componentCount == 1:  # -- st
                 texCount = len(data)//2
                 if texCount * 2 != len(data):
-                    print("WARNING: wrong length of UV coords (not even)")
+                    log.warning("wrong length of UV coords (not even)")
                 # self.texCoords[index] = []
                 # -- arrays.self.texCoords[index].resize(data.size()/2);
 
