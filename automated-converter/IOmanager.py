@@ -18,7 +18,7 @@ except AttributeError:  # module not loaded: do it manually
     temp = blemd.BModel()
     current_dir = OSPath.abspath(OSPath.split(__file__)[0])  # automatically find where we are
     temp.SetBmdViewExePath(current_dir+'\\')  # add backslash for good measure
-    temp.Import(path, 5, True, False, True, True, 'XFILE', False, 'AS_PNG', False)
+    temp.Import(path, False, 'TGA', 'DO', True, 'SEPARATE', True, False, 5, False)  # actual model importing
 
     
 # this line (below) is the export command. feel free to change it to whatever you want
