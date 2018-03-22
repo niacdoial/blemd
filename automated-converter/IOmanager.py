@@ -12,12 +12,12 @@ bpy.data.objects.remove(bpy.data.objects['Camera'],True)
 bpy.data.cameras.remove(bpy.data.cameras['Camera'],True)
 
 try:
-    bpy.ops.blemd.importer(filepath=path, imtype='AS_PNG')
+    bpy.ops.blemd.importer(filepath=path)
 except AttributeError:  # module not loaded: do it manually
     import blemd
-    temp = blemd.BModel()
-    current_dir = OSPath.abspath(OSPath.split(__file__)[0])  # automatically find where we are
-    temp.SetBmdViewExePath(current_dir+'\\')  # add backslash for good measure
+    temp = blemd.BModel.BModel()
+    # current_dir = OSPath.abspath(OSPath.split(__file__)[0])  # automatically find where we are
+    temp.SetBmdViewExePath(OSPath.split(blemd.__file__)[0]+'\\')  # add backslash for good measure
     temp.Import(path, False, 'TGA', 'DO', True, 'SEPARATE', True, False, 5, False)  # actual model importing
 
     
