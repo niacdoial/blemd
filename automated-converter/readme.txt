@@ -7,3 +7,5 @@ you will just want to set the paths correctly in the '.bat' file.
 
 with a little blender knowledge, you will be able to modify the exporting line in IOmanager.py
 to use it to export in any format known by blender
+
+In order for it to work, you still have to install the main add-on (put it where blender can reach it)
