@@ -176,8 +176,11 @@ class ImportBmd(Operator, ImportHelper):
             retcode = 'ERROR'
             raise
         finally:
-            message = log_out.getvalue()
-            log_out.truncate(0)
+            try:
+                message = log_out.getvalue()
+                log_out.truncate(0)
+            except:
+                message = "warning: logging glitched out. see system console for a more complete result"
             if message:
                 if retcode == 'ERROR':
                     self.report({'ERROR'}, message)
