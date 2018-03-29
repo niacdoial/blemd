@@ -45,7 +45,7 @@ else:
         # here, it isn't
         config_logging()
     import blemd.maxheader as MaxH
-    import blemd.BModel
+    from blemd import BModel
 del LOADED
 
 IDE_DEBUG = False
