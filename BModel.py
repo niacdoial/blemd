@@ -366,6 +366,7 @@ class BModel:
                             realbone.parent = arm.edit_bones[bone.parent.fget().name.fget()]
                         realbone.head = Vector(bone.position)
                         realbone.tail = Vector(bone.endpoint)
+                        realbone.roll = bone.roll
                         modelObject.vertex_groups.new(bone.name.fget())
 
                     if len(self.vertexMultiMatrixEntry) != len(self.model.vertices):
@@ -483,7 +484,7 @@ class BModel:
             elif strTag == "TEX1":
                 self.tex.LoadData(br)
             else:
-                raise ValueError(strTag+' tag not recognized')
+                log.warning('Tag (%s) not recognized. Resulting mesh could be weird', strTag)
             br.SeekSet(streamPos)
 
         self.tex.LoadData(br)
@@ -659,14 +660,20 @@ class BModel:
             self.jnt.matrices[n.index] = effP
 
             fstartPoint = parentMatrix*f.t
-            fstartPoint = Vector(fstartPoint.xzy)
+            fstartPoint = Vector(fstartPoint.xzy)  # convertion happes here
             fstartPoint.y *= -1
 
+            orientation = (parentMatrix.to_quaternion().to_matrix().to_4x4() *  # use rotation part of parent matrix
+                          Euler((f.rx, f.ry, f.rz), 'XYZ').to_matrix().to_4x4() *  # apply local rotation
+                          Vector((0, 0, -self.params.boneThickness)))
+            orientation.y, orientation.z = (-orientation.z), orientation.y
+            # computing correct bone orientation (first in BMD coords, then convert on the fly)
 
+            orientation = Vector((0, self.params.boneThickness, 0))
 
             bone = PBones.Pseudobone(parentBone, f, effP,
                                      fstartPoint,
-                                     fstartPoint+Vector((0, self.params.boneThickness, 0)))
+                                     fstartPoint + orientation, 0)  # f.rz)  # add roll correction
 
             bone.scale = (f.sx, f.sy, f.sz)
 
