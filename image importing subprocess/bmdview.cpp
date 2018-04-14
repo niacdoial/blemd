@@ -1,6 +1,3 @@
-// bmdview.cpp : définit le point d'entrée pour l'application console.
-//
-
 // some classic VS BS here. do not use it if you can.
 // (it doesn't do much)
 #include "stdafx.h"

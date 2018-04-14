@@ -20,7 +20,7 @@ except AttributeError:  # module not loaded: do it manually
     temp.SetBmdViewExePath(OSPath.split(blemd.__file__)[0]+'\\')  # add backslash for good measure
     temp.Import(path, False, 'TGA', 'DO', True, 'SEPARATE', True, False, 5, False)  # actual model importing
 
-    
+
 # this line (below) is the export command. feel free to change it to whatever you want
 bpy.ops.export_scene.fbx(filepath=path[:-3]+'fbx', axis_forward='Y', axis_up='Z', path_mode='COPY', embed_textures=True)
 
