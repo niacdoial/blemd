@@ -74,10 +74,10 @@ def ReverseArray(inputArray):
 
 
 def HiddenDOSCommand(exefile, args, startpath=os.getcwd()):
-	# this is the function to edit to adapt the program for non-windows platforms
-	# just add an 'elif' to the  if/else block below, in which `exefile` is adapted
-	# (from 'path/to/bmdview' to 'path/to/bmdview.exe' in this example)
-	
+    # this is the function to edit to adapt the program for non-windows platforms
+    # just add an 'elif' to the  if/else block below, in which `exefile` is adapted
+    # (from 'path/to/bmdview' to 'path/to/bmdview.exe' in this example)
+
     if sys.platform[:3].lower() == "win":  # windows: use EXE
         exefile += '.exe'
     else:
