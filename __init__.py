@@ -2,9 +2,8 @@ if "bpy" in locals():  # trick to reload module on f8-press in blender
     LOADED = True
 else:
     LOADED = False
+    log_out = None
 import bpy
-
-log_out = None
 
 import logging.config
 import io
@@ -38,6 +37,8 @@ if LOADED:
     from importlib import reload
     reload(BModel)
     reload(MaxH)
+    log = logging.getLogger('bpy.ops.import_mesh.bmd')
+    log_out = log.handlers[1].stream  # kinda hacky, but it works (?)
 
 else:
     if not logging.root.handlers:
@@ -45,11 +46,11 @@ else:
         # here, it isn't
         config_logging()
     import blemd.maxheader as MaxH
-    from blemd import BModel
+    import blemd.BModel
+    log = logging.getLogger('bpy.ops.import_mesh.bmd')
 del LOADED
 
 IDE_DEBUG = False
-log = logging.getLogger('bpy.ops.import_mesh.bmd')
 
 bl_info = {
     "name": "Import gc/wii bmd format (.bmd)",

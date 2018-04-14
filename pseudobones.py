@@ -1,4 +1,3 @@
-import mathutils
 from mathutils import Vector, Euler, Matrix
 import bpy
 import math
@@ -37,6 +36,7 @@ def matrix_calibrate_r(y, d, mat, parent, bone):
     """transforms "absolute" rotation coordinates into"relative" ones, using the default pose rotation matrix"""
     # note: using GC coordinate organization: therefor rotations are in XYZ order
 
+    # ## first cancel local default pose
     EPSILON = 1/100
 
 
@@ -56,49 +56,83 @@ def matrix_calibrate_r(y, d, mat, parent, bone):
     ret_d.y = (ret_dy.y - ret_y.y) / EPSILON
     ret_d.z = (ret_dy.z - ret_y.z) / EPSILON
 
-    y,d = ret_y, ret_d
+    # return y, d
+
+    y, d = ret_y, ret_d  # "apply" transformation
+
+    # ## then add parent rotations?
 
     if hasattr(bone, 'parent_rot_matrix'):  # sililar to calibrate_t, need to transform the original vector
         parent_rot_matrix = bone.parent_rot_matrix
     else:
         if type(bone.parent.fget()) == Pseudobone:
-            parent_rot_matrix = bone.parent.fget().jnt_frame.incr_matrix.to_quaternion().to_matrix().to_4x4()
+            parent_rot_matrix = (bone.parent.fget().jnt_frame.incr_matrix.
+                                    to_quaternion().to_matrix().to_4x4())
         else:
             parent_rot_matrix = Matrix.Identity(4)
         bone.parent_rot_matrix = parent_rot_matrix
-    y = Euler((parent_rot_matrix * Vector(y)), 'XYZ')
 
-    dy = Vector((0, 0, 0))
+    # final modifications:
+    # (y, d) represent bone rotation, relative to default, but assuming bone is in "collapsed"
+    # pose compared to parent (bmd_y); with parent rotation __already__ applied (no need to do it here).
+    # blender needs translation from default pose (bl_y) __without__ parent default rotation applied _previously_:
+    # it needs to be applied __here__
+    # therefor, with parent bone default rotation (from collapsed position) (par_rot);
+    # we have par_rot * bmd_y = bl_y. We need bl_y.
+
+    ret_y = Euler((parent_rot_matrix * Vector(y)), 'XYZ')  # XCX how the *heck* is this the right move?
+    # ret_y = (parent_rot_matrix * y.to_matrix().to_4x4()).to_euler('XYZ')
+
+    # dy = Vector((0, 0, 0))
     dy.x = EPSILON * d.x + y.x
     dy.y = EPSILON * d.y + y.y
     dy.z = EPSILON * d.z + y.z
-    dy = parent_rot_matrix * dy
-    d = Euler((0, 0, 0), 'XYZ')
+    dy = Euler((parent_rot_matrix * Vector(dy)), 'XYZ')
+    # dy = (parent_rot_matrix * dy.to_matrix().to_4x4()).to_euler('XYZ')
+    # d = Euler((0, 0, 0), 'XYZ')
     d.x = (dy.x - y.x) / EPSILON
     d.y = (dy.y - y.y) / EPSILON
     d.z = (dy.z - y.z) / EPSILON
 
-    return y, d
+    return ret_y, d  # y had to be stored into a temp variable, not d
 
 
 def matrix_calibrate_t(y, d, parent, bone):
+
+    # ## cancel default pose first
     EPSILON = 1 / 100
 
     y.x -= bone.jnt_frame.t.x
-    d.x -= bone.jnt_frame.t.x
+    # d.x -= bone.jnt_frame.t.x  # adding constants doesn't change derivative, dummy!
     y.y -= bone.jnt_frame.t.y
-    d.y -= bone.jnt_frame.t.y
+    # d.y -= bone.jnt_frame.t.y
     y.z -= bone.jnt_frame.t.z
-    d.z -= bone.jnt_frame.t.z
+    # d.z -= bone.jnt_frame.t.z
 
+
+    # ## then add inherited rotations
+
+    # getting parent bone default rotation (accoriding to BMD file; in matrix form)
     if hasattr(bone, 'parent_rot_matrix'):
         parent_rot_matrix = bone.parent_rot_matrix
     else:
         if type(bone.parent.fget()) == Pseudobone:
-            parent_rot_matrix = bone.parent.fget().jnt_frame.incr_matrix.to_quaternion().to_matrix().to_4x4()
+            parent_rot_matrix = (bone.parent.fget().jnt_frame.incr_matrix.
+                                 to_quaternion().to_matrix().to_4x4())
         else:
             parent_rot_matrix = Matrix.Identity(4)
         bone.parent_rot_matrix = parent_rot_matrix
+
+    # final modifications:
+    # (y, d) represent bone translation, relative to default, but assuming bone is in "collapsed"
+    # pose compared to parent (bmd_y); with parent rotation __already__ applied (no need to do it here).
+
+    # blender needs translation from default pose (bl_y) __without__ parent default rotation applied _previously_:
+    # it needs to be applied __here__
+
+    # therefor, with parent bone default rotation (from collapsed position) (par_rot);
+    # we have par_rot * bmd_y = bl_y. We need bl_y.
+
     y = parent_rot_matrix * y
 
     dy = Vector((0, 0, 0))
@@ -113,24 +147,10 @@ def matrix_calibrate_t(y, d, parent, bone):
 
     return y, d
 
-    ret_y = (parent * Matrix.Translation(y)).to_translation()  # computing rotation value
-
-    # computes rotation tangents by definition of derivative
-    # (and now, the incredibly complex equivalent of "dy = EPSILON*d + y":
-    dy = Vector((0, 0, 0))
-    dy.x = EPSILON * d.x + y.x
-    dy.y = EPSILON * d.y + y.y
-    dy.z = EPSILON * d.z + y.z
-    ret_dy = (parent * Matrix.Translation(dy)).to_translation()
-
-    ret_d = Vector((0, 0, 0))
-    ret_d.x = (ret_dy.x - ret_y.x) / EPSILON
-    ret_d.y = (ret_dy.y - ret_y.y) / EPSILON
-    ret_d.z = (ret_dy.z - ret_y.z) / EPSILON
-    return ret_y, ret_d
-
 
 def matrix_calibrate_s(y, d, parent, bone):
+
+    # ## first cancel local default pose
     EPSILON = 1 / 100
 
     y.x /= bone.jnt_frame.sx
@@ -142,35 +162,21 @@ def matrix_calibrate_s(y, d, parent, bone):
     d.z /= bone.jnt_frame.sz
 
     return y, d
+    # note: scaling happens "inside" rotation, and does not require rotation calibration
 
-    scalemtx = Matrix.Identity(4)
-    scalemtx[0][0] = y.x
-    scalemtx[1][1] = y.y
-    scalemtx[2][2] = y.z
-    ret_y = (parent * scalemtx).to_scale()  # computing rotation value
+    # ## then add inherited rotations
 
-    # computes rotation tangents by definition of derivative
-    # (and now, the incredibly complex equivalent of "dy = EPSILON*d + y":
-    dy = Matrix.Identity(4)
-    dy[0][0] = EPSILON * d.x + y.x
-    dy[1][1] = EPSILON * d.y + y.y
-    dy[2][2] = EPSILON * d.z + y.z
-    ret_dy = (parent * scalemtx).to_scale()
-
-    ret_d = Vector((0, 0, 0))
-    ret_d.x = (ret_dy.x - ret_y.x) / EPSILON
-    ret_d.y = (ret_dy.y - ret_y.y) / EPSILON
-    ret_d.z = (ret_dy.z - ret_y.z) / EPSILON
-
-    y, d = ret_y, ret_d
-    if hasattr(bone, 'parent_rot_matrix'):  # sililar to calibrate_t, need to transform the original vector
+    # getting parent bone default rotation (accoriding to BMD file; in matrix form)
+    if hasattr(bone, 'parent_rot_matrix'):
         parent_rot_matrix = bone.parent_rot_matrix
     else:
         if type(bone.parent.fget()) == Pseudobone:
-            parent_rot_matrix = bone.parent.fget().jnt_frame.incr_matrix.to_quaternion().to_matrix().to_4x4()
+            parent_rot_matrix = (bone.parent.fget().jnt_frame.incr_matrix.
+                                    to_quaternion().to_matrix().to_4x4())
         else:
             parent_rot_matrix = Matrix.Identity(4)
         bone.parent_rot_matrix = parent_rot_matrix
+
     y = parent_rot_matrix * y
 
     dy = Vector((0, 0, 0))
@@ -185,20 +191,22 @@ def matrix_calibrate_s(y, d, parent, bone):
 
     return y, d
 
+
 instances = {}
 
 
 class Pseudobone:
-    def __init__(self, parentBone, frame, matrix, startpoint, endpoint):
+    def __init__(self, parentBone, frame, matrix, startpoint, endpoint, roll):
 
         self._name = None
         ori = endpoint - startpoint
         self.endpoint = endpoint
         self.length = math.sqrt(ori.x**2 + ori.y**2 + ori.z**2)
         self.orientation = vect_normalize(ori)
-        self.scale = mathutils.Vector((1, 1, 1))
+        self.roll = roll
+        self.scale = Vector((1, 1, 1))
         self.jnt_frame = None
-        self.rotation_euler = mathutils.Euler((0, 0, 0), 'XYZ')
+        self.rotation_euler = Euler((0, 0, 0), 'XYZ')
         self.position = startpoint
         self.scale_kf = {}  # keyframes (values)
         self.scale_tkf = {}  # keyframes (tangents)
@@ -211,7 +219,7 @@ class Pseudobone:
         self._parent = None
         self.children = []
 
-        #  property busyness --------------------------------
+        #  property business --------------------------------
         def _getname():
             return self._name
         def _setname(val):
@@ -232,7 +240,7 @@ class Pseudobone:
             if isinstance(self.parent.fget(), Pseudobone) and (self in self.parent.fget().children):
                 self.parent.fget().children.remove(self)
             self._parent = val
-            if val is None or isinstance(val, mathutils.Vector):
+            if val is None or isinstance(val, Vector):
                 return
             val.children.append(self)
         self.parent = property(_getparent, _setparent)
