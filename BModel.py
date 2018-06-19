@@ -215,11 +215,14 @@ class BModel:
         self._subMaterials = []
 
     def SetBmdViewExePath(self, value):
-        self._bmdViewPathExe = value
-        if not OSPath.exists(self._bmdViewPathExe + "BmdView.exe"):                        
+        if not OSPath.exists(value + "BmdView.exe"):
             log.fatal(self._bmdViewPathExe + "BmdView.exe not found. Place the BmdView.exe file"
-                                                   "included in the zip file into the given path.")
-            raise ValueError("ERROR")
+                                                   "(included in the zip file) next to this one.")
+            self._bmdViewPathExe = None
+            raise ValueError("Cannot find image extractor executable. Please place it next to this file.")
+
+        self._bmdViewPathExe = value
+
 
     def TryHiddenDOSCommand(self, exefile, args, startpath):
                 
@@ -686,6 +689,8 @@ class BModel:
             bone.rotation_euler = mTransform.to_euler("XYZ")
             bone.width = bone.height = self.params.boneThickness
 
+            bone.inverted_static_mtx = effP.inverted()
+
         for com in sg.children:
             self.CreateBones(com, effP, bone)
 
@@ -852,19 +857,14 @@ class BModel:
                 else:
                     if self.params.animationType == 'SEPARATE':
                         try:
-                            b.AnimateBoneFrames(1, self._bones, 1, self.params.includeScaling)
+                            b.AnimateBoneFrames(0, self._bones, 1, self.params.includeScaling)
                             action = PBones.apply_animation(self._bones, self.arm_obj, self.jnt.frames, bckFileName)
                         except Exception as err:
                             log.warning('animation file doesn\'t apply as expected (error is %s)', err)
-                            continue
+                            raise  # XDX
                         finally:
                             for com in self._bones:
-                                com.position_kf = {}
-                                com.position_tkf = {}
-                                com.rotation_kf = {}
-                                com.rotation_tkf = {}
-                                com.scale_kf = {}
-                                com.scale_tkf = {}
+                                com.reset()
                         bpy.context.scene.frame_end = startFrame + b.animationLength + 5
                         # (create space to insert strip)
                         try:
@@ -884,7 +884,7 @@ class BModel:
                         try:
                             b.AnimateBoneFrames(startFrame, self._bones, 1, self.params.includeScaling)
                         except Exception as err:
-                            log.warning('Animation file doesn\'t apply as expected (error is %s)', err)
+                            log.error('Animation file doesn\'t apply as expected (error is %s)', err)
                             continue
                     numberOfFrames = b.animationLength
                     if b.animationLength <= 0:
