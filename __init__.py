@@ -168,8 +168,9 @@ class ImportBmd(Operator, ImportHelper):
         retcode = 'FINISHED'
         temp = BModel.BModel()
         path = OSPath.abspath(OSPath.split(__file__)[0])  # automatically find where we are
-        temp.SetBmdViewExePath(path+'\\')  # add backslash for good measure
+        print(__file__)
         try:
+            temp.SetBmdViewExePath(path + '\\')  # add backslash for good measure
             temp.Import(self.filepath, self.use_nodes, self.imtype, self.tx_pck, self.mir_tx,
                         self.sv_anim, self.ic_sc, self.frc_cr_bn, self.boneThickness, self.dvg)
         except Exception as err:
