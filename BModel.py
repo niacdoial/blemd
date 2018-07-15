@@ -763,7 +763,6 @@ class BModel:
                     self._currMaterial = Mat3V2.create_material(mat)
             except Exception as err:
                 log.error('Material not built correctly (error is %s)', err)
-                raise
                 self._currMaterial = None
 
                 # keep the correct material indexes : include void material
