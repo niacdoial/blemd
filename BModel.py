@@ -232,7 +232,7 @@ class BModel:
         try:
             MaxH.HiddenDOSCommand(exefile, args, startpath=startpath)
         except MaxH.subprocess.CalledProcessError as err:
-            log.warning('subprocess error: %s. Expect missing/glitchy textures', err)
+            log.error('subprocess error: %s. Expect missing/glitchy textures', err)
 
     def BuildSingleMesh(self):
         # -----------------------------------------------------------------
@@ -303,7 +303,7 @@ class BModel:
                     else:
                         modelMesh.polygons[f_to_rf[num]].material_index = bm_to_pm[errmat]
         except Exception as err:
-            log.warning('Materials couldn\'t be completely applied (error is %s)', err)
+            log.error('Materials couldn\'t be completely applied (error is %s)', err)
 
         active_uv = None
 
@@ -312,7 +312,7 @@ class BModel:
                 try:
                     TexH.newUVlayer(modelMesh, self.model, uv)
                 except Exception as err:
-                    log.warning('Couldn\'t create UV layer %d (error is %s)', uv, err)
+                    log.error('Couldn\'t create UV layer %d (error is %s)', uv, err)
         try:
             active_uv = modelMesh.uv_textures[0]
         except Exception as err:
@@ -330,13 +330,13 @@ class BModel:
                 try:
                     alpha_image = MatH.add_vcolor(modelMesh, self.model, 0)
                 except Exception as err:
-                    log.warning('Vertex color layer 0 failed (error is %s)', err)
+                    log.error('Vertex color layer 0 failed (error is %s)', err)
             if self.model.hasColors[1]:
                 # if len(self.vtx.colors) > 1 and len(self.vtx.colors[1]):
                 try:
                     MatH.add_vcolor(modelMesh, self.model, 1)
                 except Exception as err:
-                    log.warning('Vertex color layer 1 failed (error is %s)', err)
+                    log.error('Vertex color layer 1 failed (error is %s)', err)
         # update(modelMesh)
 
         # -----------------------------------------------------------------
@@ -373,7 +373,7 @@ class BModel:
                         modelObject.vertex_groups.new(bone.name.fget())
 
                     if len(self.vertexMultiMatrixEntry) != len(self.model.vertices):
-                        log.warning("Invalid skin")
+                        log.error("Faulty multimatrix skin interpolation")
                         raise ValueError("E")
                     if self.params.createBones:
                         # XCX should not need this
@@ -396,7 +396,7 @@ class BModel:
                     bpy.ops.object.mode_set(mode='OBJECT')
 
             except Exception as err:
-                log.warning('Animation bones not created. Animtions will fail. (error is %s)', err)
+                log.error('Animation bones not created. Animtions will fail. (error is %s)', err)
 
         modelMesh.update()
 
@@ -423,7 +423,7 @@ class BModel:
 
             # modelMesh.validate(clean_customdata=False)  # only validate now, if at all
         except Exception as err:
-            log.warning('Normals weren\'t set (error is %s)', err)
+            log.error('Normals weren\'t set (error is %s)', err)
         modelMesh.update()
 
         return modelMesh
@@ -549,7 +549,7 @@ class BModel:
                         mat = matrixTable[(currPrimitive.points[m].matrixIndex//3)]
                         if currPrimitive.points[m].matrixIndex % 3:
                             log.warning("if (mod currPrimitive.points[m].matrixIndex 3) != 0 then " +
-                                       str(currPrimitive.points[m].matrixIndex))
+                                       str(currPrimitive.points[m].matrixIndex))  # XCX does it work for fans?
                         multiMat = multiMatrixTable[(currPrimitive.points[m].matrixIndex//3)]  # fixed
 
                     if currBatch.attribs.hasNormals:
@@ -713,7 +713,7 @@ class BModel:
                 t.index = n.index
                 sg.children.append(t)
             else:
-                log.warning("buildSceneGraph(): unexpected node type %d", n.type)
+                log.error("buildSceneGraph(): unexpected node type %d", n.type)
             i += 1
 
         # note: this code can only be reached by the top level function,
@@ -723,7 +723,7 @@ class BModel:
             return sg.children[0]
         else:
             sg.type = sg.index = -1
-            log.warning("buildSceneGraph(): Unexpected size %d", len(sg.children))
+            log.error("buildSceneGraph(): Unexpected size %d for root SG", len(sg.children))
         return 0
 
     def DrawScenegraph(self, sg, parentMatrix, onDown=True, matIndex=0):
@@ -751,7 +751,7 @@ class BModel:
                     mat = self._mat1V2.materials[self._mat1V2.indexToMatIndex[n.index]]
                     self._currMaterial = Mat3V2.create_material(mat)
             except Exception as err:
-                log.warning('Material not built correctly (error is %s)', err)
+                log.error('Material not built correctly (error is %s)', err)
                 self._currMaterial = None
             finally:
                 onDown = (mat.flag == 1)
@@ -802,7 +802,7 @@ class BModel:
                 # + self.params.texturePrefix)
                 # prepare material nodes
         except Exception as err:
-            log.warning('node (GLSL) materials went wrong. They will be missing. (error is %s)', err)
+            log.error('node (GLSL) materials went wrong. They will be missing. (error is %s)', err)
 
         if self.params.createBones:
             self._bones = rootBone.tree_to_array()
@@ -860,8 +860,8 @@ class BModel:
                             b.AnimateBoneFrames(0, self._bones, 1, self.params.includeScaling)
                             action = PBones.apply_animation(self._bones, self.arm_obj, self.jnt.frames, bckFileName)
                         except Exception as err:
-                            log.warning('animation file doesn\'t apply as expected (error is %s)', err)
-                            raise  # XDX
+                            log.error('animation file doesn\'t apply as expected (error is %s)', err)
+                            continue  # XDX
                         finally:
                             for com in self._bones:
                                 com.reset()
@@ -901,7 +901,7 @@ class BModel:
                 try:
                     PBones.apply_animation(self._bones, self.arm_obj, self.jnt.frames)
                 except Exception as err:
-                    log.warning('Animation doesn\'t apply as expected. Change animation importation parameters'
+                    log.error('Animation doesn\'t apply as expected. Change animation importation parameters'
                                 'to isolate faulty file (error is %s)', err)
 
             elif self.params.animationType == 'SEPARATE':
@@ -937,7 +937,7 @@ class BModel:
             errorMessage += f + "\n"  # report file
             MaxH.newfile(f[:-6] + imageExt)  # and avoid crashes in the future
         if len(errorFiles) != 0:
-            log.warning(errorMessage)
+            log.error(errorMessage)
             return False
 
         return True
@@ -1027,7 +1027,7 @@ class BModel:
             try:
                 self.ExtractImages()
             except Exception as err:
-                log.warning('Could not extract images. This could be the cause of a plugin crash'
+                log.error('Could not extract images. This could be the cause of a plugin crash'
                             ' later on (error is %s)', err)
             self.DrawScene()
 

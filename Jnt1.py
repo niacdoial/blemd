@@ -101,7 +101,7 @@ class Jnt1:
 
 
         if len(stringTable) != header.count :
-            log.warning("jnt1: number of strings doesn't match number of joints")
+            log.error("jnt1: number of strings doesn't match number of joints")
             raise ValueError("jnt1: number of strings doesn't match number of joints")
 
 

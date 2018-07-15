@@ -369,9 +369,9 @@ class Bck_in:
         self.anims = []
 
     def ConvRotation(self, rots, scale):
-        for j in range(len(rots)):  # XCX!
-            rots[j].value *= scale
-            rots[j].tangent *= scale
+        for rot in rots:
+            rot.value *= scale
+            rot.tangent *= scale
         return rots
 
     def ReadComp(self, src, index):
