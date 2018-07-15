@@ -749,7 +749,8 @@ class BModel:
             self.jnt.frames[n.index].incr_matrix = effP
         elif n.type == 0x11:  # build material
 
-            matIndex=n.index
+            matIndex = self._currMaterialIndex
+            # assign index of the next material to the material index that will be applied to all children
 
             # build material (old version)
             try:
@@ -762,7 +763,14 @@ class BModel:
                     self._currMaterial = Mat3V2.create_material(mat)
             except Exception as err:
                 log.error('Material not built correctly (error is %s)', err)
+                raise
                 self._currMaterial = None
+
+                # keep the correct material indexes : include void material
+                while self._currMaterialIndex >= len(self._subMaterials):
+                    self._subMaterials.append(None)
+                self._subMaterials[self._currMaterialIndex] = self._currMaterial
+                self._currMaterialIndex += 1
             finally:
                 onDown = (mat.flag == 1)
 
@@ -773,7 +781,8 @@ class BModel:
                     self._currMaterial.name = self._mat1V2.stringtable[n.index]
                 else:
                     self._currMaterial.name = self._mat1.stringtable[n.index]
-                while self._currMaterialIndex >= len(self._subMaterials):  # create one more slot
+
+                while self._currMaterialIndex >= len(self._subMaterials):
                     self._subMaterials.append(None)
                 self._subMaterials[self._currMaterialIndex] = self._currMaterial
                 self._currMaterialIndex += 1
@@ -786,6 +795,9 @@ class BModel:
 
         if n.type == 0x12 and not onDown:  # - type = 18
             self.DrawBatch(n.index, matIndex)  # fixed
+
+        if n.type < 0x10 or n.type > 0x12:
+            log.error("SceneGraph node has incorrect type. Might cause chaos.")
 
     def DrawScene(self):
         log.debug("DrawScene point reached")
