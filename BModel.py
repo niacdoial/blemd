@@ -22,23 +22,33 @@ if LOADED:
         reload(module)
 
 else:
-    import blemd.BinaryReader as BinaryReader
-    import blemd.Matrix44 as Mat44
-    import blemd.Inf1 as Inf1
-    import blemd.Vtx1 as Vtx1
-    import blemd.Shp1 as Shp1
-    import blemd.Jnt1 as Jnt1
-    import blemd.Evp1 as Evp1
-    import blemd.Drw1 as Drw1
-    import blemd.Bck as Bck
-    import blemd.Mat3 as Mat3
-    import blemd.materialV2 as Mat3V2
-    import blemd.Tex1 as Tex1
-    import blemd.Btp as Btp
-    import blemd.maxheader as MaxH
-    import blemd.texhelper as TexH
-    import blemd.materialhelper as MatH
-    import blemd.pseudobones as PBones
+    from . import (
+        BinaryReader,
+        Matrix44 as Mat44,
+        Inf1, Vtx1, Shp1, Jnt1, Evp1, Drw1, Bck, Mat3, Tex1, Btp,
+        materialV2 as Mat3V2,
+        maxheader as MaxH,
+        texhelper as TexH,
+        materialhelper as MatH,
+        pseudobones as PBones
+    )
+    # import blemd.BinaryReader as BinaryReader
+    # import blemd.Matrix44 as Mat44
+    # import blemd.Inf1 as Inf1
+    # import blemd.Vtx1 as Vtx1
+    # import blemd.Shp1 as Shp1
+    # import blemd.Jnt1 as Jnt1
+    # import blemd.Evp1 as Evp1
+    # import blemd.Drw1 as Drw1
+    # import blemd.Bck as Bck
+    # import blemd.Mat3 as Mat3
+    # import blemd.materialV2 as Mat3V2
+    # import blemd.Tex1 as Tex1
+    # import blemd.Btp as Btp
+    # import blemd.maxheader as MaxH
+    # import blemd.texhelper as TexH
+    # import blemd.materialhelper as MatH
+    # import blemd.pseudobones as PBones
 del LOADED
 
 
