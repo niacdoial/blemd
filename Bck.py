@@ -22,6 +22,9 @@ class BckKey:
         self.value = vl
         self.tangent = tg
 
+    def __lt__(self, other):
+        return self.time < other.time
+
     def __eq__(self, other):
         return (self.time == other.time and
                 isclose(self.value, other.value, rel_tol=1E-3) and
@@ -366,9 +369,9 @@ class Bck_in:
         self.anims = []
 
     def ConvRotation(self, rots, scale):
-        for j in range(len(rots)):  # XCX!
-            rots[j].value *= scale
-            rots[j].tangent *= scale
+        for rot in rots:
+            rot.value *= scale
+            rot.tangent *= scale
         return rots
 
     def ReadComp(self, src, index):
@@ -378,10 +381,7 @@ class Bck_in:
         # -- violated by biawatermill01.bck
 
         if index.zero != 0:
-            pass
-            # -- throw "bck: zero field %d instead of zero" -- ignore for now?
-            # --TODO: biawatermill01.bck doesn't work, so the "zero"
-            # --value is obviously something important
+            log.warning("readComp(): index `zero` variable is non-zero. This animation might look broken")
         if index.count <= 0:
             log.warning("readComp(): count is <= 0")
         elif index.count == 1:
@@ -481,7 +481,7 @@ class Bck_in:
         br.Close()
 
     # no use here
-    def Interpolate(self, v1, d1, v2, d2, t): # -- t in [0,1]
+    def Interpolate(self, v1, d1, v2, d2, t):  # -- t in [0,1]
         # linear imterpolation:
         # return v1+t*(v1-v1)
 
@@ -494,45 +494,6 @@ class Bck_in:
         # --TODO: yoshi_walk.bck has strange-looking legs...not sure if
         # --the following line is to blame, though
         return ((a*t + b)*t + c) *t + d
-
-    # no use neither
-    def getAnimValue(self, keys, t):
-        if keys.count == 0:
-                return 0.0
-        if keys.count == 1:
-                return keys[0].value
-        # --messageBox (keys as string)
-        # -- throw "E"
-        i = 0
-
-        while keys[i].time < t:
-            i += 1
-        # XCX
-        time = (t - keys[i].time) /(keys[i].time- keys[i].time)         # -- scale to [0, 1]
-        #return mathutils.interpolate(keys[i- 1].value,keys[i- 1].tangent,keys[i].value,keys[i].tangent,time)
-        return self.Interpolate(keys[i].value, keys[i].tangent, keys[i].value, keys[i].tangent, time)
-
-    # still nope.
-    def AnimateJnt(self, jnt, deltaTime):
-
-        # -- update time
-        self.currAnimTime += deltaTime  # --*16 -- convert from seconds to ticks (dunno if this is right this way...TODO)
-        self.currAnimTime = self.currAnimTime % self.animationLength  # -- loop?
-
-        # -- update joints
-        for i in range(len(jnt.frames)):
-            jnt.frames[i].sx = self.getAnimValue(self.anims[i].scalesX, self.currAnimTime)
-            jnt.frames[i].sy = self.getAnimValue(self.anims[i].scalesY, self.currAnimTime)
-            jnt.frames[i].sz = self.getAnimValue(self.anims[i].scalesZ, self.currAnimTime)
-
-            # --TODO: use quaternion interpolation for rotations? nope: it will screw the keyframes up.
-            jnt.frames[i].rx = self.getAnimValue(self.anims[i].rotationsX, self.currAnimTime)
-            jnt.frames[i].ry = self.getAnimValue(self.anims[i].rotationsY, self.currAnimTime)
-            jnt.frames[i].rz = self.getAnimValue(self.anims[i].rotationsZ, self.currAnimTime)
-
-            jnt.frames[i].t.x = self.getAnimValue(self.anims[i].translationsX, self.currAnimTime)
-            jnt.frames[i].t.y = self.getAnimValue(self.anims[i].translationsY, self.currAnimTime)
-            jnt.frames[i].t.z = self.getAnimValue(self.anims[i].translationsZ, self.currAnimTime)
 
     # TODO: erase dummy bone system
     def GetPositionBone(self, curBone):
@@ -558,46 +519,48 @@ class Bck_in:
             bone = bones[i]
             anim = self.anims[i]
 
-            # position correction LATER in the program
-            if includeScaling:
-                translate_animation(timeOffset, bone, anim, frameScale,
-                          'scale', 'x', mathutils.Vector((nan, nan, nan)))
-                translate_animation(timeOffset, bone, anim, frameScale,
-                          'scale', 'y', mathutils.Vector((nan, nan, nan)))
-                translate_animation(timeOffset, bone, anim, frameScale,
-                          'scale', 'z', mathutils.Vector((nan, nan, nan)))
-            translate_animation(timeOffset, bone, anim, frameScale,
-                      'rotation', 'x', mathutils.Euler((nan, nan, nan), 'XYZ'))
-            translate_animation(timeOffset, bone, anim, frameScale,
-                      'rotation', 'y', mathutils.Euler((nan, nan, nan), 'XYZ'))
-            translate_animation(timeOffset, bone, anim, frameScale,
-                      'rotation', 'z', mathutils.Euler((nan, nan, nan), 'XYZ'))
-            translate_animation(timeOffset, bone, anim, frameScale,
-                      'position', 'x', mathutils.Vector((nan, nan, nan)))
-            translate_animation(timeOffset, bone, anim, frameScale,
-                      'position', 'y', mathutils.Vector((nan, nan, nan)))
-            translate_animation(timeOffset, bone, anim, frameScale,
-                      'position', 'z', mathutils.Vector((nan, nan, nan)))
-
-            if includeScaling:
-                complete_animation(timeOffset, bone, anim, self.animationLength,
-                                    'scale', 'x', mathutils.Vector((nan, nan, nan)))
-                complete_animation(timeOffset, bone, anim, self.animationLength,
-                                    'scale', 'y', mathutils.Vector((nan, nan, nan)))
-                complete_animation(timeOffset, bone, anim, self.animationLength,
-                                    'scale', 'z', mathutils.Vector((nan, nan, nan)))
-            complete_animation(timeOffset, bone, anim, self.animationLength,
-                                'rotation', 'x', mathutils.Euler((nan, nan, nan), 'XYZ'))
-            complete_animation(timeOffset, bone, anim, self.animationLength,
-                                'rotation', 'y', mathutils.Euler((nan, nan, nan), 'XYZ'))
-            complete_animation(timeOffset, bone, anim, self.animationLength,
-                                'rotation', 'z', mathutils.Euler((nan, nan, nan), 'XYZ'))
-            complete_animation(timeOffset, bone, anim, self.animationLength,
-                                'position', 'x', mathutils.Vector((nan, nan, nan)))
-            complete_animation(timeOffset, bone, anim, self.animationLength,
-                                'position', 'y', mathutils.Vector((nan, nan, nan)))
-            complete_animation(timeOffset, bone, anim, self.animationLength,
-                                'position', 'z', mathutils.Vector((nan, nan, nan)))
+            bone.frames.feed_anim(anim, includeScaling, frameScale, timeOffset)
+            pass
+            # # position correction LATER in the program
+            # if includeScaling:
+            #     translate_animation(timeOffset, bone, anim, frameScale,
+            #               'scale', 'x', mathutils.Vector((nan, nan, nan)))
+            #     translate_animation(timeOffset, bone, anim, frameScale,
+            #               'scale', 'y', mathutils.Vector((nan, nan, nan)))
+            #     translate_animation(timeOffset, bone, anim, frameScale,
+            #               'scale', 'z', mathutils.Vector((nan, nan, nan)))
+            # translate_animation(timeOffset, bone, anim, frameScale,
+            #           'rotation', 'x', mathutils.Euler((nan, nan, nan), 'XYZ'))
+            # translate_animation(timeOffset, bone, anim, frameScale,
+            #           'rotation', 'y', mathutils.Euler((nan, nan, nan), 'XYZ'))
+            # translate_animation(timeOffset, bone, anim, frameScale,
+            #           'rotation', 'z', mathutils.Euler((nan, nan, nan), 'XYZ'))
+            # translate_animation(timeOffset, bone, anim, frameScale,
+            #           'position', 'x', mathutils.Vector((nan, nan, nan)))
+            # translate_animation(timeOffset, bone, anim, frameScale,
+            #           'position', 'y', mathutils.Vector((nan, nan, nan)))
+            # translate_animation(timeOffset, bone, anim, frameScale,
+            #           'position', 'z', mathutils.Vector((nan, nan, nan)))
+            #
+            # if includeScaling:
+            #     complete_animation(timeOffset, bone, anim, self.animationLength,
+            #                         'scale', 'x', mathutils.Vector((nan, nan, nan)))
+            #     complete_animation(timeOffset, bone, anim, self.animationLength,
+            #                         'scale', 'y', mathutils.Vector((nan, nan, nan)))
+            #     complete_animation(timeOffset, bone, anim, self.animationLength,
+            #                         'scale', 'z', mathutils.Vector((nan, nan, nan)))
+            # complete_animation(timeOffset, bone, anim, self.animationLength,
+            #                     'rotation', 'x', mathutils.Euler((nan, nan, nan), 'XYZ'))
+            # complete_animation(timeOffset, bone, anim, self.animationLength,
+            #                     'rotation', 'y', mathutils.Euler((nan, nan, nan), 'XYZ'))
+            # complete_animation(timeOffset, bone, anim, self.animationLength,
+            #                     'rotation', 'z', mathutils.Euler((nan, nan, nan), 'XYZ'))
+            # complete_animation(timeOffset, bone, anim, self.animationLength,
+            #                     'position', 'x', mathutils.Vector((nan, nan, nan)))
+            # complete_animation(timeOffset, bone, anim, self.animationLength,
+            #                     'position', 'y', mathutils.Vector((nan, nan, nan)))
+            # complete_animation(timeOffset, bone, anim, self.animationLength,
+            #                     'position', 'z', mathutils.Vector((nan, nan, nan)))
 
 
 class Bck_out:

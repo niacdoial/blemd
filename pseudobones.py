@@ -2,7 +2,35 @@ from mathutils import Vector, Euler, Matrix
 import bpy
 import math
 import re
+from .maxheader import dict_get_set
 # import weakref
+import logging
+log = logging.getLogger('bpy.ops.import_mesh.bmd.pseudobones')
+
+def product(lamb, vct):
+    ret = vct.copy()
+    ret.x *= lamb
+    ret.y *= lamb
+    ret.z *= lamb
+    return ret
+
+
+def sum2(vct1, vct2):
+    ret = vct1.copy()
+    ret.x += vct2.x
+    ret.y += vct2.y
+    ret.z += vct2.z
+    return ret
+
+
+def subtract2(vct1, vct2):
+    ret = vct1.copy()
+    ret.x -= vct2.x
+    ret.y -= vct2.y
+    ret.z -= vct2.z
+    return ret
+
+
 
 def vect_normalize(vect):
     length = math.sqrt(vect.x**2 + vect.y**2 + vect.z**2)
@@ -15,6 +43,8 @@ def vect_normalize(vect):
 
 def cubic_interpolator(t1, y1, d1, t2, y2, d2, t):
     tn = (t-t1)/(t2-t1)  # normalized time coordinate
+    d1 *= (t2-t1)  # adapted derivatives for the normalized time interval
+    d2 *= (t2-t1)
 
     # temporary values
     # for the value
@@ -30,6 +60,55 @@ def cubic_interpolator(t1, y1, d1, t2, y2, d2, t):
     dd = (3*tn**2 - 2*tn) * d2
 
     return ya+yb+yc+yd, (da+db+dc+dd)/(t2-t1)
+
+
+def get_total_mtx(p_bone, frame):
+    if not isinstance(p_bone, Pseudobone):
+        return Matrix.Identity(4), Matrix.Identity(4)
+    if frame not in p_bone.computed_t_matrices.keys():
+        parent_tot_mtx = get_total_mtx(p_bone.parent.fget(), frame)
+        local_t_mtx = p_bone.frames.get_mtx(frame)
+        p_bone.computed_t_matrices[frame] = (parent_tot_mtx[0] * local_t_mtx[0],
+                                             parent_tot_mtx[1] * local_t_mtx[1])
+    return p_bone.computed_t_matrices[frame]
+
+
+def get_dynamic_mtx(p_bone, frame):
+    # for a (n+1)-th generation dynamic matrix in the tree (Dmat_{n+1})
+    # we have Dmat_{n+1} = inverted(Smat_{n+1} * Product(k from 1 to n)(Dmat_{k}))) * Tmat_{n+1}
+    if frame not in p_bone.computed_d_matrices.keys():
+        solo_mtx_y = p_bone.inverted_static_mtx * get_total_mtx(p_bone, frame)[0]
+        solo_mtx_yd = p_bone.inverted_static_mtx * get_total_mtx(p_bone, frame)[1]
+        temp_bone = p_bone.parent.fget()
+        ancestor_mtx_y = Matrix.Identity(4)
+        ancestor_mtx_yd = Matrix.Identity(4)
+        while isinstance(temp_bone, Pseudobone):
+            ancestor_mtx_y = get_dynamic_mtx(temp_bone, frame)[0] * ancestor_mtx_y
+            ancestor_mtx_yd = get_dynamic_mtx(temp_bone, frame)[1] * ancestor_mtx_yd
+            temp_bone = temp_bone.parent.fget()
+        p_bone.computed_d_matrices[frame] = (ancestor_mtx_y.inverted() * solo_mtx_y,
+                                             ancestor_mtx_yd.inverted() * solo_mtx_yd)
+    return p_bone.computed_d_matrices[frame]
+
+
+def get_pos_vct(p_bone, frame):
+    EPSILON = 1E-4
+    y, yd = get_dynamic_mtx(p_bone, frame)
+    y = y.to_translation()
+    yd = yd.to_translation()
+    # yd = get_dynamic_mtx(p_bone, frame+EPSILON).position()
+    d = (yd-y)/EPSILON
+    return y, d
+
+
+def get_rot_vct(p_bone, frame):
+    EPSILON = 1E-4
+    y, yd = get_dynamic_mtx(p_bone, frame)
+    y = y.to_euler('XYZ')
+    yd = yd.to_euler('XYZ')
+    # yd = get_dynamic_mtx(p_bone, frame+EPSILON).rotation()
+    d = product(1/EPSILON, subtract2(yd, y))
+    return y, d
 
 
 def matrix_calibrate_r(y, d, mat, parent, bone):
@@ -195,6 +274,106 @@ def matrix_calibrate_s(y, d, parent, bone):
 instances = {}
 
 
+class KeyFrames:
+    def __init__(self):
+        self.times = {}
+        self.positions = [{}, {}, {}]
+        self.rotations = [{}, {}, {}]
+        self.scales = [{}, {}, {}]
+
+    def feed_anim(self, anim, include_sc=True, fr_sc=1, fr_of=0):
+        for key in anim.translationsX:
+            self.positions[0][fr_sc*key.time+fr_of] = (key.value, key.tangent)
+            dict_get_set(self.times, fr_sc*key.time+fr_of, [False, False, False])[0] = True
+        for key in anim.translationsY:
+            self.positions[1][fr_sc*key.time+fr_of] = (key.value, key.tangent)
+            dict_get_set(self.times, fr_sc*key.time+fr_of, [False, False, False])[0] = True
+        for key in anim.translationsZ:
+            self.positions[2][fr_sc*key.time+fr_of] = (key.value, key.tangent)
+            dict_get_set(self.times, fr_sc*key.time+fr_of, [False, False, False])[0] = True
+
+        for key in anim.rotationsX:
+            self.rotations[0][fr_sc*key.time+fr_of] = (key.value, key.tangent)
+            dict_get_set(self.times, fr_sc*key.time+fr_of, [False, False, False])[1] = True
+        for key in anim.rotationsY:
+            self.rotations[1][fr_sc*key.time+fr_of] = (key.value, key.tangent)
+            dict_get_set(self.times, fr_sc*key.time+fr_of, [False, False, False])[1] = True
+        for key in anim.rotationsZ:
+            self.rotations[2][fr_sc*key.time+fr_of] = (key.value, key.tangent)
+            dict_get_set(self.times, fr_sc*key.time+fr_of, [False, False, False])[1] = True
+        if include_sc:
+            for key in anim.scalesX:
+                self.scales[0][fr_sc*key.time+fr_of] = (key.value, key.tangent)
+                dict_get_set(self.times, fr_sc*key.time+fr_of, [False, False, False])[2] = True
+            for key in anim.scalesY:
+                self.scales[1][fr_sc*key.time+fr_of] = (key.value, key.tangent)
+                dict_get_set(self.times, fr_sc*key.time+fr_of, [False, False, False])[2] = True
+            for key in anim.scalesZ:
+                self.scales[2][fr_sc*key.time+fr_of] = (key.value, key.tangent)
+                dict_get_set(self.times, fr_sc*key.time+fr_of, [False, False, False])[2] = True
+
+        # add last frame on everything (to avoid crashes), but not register them as 'real'
+
+        anim_length = max(self.times.keys())
+        for coordinate in (0,1,2):
+            max_time = max(self.positions[coordinate].keys())
+            if max_time < anim_length:
+                self.positions[coordinate][anim_length] = self.positions[coordinate][max_time]
+            max_time = max(self.rotations[coordinate].keys())
+            if max_time < anim_length:
+                self.rotations[coordinate][anim_length] = self.rotations[coordinate][max_time]
+            max_time = max(self.scales[coordinate].keys())
+            if max_time < anim_length:
+                self.scales[coordinate][anim_length] = self.scales[coordinate][max_time]
+
+
+    def _get_vt(self, data, time):
+        if time in data.keys():
+            return data[time]
+        elif len(data.keys()) == 1:
+            return next(iter(data.values()))
+        prev_t = -math.inf
+        next_t = +math.inf
+        for frame_t in data.keys():
+            if prev_t < frame_t < time:
+                prev_t = frame_t
+            elif time < frame_t < next_t:
+                next_t = frame_t
+
+        return cubic_interpolator(prev_t, data[prev_t][0], data[prev_t][1],
+                                  next_t, data[next_t][0], data[next_t][1], time)
+
+    def get_pos(self, time):
+        temp_x = self._get_vt(self.positions[0], time)
+        temp_y = self._get_vt(self.positions[1], time)
+        temp_z = self._get_vt(self.positions[2], time)
+        return (Vector((temp_x[0], temp_y[0], temp_z[0])),
+                Vector((temp_x[1], temp_y[1], temp_z[1])))
+
+    def get_rot(self, time):
+        temp_x = self._get_vt(self.rotations[0], time)
+        temp_y = self._get_vt(self.rotations[1], time)
+        temp_z = self._get_vt(self.rotations[2], time)
+        return (Euler((temp_x[0], temp_y[0], temp_z[0]), 'XYZ'),
+                Euler((temp_x[1], temp_y[1], temp_z[1]), 'XYZ'))
+
+    def get_sc(self, time):
+        temp_x = self._get_vt(self.scales[0], time)
+        temp_y = self._get_vt(self.scales[1], time)
+        temp_z = self._get_vt(self.scales[2], time)
+        return (Vector((temp_x[0], temp_y[0], temp_z[0])),
+                Vector((temp_x[1], temp_y[1], temp_z[1])))
+
+    def get_mtx(self, time):
+        EPSILON = 1E-4
+        vct_y, vct_d = self.get_pos(time)
+        rot_y, rot_d = self.get_rot(time)
+        vct_yd = sum2(vct_y, product(EPSILON, vct_d))
+        rot_yd = sum2(rot_y, product(EPSILON, rot_d))
+        return ( (Matrix.Translation(vct_y) * rot_y.to_matrix().to_4x4()),
+                 (Matrix.Translation(vct_yd) * rot_yd.to_matrix().to_4x4()) )
+
+
 class Pseudobone:
     def __init__(self, parentBone, frame, matrix, startpoint, endpoint, roll):
 
@@ -208,12 +387,16 @@ class Pseudobone:
         self.jnt_frame = None
         self.rotation_euler = Euler((0, 0, 0), 'XYZ')
         self.position = startpoint
-        self.scale_kf = {}  # keyframes (values)
-        self.scale_tkf = {}  # keyframes (tangents)
-        self.rotation_kf = {}
-        self.rotation_tkf = {}
-        self.position_kf = {}
-        self.position_tkf = {}
+        self.frames = KeyFrames()
+        self.inverted_static_mtx = None
+        self.computed_d_matrices = {}
+        self.computed_t_matrices = {}
+        # self.scale_kf = {}  # keyframes (values)
+        # self.scale_tkf = {}  # keyframes (tangents)
+        # self.rotation_kf = {}
+        # self.rotation_tkf = {}
+        # self.position_kf = {}
+        # self.position_tkf = {}
         # self.transform = mathutils.Matrix.Identity(4)  # what to do with that? it will be ultimately useless.
 
         self._parent = None
@@ -278,6 +461,11 @@ class Pseudobone:
         self._tree_to_array(ret)
         return ret
 
+    def reset(self):
+        self.frames = KeyFrames()
+        self.computed_d_matrices = {}
+        self.computed_t_matrices = {}
+
 
 def getBoneByName(name):
     global instances
@@ -311,7 +499,7 @@ def apply_animation(bones, arm_obj, jntframes, name=None):
         arm_obj.data.bones[name].use_inherit_scale = False  # scale can be applied
         posebone = arm_obj.pose.bones[name]
         posebone.rotation_mode = "XZY"  # remember, coords are flipped
-        bpy.context.scene.frame_current = 1
+        bpy.context.scene.frame_current = 0
         # this keyframe is needed, overwritten anyways
         # also it is always at 1 because this function is called once per action
         posebone.keyframe_insert('location')
@@ -328,7 +516,7 @@ def apply_animation(bones, arm_obj, jntframes, name=None):
         datadict[curve.array_index] = curve
 
     # create keyframes, with tengents
-    for num, com in enumerate(bones):
+    for com in bones:
         name = com.name.fget()
         bonedict = data[name]
         posebone = arm_obj.pose.bones[name]
@@ -336,11 +524,9 @@ def apply_animation(bones, arm_obj, jntframes, name=None):
         posebone.keyframe_insert('location')
         posebone.keyframe_insert('rotation_euler')
         posebone.keyframe_insert('scale')
-        every_frame = list(set(com.position_kf.keys()).union(
-                           set(com.rotation_kf.keys())).union(
-                           set(com.scale_kf.keys())))
+        every_frame = list(com.frames.times.keys())
         every_frame.sort()
-        refpos = jntframes[num]
+        refpos = com.jnt_frame
         if type(com.parent.fget()) is not Pseudobone:
             com.rotmatrix = Matrix.Identity(4)
             com.parentrot = Matrix.Identity(4)
@@ -353,10 +539,10 @@ def apply_animation(bones, arm_obj, jntframes, name=None):
         for frame in every_frame:
             bpy.context.scene.frame_current = frame
             # flip y and z
-            if frame in com.position_kf.keys():
-                vct = com.position_kf[frame]
-                tgt = com.position_tkf[frame]
+            if com.frames.times[frame][0]:
+                vct, tgt = com.frames.get_pos(frame)
                 vct, tgt = matrix_calibrate_t(vct, tgt, com.parentrot, com)
+                # vct, tgt = get_pos_vct(com, frame)
                 if not math.isnan(vct.x):
                     # remember: in JNT, bone coordinates are relative to their parents, not in blender
                     # (the animation data must be corrected by the relative bone position only)
@@ -379,10 +565,10 @@ def apply_animation(bones, arm_obj, jntframes, name=None):
                     bonedict['location'][2].keyframe_points[-1].handle_right = co + Vector((1, tgt.y))
                     posebone.keyframe_insert('location', 2)
 
-            if frame in com.rotation_kf.keys():
-                vct = com.rotation_kf[frame]
-                tgt = com.rotation_tkf[frame]
+            if com.frames.times[frame][1]:
+                vct, tgt = com.frames.get_rot(frame)
                 vct, tgt = matrix_calibrate_r(vct, tgt, cancel_ref_rot, com.parentrot, com)
+                # vct, tgt = get_rot_vct(com, frame)
                 if not math.isnan(vct.x):
                     posebone.rotation_euler[0] = vct.x
                     co = bonedict['rotation_euler'][0].keyframe_points[-1].co
@@ -402,9 +588,8 @@ def apply_animation(bones, arm_obj, jntframes, name=None):
                     bonedict['rotation_euler'][2].keyframe_points[-1].handle_right = co + Vector((1, tgt.y))
                     posebone.keyframe_insert('rotation_euler', 2)
 
-            if frame in com.scale_kf.keys():
-                vct = com.scale_kf[frame]
-                tgt = com.scale_tkf[frame]
+            if com.frames.times[frame][2]:
+                vct, tgt = com.frames.get_sc(frame)
                 vct, tgt = matrix_calibrate_s(vct, tgt, com.parentrot, com)
                 if not math.isnan(vct.x):
                     posebone.scale[0] = vct.x

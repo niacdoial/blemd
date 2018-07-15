@@ -73,6 +73,12 @@ def ReverseArray(inputArray):
     return rev
 
 
+def dict_get_set(dct, key, default):
+    if key not in dct.keys():
+        dct[key] = default
+    return dct[key]
+
+
 def HiddenDOSCommand(exefile, args, startpath=os.getcwd()):
     # this is the function to edit to adapt the program for non-windows platforms
     # just add an 'elif' to the  if/else block below, in which `exefile` is adapted
