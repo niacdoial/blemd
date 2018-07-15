@@ -141,11 +141,10 @@ class Node:
                         or self.inputs[0].type == 'op':
                     # the first input is special. the second one should have a defined type
                     if self.inputs[1].type == 'op':  # both special:
-                        if self.inputs[1].op in ('mixC', 'triple'):
+                        if self.inputs[1].op in ('mixC', 'triple', 'texture_color', 'texture_3alpha'):
                             typeeval = Color()  # type is color: use a dumb var to express it
-                        elif self.inputs[1].op in ('mixA', 'get_r', 'get_g', 'get_b'):
+                        elif self.inputs[1].op in ('mixA', 'get_r', 'get_g', 'get_b', 'texture_alpha'):
                             typeeval = 0.0  # type is number: use a dumb var to express it
-
                         else:
                             raise ValueError('operator not recognized for type detection. ({})'
                                              .format(self.inputs[1].op))
