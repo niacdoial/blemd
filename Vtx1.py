@@ -213,7 +213,7 @@ class Vtx1:
                 self.positions = []
                 posCount = len(data) / 3
                 if int(posCount) != posCount:
-                    log.info("wouldhaveraised_pos (%d is not *3)", len(data))
+                    log.info("amount of position coordinates (%d) is not //3", len(data))
                     for com in range(int(posCount - int(posCount)*3)):
                         data.append(None)
                 #raise ValueError('invalid posCount (length not *3)')
@@ -245,7 +245,7 @@ class Vtx1:
             if af.componentCount == 0:  # -- xyz
                 normalsCount = len(data) // 3
                 if normalsCount != len(data):
-                    log.info("wouldhaveraised_nor (%d is not *3)", len(data))
+                    log.info("length of normal coordinates (%d) is not //3", len(data))
                 self.normals = []
                 # -- arrays.self.normals.resize(data.size()/3);
                 k = 0
@@ -380,33 +380,3 @@ def StripIterator(lst):
 def FanIterator(lst):
     for com in range(1, len(lst)-1):
         yield (lst[0], lst[com+1], lst[com])  # faces need to be described like this in order to have correct normals
-
-
-# XCX depreciated
-def setNormals(mesh, Faces, nc_to_f_v, normals):
-    f_to_rf = [None] * len(mesh.polygons)  # blender faces index to loaded faces index
-    for num, com in enumerate(mesh.polygons):  # will be identity _MOST_ of the time
-        index = Faces.index(tuple(com.vertices))
-        while f_to_rf[index] is not None:
-            index = Faces.index(tuple(com.vertices), index + 1)
-        f_to_rf[index] = num
-
-    v_rf_to_l = []
-    for com in range(len(mesh.vertices)):
-        v_rf_to_l.append({})
-    for num, com in enumerate(mesh.polygons):
-        for com2 in com.loop_indices:
-            l_id = mesh.loops[com2].index
-            v_rf_to_l[mesh.loops[com2].vertex_index][num] = l_id
-
-    # those lines are a new method.
-    for num, com0 in enumerate(nc_to_f_v):
-        for com in com0:
-            if f_to_rf[com[0]] is not None:
-                for com2 in mesh.polygons[f_to_rf[com[0]]].loop_indices:
-                    if mesh.loops[com2].vertex_index == com[1]:
-                        if normals[num] is not None:
-                            normal = (normals[num].x, -normals[num].z, normals[num].y)
-                            mesh.loops[com2].normal = mathutils.Vector(normal)
-                        else:
-                            mesh.loops[com2].normal = mesh.vertices[mesh.loops[com2].vertex_index].normal

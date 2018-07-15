@@ -45,8 +45,9 @@ else:
         # if this list is not empty, logging is configured.
         # here, it isn't
         config_logging()
-    import blemd.maxheader as MaxH
-    import blemd.BModel
+    from . import (
+        maxheader as MaxH,
+        BModel )
     log = logging.getLogger('bpy.ops.import_mesh.bmd')
 del LOADED
 
@@ -101,14 +102,16 @@ class ImportBmd(Operator, ImportHelper):
         name="Import animations(WIP)",
         description="if yes, choice to chain them or put them in individual actions",
         items=(('DONT', "do not import animations", ""),
-               ('CHAINED', "import all animations in one single Action object", '(messy, but simple to deal with)'),
-               ('SEPARATE', "One Action per animation file", '(for advanced blender users)')),
+               ('CHAINED', "Single Action", 'will concatenate all the detected .bck files into a single animation (messy, but simple to use)'),
+               ('SEPARATE', "One Action per animation file", 'animations will be displayed one after the other on a "NLA strip"'
+                                                             ' (for more advanced blender users)')),
         default='CHAINED'
         )
 
     use_nodes = BoolProperty(
         name="use complete materials",
-        description="use complete (glsl) materials (converted into nodes). Hard to export.",
+        description="use complete (glsl) materials (converted into nodes)."
+                    "More precise, but impossible to export for now.",
         default=False
     )
 
@@ -134,28 +137,29 @@ class ImportBmd(Operator, ImportHelper):
         )
 
     imtype = EnumProperty(
-        name="Image use type",
-        description="Choose packed images, native format image, or targa converted ones",
+        name="Image format",
+        description="Choose packed images, native format image, or targa converted ones."
+                    "If an image is missing, try changing this setting",
         items=(('TGA', "targa files", ""),
-               ('DDS', "dds files", 'this format feels legacy')),
+               ('DDS', "dds files", '(this format has less support from Blender)')),
         default='TGA'
         )
 
     ic_sc = BoolProperty(
         name="include scaling",
-        description="needed on some models, glitch others",
+        description="Will help make some models look right, has opposite effect on others.",
         default=True
         )
 
     dvg = BoolProperty(
         name="DEBUG vertex groups",
-        description="DEBUG option. create Vgroups to show the original BMD structure",
+        description="DEBUG option. create Vgroups to show the original BMD structure (ram-intensive)",
         default=False
         )
 
     boneThickness = IntProperty(
         name="bone length",
-        description="from 5 to 100 (usually)",
+        description="the length of what represents bones in blender Only affects visibility. usually from 5 to 100.",
         min=1,
         max=1000,
         soft_min=5,
