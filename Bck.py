@@ -1,7 +1,6 @@
 #! /usr/bin/python3
 from .BinaryReader import BinaryReader
 from .BinaryWriter import BinaryWriter
-from .maxheader import MessageBox
 from .pseudobones import getBoneByName, Pseudobone, cubic_interpolator
 import mathutils
 import bpy

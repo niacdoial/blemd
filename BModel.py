@@ -18,14 +18,14 @@ log = logging.getLogger('bpy.ops.import_mesh.bmd.main')
 
 if LOADED:
     for module in (BinaryReader, Mat44, Inf1, Vtx1, Shp1, Jnt1, Evp1, Drw1,
-                   Bck, Mat3, Mat3V2, Tex1, Btp, MaxH, TexH, MatH, PBones):
+                   Bck, Mat3, Mat3V2, Tex1, Mdl3, Btp, MaxH, TexH, MatH, PBones):
         reload(module)
 
 else:
     from . import (
         BinaryReader,
         Matrix44 as Mat44,
-        Inf1, Vtx1, Shp1, Jnt1, Evp1, Drw1, Bck, Mat3, Tex1, Btp,
+        Inf1, Vtx1, Shp1, Jnt1, Evp1, Drw1, Bck, Mat3, Tex1, Btp, Mdl3,
         materialV2 as Mat3V2,
         maxheader as MaxH,
         texhelper as TexH,
@@ -169,7 +169,7 @@ class BModel:
     # <variable _runExtractTexturesCmd>
     # <variable _includeScaling>
     # <variable _reverseFaces>
-    # -- required for .x export (render eyes before face)
+    # -- required for .x export (render eyeraises before face)
     # <function>
 
 
@@ -470,6 +470,7 @@ class BModel:
         self._mat1 = Mat3.Mat3()
         self._mat1V2 = Mat3V2.Mat3()
         self.tex = Tex1.Tex1()
+        self.mdl = Mdl3.Mdl3()
 
         while strTag != "TEX1":  # "TEX1 tag is the last one every time"
             br.SeekCur(iSize)
@@ -496,6 +497,8 @@ class BModel:
                 self._mat1V2.LoadData(br)
             elif strTag == "TEX1":
                 self.tex.LoadData(br)
+            elif strTag == "MDL3":
+                self.mdl.LoadData(br)
             else:
                 log.warning('Tag (%s) not recognized. Resulting mesh could be weird', strTag)
             br.SeekSet(streamPos)
@@ -763,7 +766,6 @@ class BModel:
                     self._currMaterial = Mat3V2.create_material(mat)
             except Exception as err:
                 log.error('Material not built correctly (error is %s)', err)
-                raise
                 self._currMaterial = None
 
                 # keep the correct material indexes : include void material

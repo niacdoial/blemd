@@ -1,6 +1,5 @@
 #! /usr/bin/python3
 from mathutils import Vector
-from .maxheader import MessageBox
 import mathutils
 import logging
 log = logging.getLogger('bpy.ops.import_mesh.bmd.vtx1')
@@ -378,5 +377,6 @@ def StripIterator(lst):
 
 
 def FanIterator(lst):
+    print('This is a fan!')
     for com in range(1, len(lst)-1):
         yield (lst[0], lst[com+1], lst[com])  # faces need to be described like this in order to have correct normals

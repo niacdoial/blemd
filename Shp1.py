@@ -1,5 +1,4 @@
-#! /usr/bin/python3
-from .maxheader import MessageBox
+#! /usr/bin/python
 import logging
 log = logging.getLogger('bpy.ops.import_mesh.bmd.shp1')
 
