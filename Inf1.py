@@ -1,6 +1,4 @@
 #! /usr/bin/python3
-#     -- only used during file load
-
 
 class Inf1Header:
     def __init__(self):  # GENERATED!

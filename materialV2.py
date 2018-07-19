@@ -550,7 +550,7 @@ def displayTevStage(out, f, offset, size):
 
     out.write("TevStageInfo (op, bias, scale, doClamp, tevRegId):")
 
-    count = size / 20
+    count = size // 20
     for i in range(count):
         info = BMD_namespace.TevStageInfo()
         readTevStageInfo(f, info)

@@ -54,12 +54,12 @@ del LOADED
 IDE_DEBUG = False
 
 bl_info = {
-    "name": "Import gc/wii bmd format (.bmd)",
+    "name": "Import gc/wii bmd format (.bmd, .bdl)",
     "author": "people from the internet. adapted for blender by Niacdoial, from Avatarus-One's version (see github) full explanation in README",
     "version": (1, 0, 0),
     "blender": (2, 77, 0),
     "location": "File > Import > Nintendo BMD",
-    "description": "Import files in the gc/wii BMD format (.bmd)",
+    "description": "Import files in the gc/wii BMD format (.bmd, .bdl)",
     "wiki_url": "https://github.com/niacdoial/blemd",
     "warning": "still in devlopement",
     "tracker_url": "???",
@@ -85,7 +85,7 @@ class ImportBmd(Operator, ImportHelper):
     filename_ext = ".bmd"
 
     filter_glob = StringProperty(
-            default="*.bmd",
+            default="*.bmd;*.bdl",
             options={'HIDDEN'},
             maxlen=255,  # Max internal buffer length, longer would be clamped.
             )
@@ -197,7 +197,7 @@ class ImportBmd(Operator, ImportHelper):
 
 # Only needed if you want to add into a dynamic menu
 def menu_func(self, context):
-    self.layout.operator(ImportBmd.bl_idname, text="Nintendo BMD")
+    self.layout.operator(ImportBmd.bl_idname, text="Nintendo BMD/BDL")
 
 
 def register():
