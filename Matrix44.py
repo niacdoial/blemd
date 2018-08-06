@@ -287,3 +287,10 @@ def updateMatrixTable(evp, drw, jnt, currPacket, multiMatrixTable, matrixTable, 
                     multiMatrixTable.append(None)
                 multiMatrixTable[n] = singleMultiMatrixEntry
                 # -- end if drw.isWeighted[index] then
+
+
+def rotation_part(mtx):
+    ret = mtx.copy()
+    for i in range(3):
+        ret[i][3] = 0
+    return ret

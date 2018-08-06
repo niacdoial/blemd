@@ -272,6 +272,7 @@ class BinaryReader:
 
     def Open(self, srcPath, compressed_stream=False):
         self._f = open(srcPath, "rb+")
+        self.read = self._f.read
         # --fseek self._f 0 seek_end
         # --self._size = ftell self._f
         self._f.seek(0)

@@ -15,6 +15,7 @@ IDE = False  # is changed by test launcher
 @contextmanager
 def stdout_redirected(to=os.devnull):
     '''
+    # curtesy of https://stackoverflow.com/questions/4675728/redirect-stdout-to-a-file-in-python#4675744
     import os
 
     with stdout_redirected(to=filename):

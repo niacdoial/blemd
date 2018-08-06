@@ -363,6 +363,7 @@ class BModel:
                     bpy.context.scene.update()
 
                 with MaxH.active_object(arm_obj):
+
                     bpy.ops.object.mode_set(mode='EDIT')
                     for bone in self._bones:
                         arm.edit_bones.new(bone.name.fget())
@@ -371,15 +372,16 @@ class BModel:
                                 tempbone = arm.edit_bones.new(bone.parent.fget().name.fget())
                                 if bone.parent.fget().parent.fget() is not None:
                                     tempbone.parent = arm.edit_bones[bone.parent.fget().parent.fget().name.fget()]
-                                tempbone.head = Vector(bone.parent.fget().position)
-                                tempbone.tail = Vector(bone.parent.fget().endpoint)
+                                # XCX useless?
+                                # tempbone.head = Vector(bone.parent.fget().position)
+                                # tempbone.tail = Vector(bone.parent.fget().endpoint)
                     for bone in self._bones:
                         realbone = arm.edit_bones[bone.name.fget()]
                         if isinstance(bone.parent.fget(), PBones.Pseudobone):
                             realbone.parent = arm.edit_bones[bone.parent.fget().name.fget()]
                         realbone.head = Vector(bone.position)
                         realbone.tail = Vector(bone.endpoint)
-                        realbone.roll = bone.roll
+                        realbone.align_roll(bone.get_z())
                         modelObject.vertex_groups.new(bone.name.fget())
 
                     if len(self.vertexMultiMatrixEntry) != len(self.model.vertices):
@@ -679,17 +681,17 @@ class BModel:
             fstartPoint = Vector(fstartPoint.xzy)  # convertion happes here
             fstartPoint.y *= -1
 
-            orientation = (parentMatrix.to_quaternion().to_matrix().to_4x4() *  # use rotation part of parent matrix
+            orientation = (Mat44.rotation_part(parentMatrix) *  # use rotation part of parent matrix
                           Euler((f.rx, f.ry, f.rz), 'XYZ').to_matrix().to_4x4() *  # apply local rotation
                           Vector((0, 0, -self.params.boneThickness)))
             orientation.y, orientation.z = (-orientation.z), orientation.y
             # computing correct bone orientation (first in BMD coords, then convert on the fly)
 
-            orientation = Vector((0, self.params.boneThickness, 0))
+            # orientation = Vector((0, self.params.boneThickness, 0))
 
             bone = PBones.Pseudobone(parentBone, f, effP,
                                      fstartPoint,
-                                     fstartPoint + orientation, 0)  # f.rz)  # add roll correction
+                                     fstartPoint + orientation)
 
             bone.scale = (f.sx, f.sy, f.sz)
 
