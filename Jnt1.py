@@ -1,6 +1,6 @@
 #! /usr/bin/python3
 from .maxheader import MessageBox
-from mathutils import Vector
+from mathutils import Vector, Matrix, Euler
 from math import pi
 import logging
 log = logging.getLogger('bpy.ops.import_mesh.bmd.jnt1')
@@ -82,6 +82,9 @@ class JntFrame:
 
         self._bbMin = e.bbMin  # is this even needed? (bounding box)
         self._bbMax = e.bbMax
+
+    def get_tr_mtx(self):
+        return Matrix.Translation(self.t) * Euler((self.rx, self.ry, self.rz), 'XYZ').to_matrix().to_4x4()
   
 
 class Jnt1:

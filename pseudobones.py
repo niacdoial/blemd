@@ -3,9 +3,20 @@ import bpy
 import math
 import re
 from .maxheader import dict_get_set
+from .Matrix44 import rotation_part
 # import weakref
 import logging
 log = logging.getLogger('bpy.ops.import_mesh.bmd.pseudobones')
+
+NtoB = Matrix([[1,0,0,0],
+               [0,0,-1,0],
+               [0,1,0,0],
+               [0,0,0,1]])
+BtoN = Matrix([[1,0,0,0],
+               [0,0,1,0],
+               [0,-1,0,0],
+               [0,0,0,1]])
+
 
 def product(lamb, vct):
     ret = vct.copy()
@@ -29,7 +40,6 @@ def subtract2(vct1, vct2):
     ret.y -= vct2.y
     ret.z -= vct2.z
     return ret
-
 
 
 def vect_normalize(vect):
@@ -62,6 +72,13 @@ def cubic_interpolator(t1, y1, d1, t2, y2, d2, t):
     return ya+yb+yc+yd, (da+db+dc+dd)/(t2-t1)
 
 
+###
+# the goal here is to get the matrix adapted to blender animation
+# (from  default pose to correct pose)
+# in blender, the matrix chain looks like
+# this (each contains translation and rotation):
+# origin_s*origin_d*bone_1_s*bone_1_d*....*bone_n_s*bone_n_d
+    
 def get_total_mtx(p_bone, frame):
     if not isinstance(p_bone, Pseudobone):
         return Matrix.Identity(4), Matrix.Identity(4)
@@ -90,10 +107,19 @@ def get_dynamic_mtx(p_bone, frame):
                                              ancestor_mtx_yd.inverted() * solo_mtx_yd)
     return p_bone.computed_d_matrices[frame]
 
+def get_dynamic_mtx2(p_bone, frame):
+    # for a (n+1)-th generation dynamic matrix in the tree (Dmat_{n+1})
+    # we have Dmat_{n+1} = inverted(Smat_{n+1} * Product(k from 1 to n)(Dmat_{k}))) * Tmat_{n+1}
+    if frame not in p_bone.computed_d_matrices.keys():
+        local_mtx_y, local_mtx_yd = p_bone.frames.get_mtx(frame)
+        inv_static_mtx = p_bone.jnt_frame.get_tr_mtx().inverted()
+        p_bone.computed_d_matrices[frame] = (inv_static_mtx * local_mtx_y,
+                                             inv_static_mtx * local_mtx_yd)
+    return p_bone.computed_d_matrices[frame]
 
 def get_pos_vct(p_bone, frame):
     EPSILON = 1E-4
-    y, yd = get_dynamic_mtx(p_bone, frame)
+    y, yd = get_dynamic_mtx2(p_bone, frame)
     y = y.to_translation()
     yd = yd.to_translation()
     # yd = get_dynamic_mtx(p_bone, frame+EPSILON).position()
@@ -103,7 +129,7 @@ def get_pos_vct(p_bone, frame):
 
 def get_rot_vct(p_bone, frame):
     EPSILON = 1E-4
-    y, yd = get_dynamic_mtx(p_bone, frame)
+    y, yd = get_dynamic_mtx2(p_bone, frame)
     y = y.to_euler('XYZ')
     yd = yd.to_euler('XYZ')
     # yd = get_dynamic_mtx(p_bone, frame+EPSILON).rotation()
@@ -145,8 +171,7 @@ def matrix_calibrate_r(y, d, mat, parent, bone):
         parent_rot_matrix = bone.parent_rot_matrix
     else:
         if type(bone.parent.fget()) == Pseudobone:
-            parent_rot_matrix = (bone.parent.fget().jnt_frame.incr_matrix.
-                                    to_quaternion().to_matrix().to_4x4())
+            parent_rot_matrix = rotation_part(bone.parent.fget().jnt_frame.incr_matrix)
         else:
             parent_rot_matrix = Matrix.Identity(4)
         bone.parent_rot_matrix = parent_rot_matrix
@@ -196,8 +221,7 @@ def matrix_calibrate_t(y, d, parent, bone):
         parent_rot_matrix = bone.parent_rot_matrix
     else:
         if type(bone.parent.fget()) == Pseudobone:
-            parent_rot_matrix = (bone.parent.fget().jnt_frame.incr_matrix.
-                                 to_quaternion().to_matrix().to_4x4())
+            parent_rot_matrix = rotation_part(bone.parent.fget().jnt_frame.incr_matrix)
         else:
             parent_rot_matrix = Matrix.Identity(4)
         bone.parent_rot_matrix = parent_rot_matrix
@@ -375,14 +399,13 @@ class KeyFrames:
 
 
 class Pseudobone:
-    def __init__(self, parentBone, frame, matrix, startpoint, endpoint, roll):
+    def __init__(self, parentBone, frame, matrix, startpoint, endpoint):
 
         self._name = None
         ori = endpoint - startpoint
         self.endpoint = endpoint
         self.length = math.sqrt(ori.x**2 + ori.y**2 + ori.z**2)
         self.orientation = vect_normalize(ori)
-        self.roll = roll
         self.scale = Vector((1, 1, 1))
         self.jnt_frame = None
         self.rotation_euler = Euler((0, 0, 0), 'XYZ')
@@ -466,6 +489,9 @@ class Pseudobone:
         self.computed_d_matrices = {}
         self.computed_t_matrices = {}
 
+    def get_z(self):
+        return NtoB*rotation_part(self.matrix)*BtoN * Vector((0,0,1))
+
 
 def getBoneByName(name):
     global instances
@@ -540,9 +566,9 @@ def apply_animation(bones, arm_obj, jntframes, name=None):
             bpy.context.scene.frame_current = frame
             # flip y and z
             if com.frames.times[frame][0]:
-                vct, tgt = com.frames.get_pos(frame)
-                vct, tgt = matrix_calibrate_t(vct, tgt, com.parentrot, com)
-                # vct, tgt = get_pos_vct(com, frame)
+                # vct, tgt = com.frames.get_pos(frame)
+                # vct, tgt = matrix_calibrate_t(vct, tgt, com.parentrot, com)
+                vct, tgt = get_pos_vct(com, frame)
                 if not math.isnan(vct.x):
                     # remember: in JNT, bone coordinates are relative to their parents, not in blender
                     # (the animation data must be corrected by the relative bone position only)
@@ -566,9 +592,9 @@ def apply_animation(bones, arm_obj, jntframes, name=None):
                     posebone.keyframe_insert('location', 2)
 
             if com.frames.times[frame][1]:
-                vct, tgt = com.frames.get_rot(frame)
-                vct, tgt = matrix_calibrate_r(vct, tgt, cancel_ref_rot, com.parentrot, com)
-                # vct, tgt = get_rot_vct(com, frame)
+                # vct, tgt = com.frames.get_rot(frame)
+                # vct, tgt = matrix_calibrate_r(vct, tgt, cancel_ref_rot, com.parentrot, com)
+                vct, tgt = get_rot_vct(com, frame)
                 if not math.isnan(vct.x):
                     posebone.rotation_euler[0] = vct.x
                     co = bonedict['rotation_euler'][0].keyframe_points[-1].co

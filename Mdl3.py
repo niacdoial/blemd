@@ -1,6 +1,41 @@
 #! /usr/bin/python3
 #     -- loads correctly: count=113, offsetToW=20, offsetToD=134 [20 + 113 = 133 (nextBit = offsetToD)]
 
+class Part1Entry:
+    def __init__(self, br):
+        self.subpart1 = []
+        subentry = br.read(5)
+        while subentry[0] == 97:  # == b'a'
+            self.subpart1.append(subentry)
+            subentry = br.read(5)
+        
+        br.SeekSet(br.Position()-5)
+        self.subpart2 = b''
+        
+        buffer = br.read(4)
+        while True:  # break is used to end loop
+            if buffer == b'\xff\xff\xff\xff':
+                self.subpart2 += buffer
+                buf2 = br.read(1)
+                while buf2 == b'\xff':
+                    self.subpart2 += buf2
+                    buf2 = br.read(1)
+                if self.subpart2[-8:] == 8 * b'\xff':
+                    self.subpart2 += buf2
+                    self.subpart2 += br.read(4*16)
+                    while br.Position() % 16:
+                        # next entry starts at the beginning of a line
+                        self.subpart2 += br.read(1)
+                    break
+                else:
+                    self.subpart2 += buf2
+            else:
+                self.subpart2 += buffer
+            buffer = br.read(4)
+        
+        self.size = 5*len(self.subpart1) + len(self.subpart2)
+        
+
 class Part2Entry:
     def __init__(self, br):
         self.w1 = br.ReadWORD()  # 01 then {B1, F2}
@@ -62,15 +97,31 @@ class Mdl3:
         
         br.SeekSet(mdl3Offset + header.offsettosub1)
         
-        self.sub1_offsets = header.numberOfBones * 2 * [0]
+        offsets = (header.numberOfBones * 2 +1) * [0]  # the extra slot is here to avoid crashes
         for i in range(header.numberOfBones * 2):
-            self.sub1_offsets[i] = br.ReadDWORD()
-            
+            offsets[i] = br.ReadDWORD()
+
+        self.part1BaseOffset = offsets[0]
+
+        self.unk1 = (header.numberOfBones-1) * [0]
+        for i in range(header.numberOfBones-1):
+            self.unk1[i] = offsets[2*i+2]
+
+
         # need to deal with the big blocks : 
         # each thing looks like some 5-bit sequences: a....
         # (terminated by a....[0x10])  , and a footer with some 0xff in it
         # same number as bones ?
         
+        br.SeekSet(mdl3Offset + header.offsettosub1+self.part1BaseOffset)
+        pos = br.Position()
+        self.part1 = header.numberOfBones * [0]
+        for i in range(header.numberOfBones):
+            br.SeekSet(pos)
+            self.part1[i] = Part1Entry(br)
+            pos += offsets[2*i+1]
+
+
         br.SeekSet(mdl3Offset + header.offsettopart2)
         self.part2 = header.numberOfBones * [0]
         for i in range(header.numberOfBones):
@@ -91,4 +142,4 @@ class Mdl3:
         for i in range(header.numberOfBones):
             self.part5[i] = br.ReadWORD()  # range() so far
         
-        
+        self.stringtable = br.ReadStringTable(mdl3Offset + header.offsettopart6)
