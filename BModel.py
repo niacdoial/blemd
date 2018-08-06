@@ -713,33 +713,6 @@ class BModel:
             return bone
 
     # convenient method for a less messy scenegraph analysis
-    def buildSceneGraph(self, inf1, sg, j=0):
-        """builds sceneGraph tree from inf1 descriptors in an array"""
-        i = j
-        while i < len(inf1.scenegraph):
-            n = inf1.scenegraph[i]
-            if n.type == 1:
-                i += self.buildSceneGraph(inf1, sg.children[-1], i+1)
-            elif n.type == 2:
-                return i - j + 1
-            elif n.type == 0x10 or n.type == 0x11 or n.type == 0x12:
-                t = Inf1.SceneGraph()
-                t.type = n.type
-                t.index = n.index
-                sg.children.append(t)
-            else:
-                log.error("buildSceneGraph(): unexpected node type %d", n.type)
-            i += 1
-
-        # note: this code can only be reached by the top level function,
-        # AKA the one where the loops end by itself
-        # return first "real" node
-        if len(sg.children) == 1:
-            return sg.children[0]
-        else:
-            sg.type = sg.index = -1
-            log.error("buildSceneGraph(): Unexpected size %d for root SG", len(sg.children))
-        return 0
 
     def DrawScenegraph(self, sg, parentMatrix, onDown=True, matIndex=0):
         """create faces and assign UVs, Vcolors, materials"""
@@ -805,10 +778,8 @@ class BModel:
 
     def DrawScene(self):
         log.debug("DrawScene point reached")
-
         try:
-            sg = Inf1.SceneGraph()  # prepare scenegraph
-            sg = self.buildSceneGraph(self.inf, sg)
+            sg = self.inf.rootSceneGraph
             self.model = ModelRepresentation()
             rootBone = self.CreateBones(sg, Matrix.Identity(4), None)
             # remove dummy root bone:

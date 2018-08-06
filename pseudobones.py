@@ -78,38 +78,8 @@ def cubic_interpolator(t1, y1, d1, t2, y2, d2, t):
 # in blender, the matrix chain looks like
 # this (each contains translation and rotation):
 # origin_s*origin_d*bone_1_s*bone_1_d*....*bone_n_s*bone_n_d
-    
-def get_total_mtx(p_bone, frame):
-    if not isinstance(p_bone, Pseudobone):
-        return Matrix.Identity(4), Matrix.Identity(4)
-    if frame not in p_bone.computed_t_matrices.keys():
-        parent_tot_mtx = get_total_mtx(p_bone.parent.fget(), frame)
-        local_t_mtx = p_bone.frames.get_mtx(frame)
-        p_bone.computed_t_matrices[frame] = (parent_tot_mtx[0] * local_t_mtx[0],
-                                             parent_tot_mtx[1] * local_t_mtx[1])
-    return p_bone.computed_t_matrices[frame]
-
 
 def get_dynamic_mtx(p_bone, frame):
-    # for a (n+1)-th generation dynamic matrix in the tree (Dmat_{n+1})
-    # we have Dmat_{n+1} = inverted(Smat_{n+1} * Product(k from 1 to n)(Dmat_{k}))) * Tmat_{n+1}
-    if frame not in p_bone.computed_d_matrices.keys():
-        solo_mtx_y = p_bone.inverted_static_mtx * get_total_mtx(p_bone, frame)[0]
-        solo_mtx_yd = p_bone.inverted_static_mtx * get_total_mtx(p_bone, frame)[1]
-        temp_bone = p_bone.parent.fget()
-        ancestor_mtx_y = Matrix.Identity(4)
-        ancestor_mtx_yd = Matrix.Identity(4)
-        while isinstance(temp_bone, Pseudobone):
-            ancestor_mtx_y = get_dynamic_mtx(temp_bone, frame)[0] * ancestor_mtx_y
-            ancestor_mtx_yd = get_dynamic_mtx(temp_bone, frame)[1] * ancestor_mtx_yd
-            temp_bone = temp_bone.parent.fget()
-        p_bone.computed_d_matrices[frame] = (ancestor_mtx_y.inverted() * solo_mtx_y,
-                                             ancestor_mtx_yd.inverted() * solo_mtx_yd)
-    return p_bone.computed_d_matrices[frame]
-
-def get_dynamic_mtx2(p_bone, frame):
-    # for a (n+1)-th generation dynamic matrix in the tree (Dmat_{n+1})
-    # we have Dmat_{n+1} = inverted(Smat_{n+1} * Product(k from 1 to n)(Dmat_{k}))) * Tmat_{n+1}
     if frame not in p_bone.computed_d_matrices.keys():
         local_mtx_y, local_mtx_yd = p_bone.frames.get_mtx(frame)
         inv_static_mtx = p_bone.jnt_frame.get_tr_mtx().inverted()
@@ -119,7 +89,7 @@ def get_dynamic_mtx2(p_bone, frame):
 
 def get_pos_vct(p_bone, frame):
     EPSILON = 1E-4
-    y, yd = get_dynamic_mtx2(p_bone, frame)
+    y, yd = get_dynamic_mtx(p_bone, frame)
     y = y.to_translation()
     yd = yd.to_translation()
     # yd = get_dynamic_mtx(p_bone, frame+EPSILON).position()
@@ -129,7 +99,7 @@ def get_pos_vct(p_bone, frame):
 
 def get_rot_vct(p_bone, frame):
     EPSILON = 1E-4
-    y, yd = get_dynamic_mtx2(p_bone, frame)
+    y, yd = get_dynamic_mtx(p_bone, frame)
     y = y.to_euler('XYZ')
     yd = yd.to_euler('XYZ')
     # yd = get_dynamic_mtx(p_bone, frame+EPSILON).rotation()
@@ -137,160 +107,17 @@ def get_rot_vct(p_bone, frame):
     return y, d
 
 
-def matrix_calibrate_r(y, d, mat, parent, bone):
-    """transforms "absolute" rotation coordinates into"relative" ones, using the default pose rotation matrix"""
-    # note: using GC coordinate organization: therefor rotations are in XYZ order
+def get_sc_vct(p_bone, frame):
 
-    # ## first cancel local default pose
-    EPSILON = 1/100
+    y, d = p_bone.frames.get_sc(frame)
 
+    y.x /= p_bone.jnt_frame.sx
+    y.y /= p_bone.jnt_frame.sy
+    y.z /= p_bone.jnt_frame.sz
 
-    # ret_y = (parent*y.to_matrix().to_4x4()*mat).to_euler('XYZ')  # computing rotation value
-    ret_y = (y.to_matrix().to_4x4()*mat).to_euler('XYZ')  # computing rotation value
-
-    # computes rotation tangents by definition of derivative
-    # (and now, the incredibly complex equivalent of "dy = EPSILON*d + y":
-    dy = Euler((0,0,0), "XYZ")
-    dy.x = EPSILON * d.x + y.x
-    dy.y = EPSILON * d.y + y.y
-    dy.z = EPSILON * d.z + y.z
-
-    ret_dy = (parent*dy.to_matrix().to_4x4()*mat).to_euler('XYZ')
-    ret_d = Euler((0,0,0), 'XYZ')
-    ret_d.x = (ret_dy.x - ret_y.x) / EPSILON
-    ret_d.y = (ret_dy.y - ret_y.y) / EPSILON
-    ret_d.z = (ret_dy.z - ret_y.z) / EPSILON
-
-    # return y, d
-
-    y, d = ret_y, ret_d  # "apply" transformation
-
-    # ## then add parent rotations?
-
-    if hasattr(bone, 'parent_rot_matrix'):  # sililar to calibrate_t, need to transform the original vector
-        parent_rot_matrix = bone.parent_rot_matrix
-    else:
-        if type(bone.parent.fget()) == Pseudobone:
-            parent_rot_matrix = rotation_part(bone.parent.fget().jnt_frame.incr_matrix)
-        else:
-            parent_rot_matrix = Matrix.Identity(4)
-        bone.parent_rot_matrix = parent_rot_matrix
-
-    # final modifications:
-    # (y, d) represent bone rotation, relative to default, but assuming bone is in "collapsed"
-    # pose compared to parent (bmd_y); with parent rotation __already__ applied (no need to do it here).
-    # blender needs translation from default pose (bl_y) __without__ parent default rotation applied _previously_:
-    # it needs to be applied __here__
-    # therefor, with parent bone default rotation (from collapsed position) (par_rot);
-    # we have par_rot * bmd_y = bl_y. We need bl_y.
-
-    ret_y = Euler((parent_rot_matrix * Vector(y)), 'XYZ')  # XCX how the *heck* is this the right move?
-    # ret_y = (parent_rot_matrix * y.to_matrix().to_4x4()).to_euler('XYZ')
-
-    # dy = Vector((0, 0, 0))
-    dy.x = EPSILON * d.x + y.x
-    dy.y = EPSILON * d.y + y.y
-    dy.z = EPSILON * d.z + y.z
-    dy = Euler((parent_rot_matrix * Vector(dy)), 'XYZ')
-    # dy = (parent_rot_matrix * dy.to_matrix().to_4x4()).to_euler('XYZ')
-    # d = Euler((0, 0, 0), 'XYZ')
-    d.x = (dy.x - y.x) / EPSILON
-    d.y = (dy.y - y.y) / EPSILON
-    d.z = (dy.z - y.z) / EPSILON
-
-    return ret_y, d  # y had to be stored into a temp variable, not d
-
-
-def matrix_calibrate_t(y, d, parent, bone):
-
-    # ## cancel default pose first
-    EPSILON = 1 / 100
-
-    y.x -= bone.jnt_frame.t.x
-    # d.x -= bone.jnt_frame.t.x  # adding constants doesn't change derivative, dummy!
-    y.y -= bone.jnt_frame.t.y
-    # d.y -= bone.jnt_frame.t.y
-    y.z -= bone.jnt_frame.t.z
-    # d.z -= bone.jnt_frame.t.z
-
-
-    # ## then add inherited rotations
-
-    # getting parent bone default rotation (accoriding to BMD file; in matrix form)
-    if hasattr(bone, 'parent_rot_matrix'):
-        parent_rot_matrix = bone.parent_rot_matrix
-    else:
-        if type(bone.parent.fget()) == Pseudobone:
-            parent_rot_matrix = rotation_part(bone.parent.fget().jnt_frame.incr_matrix)
-        else:
-            parent_rot_matrix = Matrix.Identity(4)
-        bone.parent_rot_matrix = parent_rot_matrix
-
-    # final modifications:
-    # (y, d) represent bone translation, relative to default, but assuming bone is in "collapsed"
-    # pose compared to parent (bmd_y); with parent rotation __already__ applied (no need to do it here).
-
-    # blender needs translation from default pose (bl_y) __without__ parent default rotation applied _previously_:
-    # it needs to be applied __here__
-
-    # therefor, with parent bone default rotation (from collapsed position) (par_rot);
-    # we have par_rot * bmd_y = bl_y. We need bl_y.
-
-    y = parent_rot_matrix * y
-
-    dy = Vector((0, 0, 0))
-    dy.x = EPSILON * d.x + y.x
-    dy.y = EPSILON * d.y + y.y
-    dy.z = EPSILON * d.z + y.z
-    dy = parent_rot_matrix * dy
-    d = Vector((0, 0, 0))
-    d.x = (dy.x - y.x) / EPSILON
-    d.y = (dy.y - y.y) / EPSILON
-    d.z = (dy.z - y.z) / EPSILON
-
-    return y, d
-
-
-def matrix_calibrate_s(y, d, parent, bone):
-
-    # ## first cancel local default pose
-    EPSILON = 1 / 100
-
-    y.x /= bone.jnt_frame.sx
-    y.y /= bone.jnt_frame.sy
-    y.z /= bone.jnt_frame.sz
-
-    d.x /= bone.jnt_frame.sx
-    d.y /= bone.jnt_frame.sy
-    d.z /= bone.jnt_frame.sz
-
-    return y, d
-    # note: scaling happens "inside" rotation, and does not require rotation calibration
-
-    # ## then add inherited rotations
-
-    # getting parent bone default rotation (accoriding to BMD file; in matrix form)
-    if hasattr(bone, 'parent_rot_matrix'):
-        parent_rot_matrix = bone.parent_rot_matrix
-    else:
-        if type(bone.parent.fget()) == Pseudobone:
-            parent_rot_matrix = (bone.parent.fget().jnt_frame.incr_matrix.
-                                    to_quaternion().to_matrix().to_4x4())
-        else:
-            parent_rot_matrix = Matrix.Identity(4)
-        bone.parent_rot_matrix = parent_rot_matrix
-
-    y = parent_rot_matrix * y
-
-    dy = Vector((0, 0, 0))
-    dy.x = EPSILON * d.x + y.x
-    dy.y = EPSILON * d.y + y.y
-    dy.z = EPSILON * d.z + y.z
-    dy = parent_rot_matrix * dy
-    d = Vector((0, 0, 0))
-    d.x = (dy.x - y.x) / EPSILON
-    d.y = (dy.y - y.y) / EPSILON
-    d.z = (dy.z - y.z) / EPSILON
+    d.x /= p_bone.jnt_frame.sx
+    d.y /= p_bone.jnt_frame.sy
+    d.z /= p_bone.jnt_frame.sz
 
     return y, d
 
@@ -566,12 +393,8 @@ def apply_animation(bones, arm_obj, jntframes, name=None):
             bpy.context.scene.frame_current = frame
             # flip y and z
             if com.frames.times[frame][0]:
-                # vct, tgt = com.frames.get_pos(frame)
-                # vct, tgt = matrix_calibrate_t(vct, tgt, com.parentrot, com)
                 vct, tgt = get_pos_vct(com, frame)
                 if not math.isnan(vct.x):
-                    # remember: in JNT, bone coordinates are relative to their parents, not in blender
-                    # (the animation data must be corrected by the relative bone position only)
                     posebone.location[0] = vct.x
                     co = bonedict['location'][0].keyframe_points[-1].co
                     bonedict['location'][0].keyframe_points[-1].handle_left = co+Vector((-1, -tgt.x))
@@ -592,8 +415,6 @@ def apply_animation(bones, arm_obj, jntframes, name=None):
                     posebone.keyframe_insert('location', 2)
 
             if com.frames.times[frame][1]:
-                # vct, tgt = com.frames.get_rot(frame)
-                # vct, tgt = matrix_calibrate_r(vct, tgt, cancel_ref_rot, com.parentrot, com)
                 vct, tgt = get_rot_vct(com, frame)
                 if not math.isnan(vct.x):
                     posebone.rotation_euler[0] = vct.x
@@ -615,8 +436,7 @@ def apply_animation(bones, arm_obj, jntframes, name=None):
                     posebone.keyframe_insert('rotation_euler', 2)
 
             if com.frames.times[frame][2]:
-                vct, tgt = com.frames.get_sc(frame)
-                vct, tgt = matrix_calibrate_s(vct, tgt, com.parentrot, com)
+                vct, tgt = get_sc_vct(com, frame)
                 if not math.isnan(vct.x):
                     posebone.scale[0] = vct.x
                     co = bonedict['scale'][0].keyframe_points[-1].co

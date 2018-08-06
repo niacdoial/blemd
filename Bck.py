@@ -1,12 +1,12 @@
 #! /usr/bin/python3
 from .BinaryReader import BinaryReader
 from .BinaryWriter import BinaryWriter
-from .pseudobones import getBoneByName, Pseudobone, cubic_interpolator
+from .pseudobones import getBoneByName
 import mathutils
 import bpy
 import logging
 log = logging.getLogger('bpy.ops.import_mesh.bmd.bck')
-from math import nan, pi, isnan, ceil, isclose, floor
+from math import nan, pi, isnan, isclose, ceil
 
 
 class BckKey:
@@ -218,83 +218,6 @@ class BckAnimatedJoint:
 
 
 # -----------------------------------------------
-
-
-def translate_animation(timeOffset, bone, anim, frameScale, major, minor, default):
-    """this function and the next have to be run 9x to apply transformation: pos/rot/scale and x/y/z
-    this function translates animation data from `anim`, and into `bone`"""
-    # some name definitions
-    KEYF = major + '_kf'
-    TKEYF = major + '_tkf'
-    major_2 = major.replace('position', 'translation')  # incoherent naming?
-    ANIM_PART = (major_2 + 's' + minor.upper())
-
-    for j in range(len(getattr(anim, ANIM_PART))):
-        key = getattr(anim, ANIM_PART)[j]
-        # at time ((rot.time * frameScale) + timeOffset)
-        if int(key.time * frameScale + timeOffset) not in getattr(bone, KEYF).keys():
-            getattr(anim, 'frames_'+major_2).add(int(key.time * frameScale + timeOffset))
-            getattr(bone, KEYF)[int(key.time * frameScale + timeOffset)] = default.copy()
-            getattr(bone, TKEYF)[int(key.time * frameScale + timeOffset)] = default.copy()
-        setattr(getattr(bone, KEYF)[int(key.time * frameScale + timeOffset)], minor, key.value)
-        setattr(getattr(bone, TKEYF)[int(key.time * frameScale + timeOffset)], minor, key.tangent)
-
-
-def complete_animation(timeOffset, bone, anim, animationLength, major, minor, default):
-    """this function extrapolates more animation data, into `bone`"""
-    # some name definitions
-    KEYF = major + '_kf'
-    TKEYF = major + '_tkf'
-    major_2 = major.replace('position', 'translation')  # incoherent naming?
-    ANIM_PART = (major_2 + 's' + minor.upper())
-    frames = list(getattr(anim, 'frames_'+major_2))
-    frames.sort()
-    i0 = 0  # previous frame
-    i1 = 0  # next frame
-    while isnan(getattr(getattr(bone, KEYF)[frames[i1]], minor)):  # set the correct next frame
-        i1 += 1
-        if i1 == len(frames):  # failure case
-            for i in frames:
-                setattr(getattr(bone, KEYF)[i], minor, getattr(getattr(bone, KEYF)[frames[0]], minor))
-                setattr(getattr(bone, TKEYF)[i], minor, 0.)
-            break
-    for i in range(len(frames)):  # then process frames one by one
-        if isnan(getattr(getattr(bone, KEYF)[frames[i]], minor)):
-            temp = cubic_interpolator(frames[i0], getattr(getattr(bone, KEYF)[frames[i0]], minor),
-                                      getattr(getattr(bone, TKEYF)[frames[i0]], minor),
-                                      frames[i1], getattr(getattr(bone, KEYF)[frames[i1]], minor),
-                                      getattr(getattr(bone, TKEYF)[frames[i1]], minor),
-                                      frames[i])
-            setattr(getattr(bone, KEYF)[frames[i]], minor, temp[0])
-            setattr(getattr(bone, TKEYF)[frames[i]], minor, temp[1])
-        else:  # reached a new computed frame:
-            if i1 == len(frames):
-                break  # no more frames to calculate
-            i0 = i  # reset the previous and next frames
-            while isnan(getattr(getattr(bone, KEYF)[frames[i1]], minor)) or i1 <= i0:
-                i1 += 1
-                if i1 == len(frames):  # failure case
-                    for j in frames[i0:]:  # only assume remaining frames
-                        setattr(getattr(bone, KEYF)[j], minor, getattr(getattr(bone, KEYF)[frames[i0]], minor))
-                        setattr(getattr(bone, TKEYF)[j], minor, 0.)
-                    break
-
-    if timeOffset not in getattr(bone, KEYF).keys():
-        getattr(bone, KEYF)[timeOffset] = default.copy()
-        getattr(bone, TKEYF)[timeOffset] = default.copy()
-    setattr(getattr(bone, KEYF)[timeOffset], minor, getattr(getattr(bone, KEYF)[frames[0]], minor))
-    # getattr(anim, ANIM_PART)[0].value
-    setattr(getattr(bone, TKEYF)[timeOffset], minor, 0)
-
-    if animationLength > 0:
-        endFrame = timeOffset + animationLength
-
-        if endFrame not in getattr(bone, KEYF).keys():
-            getattr(bone, KEYF)[endFrame] = default.copy()
-            getattr(bone, TKEYF)[endFrame] = default.copy()
-        setattr(getattr(bone, KEYF)[endFrame], minor, getattr(getattr(bone, KEYF)[frames[-1]], minor))
-        # getattr(anim, ANIM_PART)[0].value
-        setattr(getattr(bone, TKEYF)[endFrame], minor, 0)
 
 
 class Bck_in:
@@ -598,11 +521,6 @@ class Bck_out:
             rots[j].value = round(rots[j].value / scale)
             rots[j].tangent = round(rots[j].tangent / scale)
 
-    def write_junk(self, bw, bcount):
-        string = 'Padding '
-        string = string * int(ceil(bcount/len(string)))
-        bw.writeString(string[:bcount])
-
     def dump_ank1(self, anims, bw):
 
         Ank1Offset = bw.Position()
@@ -652,19 +570,19 @@ class Bck_out:
         h.loopFlags = 0  # 0: once, 2: loop
 
         h.DumpData(bw)
-        self.write_junk(bw, h.offsetToJoints+Ank1Offset - bw.Position())
+        bw.writePadding(h.offsetToJoints+Ank1Offset - bw.Position())
         for joint in joints:
             joint.DumpData(bw)
-        self.write_junk(bw, h.offsetToScales+Ank1Offset - bw.Position())
+        bw.writePadding(h.offsetToScales+Ank1Offset - bw.Position())
         for val in scales:
             bw.WriteFloat(val)
-        self.write_junk(bw, h.offsetToRots+Ank1Offset - bw.Position())
+        bw.writePadding(h.offsetToRots+Ank1Offset - bw.Position())
         for val in rotations:
             bw.writeShort(val)
-        self.write_junk(bw, h.offsetToTrans+Ank1Offset - bw.Position())
+        bw.writePadding(h.offsetToTrans+Ank1Offset - bw.Position())
         for val in positions:
             bw.WriteFloat(val)
-        self.write_junk(bw, h.sizeOfSection+ Ank1Offset - bw.Position())
+        bw.writePadding(h.sizeOfSection+ Ank1Offset - bw.Position())
 
     def dump_bck(self, anims, filePath):
         bw = BinaryWriter()
@@ -701,174 +619,3 @@ def create_static_animation(frames):
         anim.translationsY[0].value = fr.t.y  # dont reflip translation values
         anim.translationsZ[0].value = fr.t.z
     return anims
-
-"""
-
-    def GetParentBoneScale(self, currBone, frameTime):
-
-        parentScale = Vector3()
-        parentScale.setXYZ(1, 1, 1)
-        # at(time(frameTime))
-
-        parentBone = currBone.parent
-        while parentBone is not None:
-
-            parentScale.x *= (parentBone.scale.controller.x_scale / 100)
-            parentScale.y *= (parentBone.scale.controller.y_scale / 100)
-            parentScale.z *= (parentBone.scale.controller.z_scale / 100)
-
-            parentBone = parentBone.parent
-        # --return 1
-        return parentScale
-
-    def _CalcParentScale(self, boneIndex, keys, parentBoneIndexs, frame):
-
-    # -- if (keys.count == 0) then
-    # --    return 1.0 -- identity
-
-        if boneIndex <= 0  :
-            return 1 # -- identity
-
-        val = self.getAnimValue(keys, frame) # -- absolute value
-
-        if val < 0.1  :
-                raise ValueError ("E")
-
-        if val > 10 :
-                raise ValueError ("Max")
-        val = 1 / val
-
-        if parentBoneIndexs[boneIndex] > 0 :
-            return self._CalcParentScale(parentBoneIndexs[boneIndex], keys, parentBoneIndexs, frame) * val
-
-        else:
-            return val
-
-    def CalcParentScale(self, boneIndex, keys, parentBoneIndexs, frame):
-        return 1  #  XCX ?????????
-        # -- if (boneIndex <= 0 ) then
-        # --	return 1 -- identity
-
-        val = self.GetAnimValue(keys, frame)  # -- absolute value
-
-        if val < 0.0000001:
-                raise ValueError("E")
-
-        if val > 100000 :
-                raise ValueError ("Max")
-        val = 1 / val
-        return val
-
-        # --return _CalcParentScale parentBoneIndexs[boneIndex] keys parentBoneIndexs frame
-
-    def CalcParentXScale(self, anims, parentBoneIndex, parentBoneIndexs, frame):
-
-        # --	return 1
-
-        if parentBoneIndexs[parentBoneIndex] <= 0  :# -- root bone
-            return 1 # -- identity
-        # --return  (getAnimValue self.anims[parentBoneIndex].scalesX frame)
-        val = 1 / self.getAnimValue(self.anims[parentBoneIndex].scalesX, frame)         # -- absolute value
-        return val
-        # --return (CalcParentXScale self.anims parentBoneIndexs[parentBoneIndex] parentBoneIndexs frame) * val
-
-    def CalcParentYScale(self, anims, parentBoneIndex, parentBoneIndexs, frame):
-
-        # --return 1
-
-        if parentBoneIndexs[parentBoneIndex] <= 0:  # -- root bone
-            return 1  # -- identity
-        # --return  (getAnimValue self.anims[parentBoneIndex].scalesY frame)
-        val = 1 / self.getAnimValue(self.anims[parentBoneIndex].scalesY, frame)         # -- absolute value
-        return val
-        # --return (CalcParentYScale self.anims parentBoneIndexs[parentBoneIndex] parentBoneIndexs frame) * val
-
-    def CalcParentZScale(self, anims, parentBoneIndex, parentBoneIndexs, frame):
-        # --return 1
-        if parentBoneIndexs[parentBoneIndex] <= 0  :  # -- root bone
-            return 1 # -- identity
-        # --return  (getAnimValue self.anims[parentBoneIndex].scalesZ frame)
-        val = 1 / self.getAnimValue(self.anims[parentBoneIndex].scalesZ, frame)         # -- absolute value
-        return val
-        # --return (CalcParentZScale self.anims parentBoneIndexs[parentBoneIndex] parentBoneIndexs frame) * val
-
-    def AnimateBones(self, bones, deltaTime):
-                
-        # -- update time
-        self.currAnimTime += deltaTime  # -- *16 -- convert from seconds to ticks (dunno if this is right this way...TODO)
-        self.currAnimTime = self.currAnimTime % self.animationLength  # -- loop?
-
-        # -- update joints
-
-        for i in range(len(bones)):
-            bone = bones[i]
-
-            # --TODO: use quaternion interpolation for rotations?
-            rx = self.getAnimValue(self.anims[i].rotationsX, 0) #currAnimTime)
-            ry = self.getAnimValue(self.anims[i].rotationsY, 0) #currAnimTime)
-            rz = self.getAnimValue(self.anims[i].rotationsZ, 0) #currAnimTime)
-            bone.rotation.controller.x_rotation = rx
-            bone.rotation.controller.y_rotation = ry
-            bone.rotation.controller.z_rotation = rz
-
-            tx = self.getAnimValue(self.anims[i].translationsX, 0)#currAnimTime)
-            ty = self.getAnimValue(self.anims[i].translationsY, 0)#currAnimTime)
-            tz = self.getAnimValue(self.anims[i].translationsZ, 0)#currAnimTime)
-            bone.position.controller.x_position = tx
-            bone.position.controller.y_position = ty
-            bone.position.controller.z_position = tz
-
-            sx = self.getAnimValue(self.anims[i].scalesX, 0)# currAnimTime
-            sy = self.getAnimValue(self.anims[i].scalesY, 0)# currAnimTime
-            sz = self.getAnimValue(self.anims[i].scalesZ, 0)# currAnimTime
-            bone.scale.controller.x_scale = sx * 100
-            bone.scale.controller.y_scale = sy * 100
-            bone.scale.controller.z_scale = sz * 100
-
-    def resetAnim(self, fromAnim):
-                
-
-        if fromAnim.controller is not None :
-            pass
-            # deleteKeys fromAnim.controller allKeys
-
-        # -- delete self.anims from custom attributes
-
-        for k in range(len(custAttributes(fromAnim))) :
-            ca = custattributes.get(fromAnim, k)
-            if ca is not None:
-                saNames = getSubAnimNames(ca)
-                for s in range(len(saNames.count)):
-                    if ca[s].controller is not None:
-                        pass  # XCXs everywhere!
-                        #deleteKeys(ca[s].controller, allKeys)
-
-        for j in range(1 , fromAnim.numSubs+ 1):
-            self.resetAnim(fromAnim[j])
-
-    def resetNodeAnim(self, node):
-                
-        self.resetAnim(node.controller)
-        self.resetAnim(node.baseObject)
-        for m in node.modifiers:
-            self.resetAnim(m)
-
-    def DeleteAllKeys(self, bones):
-
-        if self.animationLength > 0:
-            # -- move all the keys back by one frame (extra frame was required to prevent export / import bug)
-            for i in range(len(bones)):
-                b = bones[i]
-                #selectKeys(b.rotation.controller,  interval(1, (animationLength+5)))
-                #moveKeys(b.rotation.controller (-animationLength+1), selection)
-                #deleteKeys(b.rotation.controller, selection)
-
-                #selectKeys(b.position.controller, interval(1, animationLength+5))
-                #moveKeys(b.position.controller, -animationLength+1, selection)
-                #deleteKeys(b.position.controller, selection)
-
-                #selectKeys(b.scale.controller, interval(1, animationLength+5))
-                #moveKeys(b.scale.controller, -animationLength+1, selection)
-                #deleteKeys(b.scale.controller, selection)
-
-                # --moveKeys  b -animationLength"""
