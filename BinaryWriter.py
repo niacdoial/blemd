@@ -1,7 +1,7 @@
 #! /usr/bin/python3
 import os
 from .maxheader import MessageBox
-from math import log2, floor
+from math import log2, floor, ceil
 import sys
 import logging
 log = logging.getLogger('bpy.ops.import_mesh.bmd.fileOut')
@@ -131,21 +131,29 @@ class BinaryWriter:
         # w2 = chr(v & 0x00ff).encode()
         self._f.write(v.to_bytes(2, 'big'))  #(w1+w2)
 
-    def WriteStringTable(self, pos):
-        raise ValueError("not implemented")
-                
-        oldPos = self.Position()
-        self.SeekSet(pos)
-        count = self.ReadWORD()         # -- orig = 35 read = 35. current pos = ok?
-        unknown1 = self.ReadWORD()         # -- skip pad bytes
-        result = []
-        for _ in range(count):
-            unknown = self.ReadWORD()
-            stringOffset = self.ReadWORD()
-            s = self.ReadString(pos + stringOffset)
-            result.append(s)
-        self.SeekSet(oldPos)
-        return result
+    def WriteStringTable(self, table):
+
+        origin = self.Position()
+
+        count = len(table)         # -- orig = 35 read = 35. current pos = ok?
+        self.writeWord(count)
+        self.writeWord(0xffff)  # skip pad bytes
+
+        StringsPos = 4*count + 4
+
+        for i in range(count):
+            curPos = self.Position()
+
+            stringOffset = StringsPos
+            self.SeekSet(origin + StringsPos)
+            self.writeString(table[i], fixed_len=False)
+            StringsPos = self.Position() - origin
+
+            self.SeekSet(curPos)
+            self.writeWord(stringOffset)
+            self.writeWord(0xffff)  # unknown use
+
+        self.SeekSet(origin + StringsPos)
 
     def writeShort(self, v):
 
@@ -155,7 +163,7 @@ class BinaryWriter:
             v ^= 0xffff
         self.writeWord(v)
 
-    def WriteFloat(self, v):
+    def writeFloat(self, v):
         if v < 0:
             neg = (1 << 31)
             v *= -1
@@ -181,3 +189,8 @@ class BinaryWriter:
                 raise ValueError('float dump: bad m value')
             m &= 0x7fffff
         self.writeDword(neg | e | m)
+
+    def writePadding(self, bcount):
+        string = 'Padding '
+        string = string * int(ceil(bcount/len(string)))
+        self.writeString(string[:bcount])

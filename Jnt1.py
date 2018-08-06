@@ -1,11 +1,12 @@
 #! /usr/bin/python3
 from .maxheader import MessageBox
 from mathutils import Vector, Matrix, Euler
-from math import pi
+from math import pi, ceil
 import logging
 log = logging.getLogger('bpy.ops.import_mesh.bmd.jnt1')
 
 class Jnt1Header:
+    size = 24
     def __init__(self):  # GENERATED!
         pass
 
@@ -22,8 +23,23 @@ class Jnt1Header:
                                              # offset relative to Jnt1Header start
         self.stringTableOffset = br.ReadDWORD()  # names of joints
 
+    def DumpData(self, bw):
+        bw.writeString("jnt1")  # XCX check caps
+        bw.writeDword(self.sizeOfSection)
+        bw.writeWord(self.count)
+        bw.writeWord(self.pad)
+
+        bw.writeDword(self.jntEntryOffset)
+        # offset relative to Jnt1Header start
+        bw.writeDword(self.unknownOffset)
+        # always the numbers 0 to count - 1 (in that order).
+        # perhaps an index-to-stringtable-index map?
+        # offset relative to Jnt1Header start
+        bw.writeDword(self.stringTableOffset)
+
 
 class JntEntry:
+    size = 0x40
     def __init__(self):  # GENERATED!
         self.bbMin = []
         self.bbMax = []
@@ -64,6 +80,53 @@ class JntEntry:
             raise ValueError(msg)
 
 
+    def FromFrame(self, f):
+        self.sx = f.sx
+        self.sy = f.sy
+        self.sz = f.sz
+
+        self.rx = round(f.rx * 32768./pi)
+        self.ry = round(f.ry * 32768./pi)
+        self.rz = round(f.rz * 32768./pi)
+
+        self.tx, self.ty, self.tz = f.t.xyz
+        self.bbMin = f._bbMin
+        self.bbMax = f._bbMax
+
+        self.unknown = 0x00  # correct value unknown
+        self.pad = 0x00ff  # or 0x0000 ??
+        self.pad2 = 0xffff
+
+    def DumpData(self, bw):
+        # values flipped late
+        bw.WriteWORD(self.unknown)
+        # no idea how this works...always 0, 1 or 2.
+        # "matrix type" according to yaz0r - whatever this means ;-)
+        bw.WriteWORD(self.pad)
+        # always 0x00ff in mario, but not in zelda
+        bw.writeFloat(self.sx)
+        bw.writeFloat(self.sy)
+        bw.writeFloat(self.sz)
+
+        bw.writeShort(self.rx)  # short: each increment is an 1/2**16 of turn
+        bw.writeShort(self.ry)
+        bw.writeShort(self.rz)
+
+        bw.WriteWORD(self.pad2)  # always 0xffff
+
+        bw.writeFloat(self.tx)  # translation floats
+        bw.writeFloat(self.ty)
+        bw.writeFloat(self.tz)
+
+        bw.writeFloat(self.unknown2)
+
+        # bounding box?
+        for i in range(3):
+            bw.writeFloat(self.bbMin[i])
+        for i in range(3):
+            bw.writeFloat(self.bbMax[i])
+
+
 class JntFrame:
     def __init__(self):  # GENERATED!
         pass
@@ -83,9 +146,10 @@ class JntFrame:
         self._bbMin = e.bbMin  # is this even needed? (bounding box)
         self._bbMax = e.bbMax
 
+
     def get_tr_mtx(self):
         return Matrix.Translation(self.t) * Euler((self.rx, self.ry, self.rz), 'XYZ').to_matrix().to_4x4()
-  
+
 
 class Jnt1:
     def __init__(self):  # GENERATED!
@@ -94,7 +158,7 @@ class Jnt1:
         self.frames = []  # base position of bones, used as a reference to compute animations as a difference to this
 
     def LoadData(self, br):
-                
+
         jnt1Offset = br.Position()
 
         header = Jnt1Header()
@@ -129,3 +193,47 @@ class Jnt1:
             else:
                 raise ValueError("i < stringtable.count %d %d " % (i, len(stringTable)))
             self.frames[i] = f
+
+    def DumpData(self, bw):
+
+        jnt1Offset = bw.Position()
+
+        # prepare (incomplete) header, then write it
+        header = Jnt1Header()
+        header.count = len(self.frames)
+        header.jntEntryOffset = 16 * ceil(Jnt1Header.size / 16)
+        header.unknownOffset = header.jntEntryOffset + header.count*JntEntry.size
+        header.stringTableOffset = header.unknownOffset + 2 * header.count
+        header.pad = 0xffff  # padding
+
+        header.DumpData(bw)
+        bw.writePadding(header.jntEntryOffset - Jnt1Header.size)
+
+        if bw.Position != jnt1Offset + header.jntEntryOffset:
+            raise ValueError('incorrect lengths in writing Jnt1')
+
+        stringTable = header.count * [""]
+
+        e = JntEntry()
+        for i in range(header.count):
+            e.FromFrame(self.frames[i])
+            stringTable[i] = self.frames[i].name
+            e.DumpData(bw)
+
+        if bw.Position != jnt1Offset + header.unknownOffset:
+            raise ValueError('incorrect lengths in writing Jnt1')
+
+        for i in range(header.count):
+            bw.writeWord(i)
+
+        if bw.Position != jnt1Offset + header.stringTableOffset:
+            raise ValueError('incorrect lengths in writing Jnt1')
+
+        bw.writeStringTable(stringTable)
+
+        # now complete and rewrite header
+        header.sizeOfSection = 16 * ceil((bw.Position()-jnt1Offset)/16)
+        bw.writePadding(jnt1Offset + header.sizeOfSection - bw.Position())
+        bw.SeekSet(jnt1Offset + 4)
+        bw.writeDword(header.sizeOfSection)
+        bw.SeekSet(jnt1Offset + header.sizeOfSection)
