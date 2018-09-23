@@ -2,6 +2,14 @@
 import logging
 log = logging.getLogger('bpy.ops.import_mesh.bmd.shp1')
 
+"""
+Okay.
+Mesh structure:
+Batches define the attributes that can be contained in them (see ShpAttributes)
+Packets define the relative weights 
+Primitives contain loops (`ShpIndex`es)
+"""
+
 
 class ShpIndex:
     # <variable matrixIndex>
@@ -17,22 +25,32 @@ class ShpIndex:
     def __init__(self):  # GENERATED!
         self.colorIndex= []
         self.texCoordIndex= []
-#---------------------------------------------------------------------------------------------------------------------
+# ---------------------------------------------------------------------------------------------------------------------
 
 
 class ShpPrimitive:
+    # <variable primitiveType>
+    # --u8 see above
+    # <variable numVertices>
+    # --u16 that many vertices included in this primitive - for
+    # --each vertex indices are stored according to batch type
     def __init__(self):  # GENERATED!
         self.points = []
+    #---------------------------------------------------------------------------------------------------------------------
+    #--for every packet a MatrixData struct is stored at
+    #--Shp1Header.offsetToMatrixData + Batch.firstMatrixData*sizeof(MatrixData).
+    #--This struct stores which part of the MatrixTable belongs to this packet
+    #--(the matrix table is stored at Shp1Header.offsetToMatrixTable)
 # ---------------------------------------------------------------------------------------------------------------------
 
 
 class ShpPacket:
     def __init__(self):  # GENERATED!
-        self.matrixTable= []
+        self.matrixTable = []
         # maps attribute matrix index to draw array index
         # -- Shp1BatchAttrib[] attribs
         # -- Packet& dst
-        self.primitives= []
+        self.primitives = []
 
     def LoadPacketPrimitives(self, attribs, dataSize, br):
         done = False
@@ -42,7 +60,7 @@ class ShpPacket:
         while not done:
             type = br.GetByte()
             readBytes += 1
-            if type == 0 or readBytes >= dataSize :
+            if type == 0 or readBytes >= dataSize:
                 done = True
             else:
                 curPrimative = ShpPrimitive()
@@ -69,12 +87,12 @@ class ShpPacket:
                             val = br.ReadWORD()
                             readBytes += 2
                         else:
-                            log.warning("X shp1: got invalid data type in packet. should never happen because dumpBatch() should check this before calling dumpPacket()")
+                            log.error("X shp1: got invalid data type in packet. should never happen because dumpBatch() should check this before calling dumpPacket()")
                             raise ValueError("ERROR")
 
                         # -- set appropriate index
                         if attribs[k].attrib == 0:
-                            curPoint.matrixIndex = val  # -- can be undefined
+                            curPoint.matrixIndex = val
                         elif attribs[k].attrib == 9:
                             curPoint.posIndex = val
                         elif attribs[k].attrib == 0xa:
@@ -83,20 +101,13 @@ class ShpPacket:
                             while len(curPoint.colorIndex) < 2:
                                 curPoint.colorIndex.append(None)
                             curPoint.colorIndex[(attribs[k].attrib - 0xb)] = val  # fixed
-                        elif attribs[k].attrib == 0xd or\
-                             attribs[k].attrib == 0xe or\
-                             attribs[k].attrib == 0xf or\
-                             attribs[k].attrib == 0x10 or\
-                             attribs[k].attrib == 0x11 or\
-                             attribs[k].attrib == 0x12 or\
-                             attribs[k].attrib == 0x13 or\
-                             attribs[k].attrib == 0x14:
-
+                        elif 0xd <= attribs[k].attrib <= 0x14:
                             while len(curPoint.texCoordIndex)<8:
                                 curPoint.texCoordIndex.append(None)
-                            curPoint.texCoordIndex[(attribs[k].attrib - 0xd)] = val # fixed
+                            curPoint.texCoordIndex[(attribs[k].attrib - 0xd)] = val  # fixed
                         else:
-                            pass
+                            log.error("impossible SHP attribute %d", attribs[k].attrib)
+                            raise ValueError('~the dev was an idiot~')
                             #-- messageBox "WARNING shp1: got invalid attrib in packet. should never happen because dumpBatch() should check this before calling dumpPacket()"
                             #--print curPrimative
                             #-- throw "shp1: got invalid attrib in packet. should never happen because dumpBatch() should check this before calling dumpPacket()"
@@ -109,6 +120,55 @@ class ShpPacket:
                 # for j = 1 to count do
             # -- end else (type == 0 || readBytes >= dataSize) then
          # -- end while not done do
+
+    def DumpPacketPrimitives(self, attribs, bw):
+        writtenBytes = 0
+
+        for curPrimative in self.primitives:
+            bw.writeByte(curPrimative.type)
+            writtenBytes += 1
+
+            bw.writeWord(len(curPrimative.points))
+            writtenBytes += 2
+            curPrimative.points = []
+            # --  primative.points.resize(count)
+            for curPoint in curPrimative.points:
+                for k in range(len(attribs)):
+                    # -- set appropriate index
+                    if attribs[k].attrib == 0:
+                        val = curPoint.matrixIndex
+                    elif attribs[k].attrib == 9:
+                        val = curPoint.posIndex
+                    elif attribs[k].attrib == 0xa:
+                        val = curPoint.normalIndex
+                    elif attribs[k].attrib == 0xb or attribs[k].attrib == 0xc:
+                        while len(curPoint.colorIndex) < 2:
+                            curPoint.colorIndex.append(None)
+                        val = curPoint.colorIndex[(attribs[k].attrib - 0xb)]  # fixed
+                    elif 0xd <= attribs[k].attrib <= 0x14:
+                        while len(curPoint.texCoordIndex) < 8:
+                            curPoint.texCoordIndex.append(None)
+                        val = curPoint.texCoordIndex[(attribs[k].attrib - 0xd)]  # fixed
+                    else:
+                        log.error("impossible SHP attribute %d", attribs[k].attrib)
+                        raise ValueError('~the dev was an idiot~')
+
+                    if attribs[k].dataType == 1:  # -- s8
+                        bw.writeByte(val)
+                        writtenBytes += 1
+                    elif attribs[k].dataType == 3:  # -- s16
+                        bw.writeWord(val)
+                        writtenBytes += 2
+                    else:
+                        log.error("shp1: invalid data type %d", attribs[k].dataType)
+                        raise ValueError("ERROR")
+                        # -- messageBox "WARNING shp1: got invalid attrib in packet. should never happen because dumpBatch() should check this before calling dumpPacket()"
+                        # --print curPrimative
+                        # -- throw "shp1: got invalid attrib in packet. should never happen because dumpBatch() should check this before calling dumpPacket()"
+                        # -- ignore unknown types, it's enough to warn() in dumpBatch
+        bw.writeByte(0)  # create the incomplete 'termination primitive'
+
+        return writtenBytes
 # ---------------------------------------------------------------------------------------------------------------------
 
 
@@ -125,8 +185,6 @@ class ShpAttributes:
         self.hasColors = [False]*2  # Bools[2]
         self.hasTexCoords = [False]*8  # Bools[8]
 
-# ---------------------------------------------------------------------------------------------------------------------
-# -- Used in dumpBatch
 
 
 class ShpBatch:
@@ -134,11 +192,9 @@ class ShpBatch:
         self.attribs = None  # ShpAttributes
         self.packets = None
 
-# ---------------------------------------------------------------------------------------------------------------------
-# -- same as ShpBatch?
 
-
-class Shp1HeaderBatch:
+class Shp1BatchDescriptor:
+    size = 40
     def __init__(self):  # GENERATED!
         self.unknown4 = []
 
@@ -157,13 +213,24 @@ class Shp1HeaderBatch:
         self.firstMatrixData = br.ReadWORD()  # index to first matrix data (packetCount consecutive indices)
         self.firstPacketLocation = br.ReadWORD()  # index to first packet position (packetCount consecutive indices)
         self.unknown3 = br.ReadWORD()  # 0xffff
-        for j in range(7) :
+        for _ in range(7):
             self.unknown4.append(br.GetFloat())
         # great... (seems to match the last 7 floats of joint info sometimes)
         # (one unknown float, 6 floats bounding box?)
 
+    def DumpData(self, bw):
+        bw.writeWord(0x00ff)
+        bw.writeWord(self.packetCount)
+        bw.writeWord(self.offsetToAttribs)
+        bw.writeWord(self.firstMatrixData)
+        bw.writeWord(self.firstPacketLocation)
+        bw.writeWord(0xffff)
+        for _ in range(7):
+            bw.writeFloat(0.0)  # XCX might need actual values
+
 
 class Shp1Header:
+    size = 44
     def __init__(self):  # GENERATED!
         pass
 
@@ -189,10 +256,34 @@ class Shp1Header:
         self.offsetToPacketLocations = br.ReadDWORD()
         # u32 offset to packet start/length info
         # (all offsets relative to Shp1Header start)
+
+    def DumpData(self, bw):
+        bw.writeString("SHP1")
+        bw.writeDword(self.sizeOfSection)
+        bw.writeWord(self.batchCount)
+        bw.writeWord(self.pad)
+        bw.writeDword(self.offsetToBatches)
+        bw.writeDword(self.offsetUnknown)
+        bw.writeDword(self.zero)
+        bw.writeDword(self.offsetToBatchAttribs)
+        # batch vertex attrib start
+        # The matrixTable is an array of u16, which maps from the matrix data indices
+        # to Drw1Data arrays indices. If a batch contains multiple packets, for the
+        # 2nd, 3rd, ... packet this array may contain 0xffff values, which means that
+        # the corresponding index from the previous packet should be used.
+        bw.writeDword(self.offsetToMatrixTable)
+
+        bw.writeDword(self.offsetData)
+        # start of the actual primitive data
+        bw.writeDword(self.offsetToMatrixData)
+        bw.writeDword(self.offsetToPacketLocations)
+        # u32 offset to packet start/length info
+        # (all offsets relative to Shp1Header start)
 # ---------------------------------------------------------------------------------------------------------------------
 
 
 class Shp1BatchAttrib:
+    size = 8
     def __init__(self):  # GENERATED!
         pass
 
@@ -209,52 +300,58 @@ class Shp1BatchAttrib:
         # This struct stores where the primitive data for this packet is stored in the
         # data block.
 
+    def DumpData(self, bw):
+        bw.writeDword(self.attrib)
+        bw.writeDword(self.dataType)
+
 
 class Shp1PacketLocation:
+    size = 8
     def __init__(self):  # GENERATED!
         pass
 
     def LoadData(self, br):
-        self.size = br.ReadDWORD()  # size in bytes of packet
+        self.packetSize = br.ReadDWORD()  # size in bytes of packet
         self.offset = br.ReadDWORD()  # relative to Shp1Header.offsetData
+
+    def DumpData(self, bw):
+        bw.writeDword(self.packetSize)  # size in bytes of packet
+        bw.writeDword(self.offset)  # relative to Shp1Header.offsetData
 #---------------------------------------------------------------------------------------------------------------------
 
 
-class Shp1Primitive:
-    # <variable primitiveType>
-    # --u8 see above
-    # <variable numVertices>
-    # --u16 that many vertices included in this primitive - for
-    # --each vertex indices are stored according to batch type
-    def __init__(self):  # GENERATED!
-        pass
-    #---------------------------------------------------------------------------------------------------------------------
-    #--for every packet a MatrixData struct is stored at
-    #--Shp1Header.offsetToMatrixData + Batch.firstMatrixData*sizeof(MatrixData).
-    #--This struct stores which part of the MatrixTable belongs to this packet
-    #--(the matrix table is stored at Shp1Header.offsetToMatrixTable)
-
-
 class Shp1MatrixData:
+    size = 8
     def __init__(self):  # GENERATED!
         pass
-
-    def StructSize(self):
-        return 8
 
     def LoadData(self, br):
         # from yaz0r's source (animation stuff)
-        self.unknown1 = br.ReadWORD()         # -- TODO: figure this out...
+        self.unknown1 = br.ReadWORD()
+        # TODO: figure this out... 0xffff is a valid value: probably means "keep last instance", but for what?
         self.count = br.ReadWORD()
         # count many consecutive indices into matrixTable
         self.firstIndex = br.ReadDWORD()
+        # first index into matrix table
+
+    def DumpData(self, bw):
+        # from yaz0r's source (animation stuff)
+        bw.writeWord(self.unknown1)
+        bw.writeWord(self.count)
+        # count many consecutive indices into matrixTable
+        bw.writeDword(self.firstIndex)
         # first index into matrix table
 # ---------------------------------------------------------------------------------------------------------------------
 
 
 class Shp1:
     def __init__(self):  # GENERATED!
-        self.batches= []
+        self.batches = []
+
+        self.all_attribs = []
+        self.all_p_locs = []
+        self.matrices_data = []
+        self.matrices_table = []
 
     def GetBatchAttribs(self, br, offset):
                 
@@ -274,7 +371,7 @@ class Shp1:
 
         return batchAttribs
 
-    def dumpBatch(self, br, batchSrc, header, baseOffset, dst):
+    def makeBatch(self, br, batchSrc, header, baseOffset, dst):
                 
         # -- read and interpret batch vertex attribs
         attribs = self.GetBatchAttribs(br, baseOffset + header.offsetToBatchAttribs + batchSrc.offsetToAttribs)
@@ -317,29 +414,108 @@ class Shp1:
             # -- read packet's primitives
             dstPacket = ShpPacket()
             br.SeekSet(baseOffset + header.offsetData + packetLoc.offset)
-            dstPacket.LoadPacketPrimitives(attribs, packetLoc.size, br)
+            dstPacket.LoadPacketPrimitives(attribs, packetLoc.packetSize, br)
             if len(dst.packets) <= i:
                 dst.packets.append(None)
             dst.packets[i] = dstPacket
 
             # -- read matrix data for current packet
             matrixData = Shp1MatrixData()
-            br.SeekSet(baseOffset + header.offsetToMatrixData + (batchSrc.firstMatrixData + i)*matrixData.StructSize())
+            br.SeekSet(baseOffset + header.offsetToMatrixData + (batchSrc.firstMatrixData + i)*matrixData.size)
             matrixData.LoadData(br)
 
             # --print (matrixData as string)
 
             # -- read packet's matrix table
             # --dstPacket.matrixTable.resize(matrixData.count);
-            dstPacket.matrixTable = []
+            dstPacket.matrixTable = [None] * matrixData.count
             br.SeekSet(baseOffset + header.offsetToMatrixTable + 2*matrixData.firstIndex)
 
             for j in range(matrixData.count):
-                if len(dstPacket.matrixTable) <= j:
-                    dstPacket.matrixTable.append(None)
                 dstPacket.matrixTable[j] = br.ReadWORD()
             # --print (dstPacket.matrixTable.count as string) -- matrixTable
             # --print (dstPacket.matrixTable[1] as string)
+    # end for i=1 to batchSrc.packetCount do
+
+    def decomposeBatch(self, bww, batch, header, baseOffset, batchDst):
+
+        batchDst.offsetToAttribs = len(self.all_attribs) * Shp1BatchAttrib.size
+
+        batch.raw_attribs = attribs = []
+
+        if batch.attribs.hasMatrixIndices:
+            attrib = Shp1BatchAttrib()
+            attrib.attrib = 0
+            attrib.dataType = 1
+            attribs.append(attrib)
+        if batch.attribs.hasPositions:
+            attrib = Shp1BatchAttrib()
+            attrib.attrib = 9
+            attrib.dataType = 3
+            attribs.append(attrib)
+        if batch.attribs.hasNormals:
+            attrib = Shp1BatchAttrib()
+            attrib.attrib = 0xa
+            attrib.dataType = 3
+            attribs.append(attrib)
+        for i in (0, 1):
+            if batch.attribs.hasColor[i]:
+                attrib = Shp1BatchAttrib()
+                attrib.attrib = 0xb+i
+                attrib.dataType = 3
+                attribs.append(attrib)
+        for i in range(8):
+            if batch.attribs.hasTexCoords[i]:
+                attrib = Shp1BatchAttrib()
+                attrib.attrib = 0xd + i
+                attrib.dataType = 3
+                attribs.append(attrib)
+
+        attrib = Shp1BatchAttrib()  # each batch must declare a 'separator attibute'
+        attrib.attrib = 0xff
+        attrib.dataType = 0xff
+        attribs.append(attrib)
+
+        self.all_attribs += attribs
+
+        batchDst.firstMatrixData = len(self.matrices_data)
+
+        batch.p_locs = p_locs = []  # give the batch a reference for future completion
+
+        batchDst.packetCount = len(batch.packets)
+        batchDst.firstPacketLocation = len(self.all_p_locs)
+
+        for i in range(len(batch.packets)):
+            packet = batch.packets[i]
+
+            packetLoc = Shp1PacketLocation()
+            # created here, will be completed at primitive write time
+
+
+            # packetLoc.offset = bw.Position() - baseOffset - header.offsetData
+
+            # bw.SeekSet(baseOffset + header.offsetData + packetLoc.offset)
+            # packetLoc.packetSize = packet.DumpPacketPrimitives(attribs, bw)
+
+            p_locs.append(packetLoc)
+
+            # -- read matrix data for current packet
+            matrixData = Shp1MatrixData()
+
+            matrixData.unknown1 = 3
+            matrixData.count = len(packet.matrixTable)
+
+            # bw.SeekSet(baseOffset + header.offsetToMatrixData + (batchDst.firstMatrixData + i) * matrixData.size)
+            self.matrices_data.append(matrixData)
+
+            matrixData.firstIndex = len(self.matrices_table)
+            # bw.SeekSet(baseOffset + header.offsetToMatrixTable + 2 * matrixData.firstIndex)  # position indicator
+
+            for j in range(matrixData.count):
+                self.matrices_table.append(packet.matrixTable[j])
+
+        self.all_p_locs += p_locs
+
     # end for i=1 to batchSrc.packetCount do
 
     def LoadData(self, br):
@@ -354,11 +530,9 @@ class Shp1:
         # -- read self.batches
         br.SeekSet(header.offsetToBatches + shp1Offset)
         self.batches = []
-        # --.resize(h.batchCount);
-        # -- print  (header.batchCount as string)  = 1 on face
         for _ in range(header.batchCount):
             # -- print ("2: " + str(br.Position()))
-            d = Shp1HeaderBatch()
+            d = Shp1BatchDescriptor()
             d.LoadData(br)
 
             # --print ("3: " + (br.Position() as string))
@@ -370,6 +544,79 @@ class Shp1:
 
             # --Batch& dstBatch = dst.batches[i]; dst = this
             curPos = br.Position()
-            self.dumpBatch(br, d, header, shp1Offset, dstBatch)
+            self.makeBatch(br, d, header, shp1Offset, dstBatch)
             # --  print ("4: " + (br.Position() as string))
             br.SeekSet(curPos)
+
+    def DumpData(self, bw):
+        # -- print ("0: " + (br.Position() as string))
+
+        shp1Offset = bw.Position()
+        header = Shp1Header()
+
+        header.pad = 0xffff
+        header.zero = 0
+
+        header.batchCount = len(self.batches)
+        header.offsetToBatches = header.size
+        header.offsetUnknown = 000  # a short per batch?
+        header.offsetToBatchAttribs = 000  # aligned
+        header.offsetToMatrixTable = 000
+        header.offsetData = 000  # aligned
+        header.offsetToMatrixData = 000
+        header.offsetToPacketLocations = 000
+
+        bw.writePadding(header.size)
+        #header.DumpData(bw)
+
+
+        for batch in self.batches:
+            # -- print ("2: " + str(br.Position()))
+            d = Shp1BatchDescriptor()
+
+
+            # -- TODO: check code
+            # --Batch& dstBatch = dst.batches[i]; dst = this
+            curPos = bw.Position()
+            self.decomposeBatch(bw, batch, header, shp1Offset, d)
+            # --  print ("4: " + (br.Position() as string))
+            bw.SeekSet(curPos)
+            d.DumpData(bw)
+
+        header.offsetUnknown = bw.Position()
+        for _ in range(header.batchCount):
+            bw.writeWord(0)
+        bw.writePaddingTo16()
+
+        header.offsetToBatchAttribs = bw.Position()
+        for attrib in self.all_attribs:
+            attrib.DumpData(bw)
+        # this includes the separator attribs
+
+        header.offsetToMatrixTable = bw.Position()
+        for mtx in self.matrices_table:
+            bw.writeWord(mtx)
+        bw.writePaddingTo16()
+
+        header.offsetData = bw.Position()
+        total_length = 0
+        for batch in self.batches:
+            for i, packet in enumerate(batch.packets):
+                batch.p_locs[i].offset = total_length
+                length = packet.DumpPacketPrimitives(batch.raw_attribs, bw)
+                batch.p_locs[i].packetSize = length
+                total_length += length
+
+        header.offsetToMatrixData = bw.Position()
+        for mdat in self.matrices_data:
+            mdat.DumpData(bw)
+
+        header.offsetToPacketLocations = bw.Position()
+        for p_loc in self.all_p_locs:
+            p_loc.DumpData()
+
+        bw.writePaddingTo16()
+        header.sizeOfSection = bw.Position() - shp1Offset
+        bw.SeekSet(shp1Offset)
+        header.DumpData(bw)
+        bw.Seekset(shp1Offset + header.sizeOfSection)

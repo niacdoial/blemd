@@ -17,13 +17,13 @@ import logging
 log = logging.getLogger('bpy.ops.import_mesh.bmd.main')
 
 if LOADED:
-    for module in (BinaryReader, Mat44, Inf1, Vtx1, Shp1, Jnt1, Evp1, Drw1,
+    for module in (BinaryReader, BinaryWriter, Mat44, Inf1, Vtx1, Shp1, Jnt1, Evp1, Drw1,
                    Bck, Mat3, Mat3V2, Tex1, Mdl3, Btp, MaxH, TexH, MatH, PBones):
         reload(module)
 
 else:
     from . import (
-        BinaryReader,
+        BinaryReader, BinaryWriter,
         Matrix44 as Mat44,
         Inf1, Vtx1, Shp1, Jnt1, Evp1, Drw1, Bck, Mat3, Tex1, Btp, Mdl3,
         materialV2 as Mat3V2,
@@ -32,29 +32,12 @@ else:
         materialhelper as MatH,
         pseudobones as PBones
     )
-    # import blemd.BinaryReader as BinaryReader
-    # import blemd.Matrix44 as Mat44
-    # import blemd.Inf1 as Inf1
-    # import blemd.Vtx1 as Vtx1
-    # import blemd.Shp1 as Shp1
-    # import blemd.Jnt1 as Jnt1
-    # import blemd.Evp1 as Evp1
-    # import blemd.Drw1 as Drw1
-    # import blemd.Bck as Bck
-    # import blemd.Mat3 as Mat3
-    # import blemd.materialV2 as Mat3V2
-    # import blemd.Tex1 as Tex1
-    # import blemd.Btp as Btp
-    # import blemd.maxheader as MaxH
-    # import blemd.texhelper as TexH
-    # import blemd.materialhelper as MatH
-    # import blemd.pseudobones as PBones
 del LOADED
 
 
 class Prog_params:
     def __init__(self, filename, boneThickness, allowTextureMirror, forceCreateBones, loadAnimations, animationType,
-                 packTextures, includeScaling, imtype, dvg, use_nodes=False):
+                 packTextures, includeScaling, imtype, dvg, use_nodes=False, validate_mesh=False):
         self.filename = filename
         self.boneThickness = boneThickness
         self.allowTextureMirror = allowTextureMirror
@@ -66,6 +49,7 @@ class Prog_params:
         self.imtype = imtype
         self.DEBUGVG = dvg
         self.use_nodes = use_nodes
+        self.validate_mesh = validate_mesh
         # secondary parameters (computed later on)
         self.createBones = True
 
@@ -76,6 +60,7 @@ class LoopRepresentation:
         self.UVs = [None]*8
         self.VColors = [None]*2
         self.normal = None
+        self.mm = -1  # reference to the multimatrix entry used to move the point
 
     # def __eq__(self, other):
     #    return self.vertex == other.vertex and \
@@ -105,8 +90,8 @@ class ModelRepresentation:
             ret = array('f', [0.0]*3*len(self.vertices))
             for num, com in enumerate(self.vertices):
                 ret[3*num] = com.x
-                ret[3*num+1] = com.y
-                ret[3*num+2] = com.z
+                ret[3*num+1] = -com.z
+                ret[3*num+2] = com.y
         elif type == 'loop_start':
             ret = array('i')
             for com in self.faces:
@@ -125,6 +110,21 @@ class ModelRepresentation:
             raise ValueError('wrong array type')
 
         return ret
+
+    def getLoop(self, faceidx, i):
+        assert 0 <= i <= 2
+        return self.loops[self.faces[faceidx].loop_start + i]
+    
+    def getLoops(self, faceidx):
+        return (self.loops[self.faces[faceidx].loop_start],
+                self.loops[self.faces[faceidx].loop_start+1],
+                self.loops[self.faces[faceidx].loop_start+2])
+
+    def getVerts(self, faceidx):
+        l1 = self.faces[faceidx].loop_start
+        return (self.loops[l1].vertex,
+                self.loops[l1+1].vertex,
+                self.loops[l1+2].vertex)
 
 
 class BModel:
@@ -233,7 +233,6 @@ class BModel:
 
         self._bmdViewPathExe = value
 
-
     def TryHiddenDOSCommand(self, exefile, args, startpath):
                 
         # --print "###################"
@@ -270,18 +269,14 @@ class BModel:
                     self.cv_to_f_v[cv][num] = com"""
 
         # TODO: should never have undefined materials
-        if len(self._materialIDS) > 0:
-            for i in range(len(self._materialIDS), len(self.model.faces)):
-                self._materialIDS.append(None)
-        else:
-            self._materialIDS = [None] * len(self.model.faces)
+
+        # adjust length of _materialIDS
+        self._materialIDS += [None] * (len(self.model.faces) - len(self._materialIDS))
 
         for idx in range(len(self.model.vertices)):
             if self.model.vertices[idx] is None:
-                self.model.vertices[idx] = temp_vtx = self.vtx.positions[idx]  # XCX should not have to do this
-                # add vertices without matrix transformation
-                temp_vtx.z *= -1
-                temp_vtx.xyz = temp_vtx.xzy  # transform coordinates here
+                self.model.vertices[idx] = self.vtx.positions[idx]  # XCX should not have to do this
+                # vertices will be adapted in the toarray() cinverter
 
         modelMesh = bpy.data.meshes.new(MaxH.getFilenameFile(self._bmdFilePath))
         modelMesh.vertices.add(len(self.model.vertices))
@@ -304,14 +299,12 @@ class BModel:
             errmat = MatH.add_err_material(modelObject)
             for num, com in enumerate(modelObject.material_slots):
                 bm_to_pm[com.material] = num
-            f_to_rf = list(range(len(self.model.faces)))
             for num, com in enumerate(self._materialIDS):  # assign materials to faces
                 # DEBUG reversed index
-                if f_to_rf[num] is not None:
-                    if com is not None:
-                        modelMesh.polygons[f_to_rf[num]].material_index = com  # bm_to_pm[com]
-                    else:
-                        modelMesh.polygons[f_to_rf[num]].material_index = bm_to_pm[errmat]
+                if com is not None:
+                    modelMesh.polygons[num].material_index = com
+                else:
+                    modelMesh.polygons[num].material_index = bm_to_pm[errmat]
         except Exception as err:
             log.error('Materials couldn\'t be completely applied (error is %s)', err)
 
@@ -367,21 +360,16 @@ class BModel:
                     bpy.ops.object.mode_set(mode='EDIT')
                     for bone in self._bones:
                         arm.edit_bones.new(bone.name.fget())
-                        if isinstance(bone.parent.fget(), PBones.Pseudobone):
-                            if bone.parent.fget().name.fget() not in [temp.name.fget() for temp in self._bones]:
-                                tempbone = arm.edit_bones.new(bone.parent.fget().name.fget())
-                                if bone.parent.fget().parent.fget() is not None:
-                                    tempbone.parent = arm.edit_bones[bone.parent.fget().parent.fget().name.fget()]
-                                # XCX useless?
-                                # tempbone.head = Vector(bone.parent.fget().position)
-                                # tempbone.tail = Vector(bone.parent.fget().endpoint)
+                        # create ALL bones before starting referencing them
                     for bone in self._bones:
                         realbone = arm.edit_bones[bone.name.fget()]
                         if isinstance(bone.parent.fget(), PBones.Pseudobone):
                             realbone.parent = arm.edit_bones[bone.parent.fget().name.fget()]
-                        realbone.head = Vector(bone.position)
-                        realbone.tail = Vector(bone.endpoint)
-                        realbone.align_roll(bone.get_z())
+                        realbone.head.xyz = bone.position.xzy
+                        realbone.tail.xyz = bone.endpoint.xzy
+                        realbone.head.y *= -1
+                        realbone.tail.y *= -1
+                        realbone.align_roll(bone.get_z())  # get_z translates into blender coodrinates by itself
                         modelObject.vertex_groups.new(bone.name.fget())
 
                     if len(self.vertexMultiMatrixEntry) != len(self.model.vertices):
@@ -391,7 +379,7 @@ class BModel:
                         # XCX should not need this
                         for idx in range(len(self.vertexMultiMatrixEntry)):
                             if self.vertexMultiMatrixEntry[idx] is None:
-                                self.vertexMultiMatrixEntry[idx] = Mat44.MultiMatrix()
+                                self.vertexMultiMatrixEntry[idx] = Evp1.MultiMatrix()
                         for i in range(len(self.model.vertices)):
                             for num, vg_id in enumerate(self.vertexMultiMatrixEntry[i].indices):
                                 modelObject.vertex_groups[vg_id].add([i], self.vertexMultiMatrixEntry[i].weights[num], 'REPLACE')
@@ -412,11 +400,13 @@ class BModel:
 
         modelMesh.update()
 
+        ### deal with normals
+
         try:
             modelMesh.create_normals_split()  # does this stabilize normals?
 
             for face in modelMesh.polygons:
-                face.use_smooth = True  # normals have effect only if smooth shading
+                face.use_smooth = True  # loop normals have effect only if smooth shading
 
             # create custom data to write normals correctly?
             modelMesh.update()
@@ -433,13 +423,309 @@ class BModel:
             modelMesh.show_edge_sharp = True
             # end not understood black box
 
-            # modelMesh.validate(clean_customdata=False)  # only validate now, if at all
+            if self.params.validate_mesh:
+                ll = len(modelMesh.loops)
+                fl = len(modelMesh.polygons)
+                modelMesh.validate(clean_customdata=False)  # only validate now, if at all
+                if ll != len(modelMesh.loops):
+                    log.warning('mesh validation lost data! (%d loops, %d faces)',
+                                len(modelMesh.loops)-ll, len(modelMesh.polygons)-fl)
         except Exception as err:
             log.error('Normals weren\'t set (error is %s)', err)
         modelMesh.update()
 
-        return modelMesh
+        return modelObject
 
+    def DismantleSingleMesh(self, modelObject):
+
+        # ## first, create the PseudoBone armature
+        if (modelObject.parent is not None) and isinstance(modelObject.parent.data, bpy.types.Armature):
+            try:
+                arm_obj = modelObject.parent
+                arm = arm_obj.data
+
+                with MaxH.active_object(arm_obj):
+                    bpy.ops.object.mode_set(mode='EDIT')
+                    bones = {}  # {realbone: Pbone}
+                    self._bones = [None] * len(arm.edit_bones)
+                    for i, realbone in enumerate(arm.edit_bones):
+                        self._bones[i] = PBones.Pseudobone(None, realbone.name, None,
+                                                   Vector((0,0,0)), Vector((0,1,0)))
+
+                        bones[realbone] = (self._bones[i])  # indexing needed to create the multimatrices
+
+                    rootbones = []  # we need to have a single root bone in the BMD file: it might need to be added
+                    for realbone in arm.edit_bones:
+                        bone = bones[realbone]
+                        if realbone.parent.fget() is not None:
+                            bone.parent.fset(bones[realbone.parent])
+                        else:
+                            rootbones.append(bone)
+                        bone.position = realbone.head.copy()
+                        bone.endpoint = realbone.tail.copy()
+                        bone.matrix = PBones.BtoN * realbone.matrix * PBones.NtoB
+                        # XCX is there a matter of scale in this BS as well? (I don't think so, but tests needed.)
+
+                        bone.position.xyz = bone.position.xzy  # get the vectors in bmd space, not blender space
+                        bone.position.z *= -1
+                        bone.endpoint.xyz = bone.endpoint.xzy
+                        bone.endpoint.z *= -1
+
+                    # check if there is a single root:
+                    if len(rootbones) > 1:
+                        rootBone = PBones.Pseudobone(None, '__root__', None, Vector((0,0,0)), Vector((0,0,0)) )
+                        self._bones.insert(0, rootBone)
+                        for fakeroot in rootbones:
+                            fakeroot.parent.fset(rootBone)
+                            fakeroot.matrix = Matrix.Identity(4)
+                    else:
+                        rootBone = rootbones[0]
+
+                    # new build (incomplete!) scenegraph and reorder bones
+                    self._bones = []
+                    rootSG = Inf1.SceneGraph()
+                    rootSG.type = 0x10
+                    self.BuildScenegraph(rootSG, rootBone)
+                    # [self._bones has been rebuilt]
+                    
+                    bpy.ops.object.mode_set(mode='OBJECT')
+
+                self.params.createBones = True
+
+            except Exception as err:
+                log.critical('Animation bones not created. cannot export further. Crashing...')
+                raise
+
+        # ## then create the easily-accessible representation
+
+        self.model = ModelRepresentation()
+        self.model.vertices = [Vector((vert.co.x, vert.co.z, -vert.co.y))
+                                   for vert in modelObject.data.vertices]
+        self.model.loops = []
+
+        maxuv = min(len(modelObject.data.uv_layers), 8)
+        maxvc = min(len(modelObject.data.vertex_colors), 2)
+
+        for b_loop in modelObject.data.loops:
+            p_loop = LoopRepresentation()
+            self.model.loops.append(p_loop)
+            p_loop.vertex = b_loop.vertex_index
+            p_loop.normal = Vector(b_loop.normal.xzy)
+            p_loop.normal.z *= -1
+            for uv in range(maxuv):
+                p_loop.UVs[uv] = modelObject.data.uv_layers[uv].data[b_loop.index].uv
+                p_loop.UVs[uv].y = 1-p_loop.UVs[uv].y  # XCX: needs more consistency : wasn't it a tuple?
+            for vc in range(maxvc):
+                p_loop.VColors[vc] = modelObject.data.vertex_colors[vc].data[b_loop.index].color
+
+        self.model.hasNormals = True
+        for uv in range(maxuv):
+            self.model.hasTexCoords[uv] = True
+        for vc in range(maxvc):
+            self.model.hasColors[vc] = True
+
+        for poly in modelObject.data.polygons:
+            face = FaceRepresentation()
+            self.model.faces.append(face)
+            face.material = poly.material_index
+            face.loop_start = poly.loop_start
+
+        # continue bone business after building model
+        if self.params.createBones:
+            self.vertexMultiMatrixEntry = []
+            for i, vert in enumerate(modelObject.data.vertices):
+                mm = Evp1.MultiMatrix()
+                self.vertexMultiMatrixEntry.append(mm)
+
+                for group in vert.groups:
+                    # XCX is groups ordered? if so, optimize is_near.
+                    if group.weight > 0.0001:
+                        mm.indices.append(group.group)
+                        mm.weights.append(group.weight)
+
+            # mm disambiguation and reference making
+            self.unique_MMs = []  
+            vertexMMIndices = [-1] * len(self.vertexMultiMatrixEntry)
+            
+            for i in range(len(self.vertexMultiMatrixEntry)):
+                for ri, reference in enumerate(self.unique_MMs):
+                    if Mat44.is_near(self.vertexMultiMatrixEntry[i], reference):
+                        self.vertexMultiMatrixEntry[i] = reference
+                        vertexMMIndices[i] = ri
+                        break
+                else:  # no break detected : unique yet
+                    vertexMMIndices[i] = len(self.unique_MMs)
+                    self.unique_MMs.append(self.vertexMultiMatrixEntry[i])
+
+            for mm in self.unique_MMs:
+                if len(mm.indices) > 1:
+                    self.model.hasMatrixIndices = True
+            
+            # reference making
+            for loop in self.model.loops:
+                loop.mm = vertexMMIndices[loop.vertex]
+        
+            self.AnalyseBones(rootSG, rootBone.matrix, rootBone)  # build the joints.
+            batches = self.splitInBatches()
+        else:
+            raise ValueError("need to figure out what to do for armatureless meshes. extract data.")  # XCX
+    
+    def splitInBatches(self):
+        singleboneBatches = {}  # {(bone number, material): batch}
+        groupedBones = []  # list of sets of bones (ints)
+        secondpassFaces = []
+        model = self.model
+        
+        # first pass: split the single-boned faces per bone,
+        # and create groups for the others
+        for i in range(len(self.model.faces)):
+            l1, l2, l3 = model.getLoops(i)
+            mat = model.faces[i].material
+            if l1.mm == l2.mm == l3.mm and \
+                    len(self.unique_MMs[l1.mm].weights) == 1:
+                boneIndex = self.unique_MMs[l1.mm].indices[0]
+                if not singleboneBatches.get(boneIndex, None):
+                    singleboneBatches[boneIndex, mat] = []
+                singleboneBatches[boneIndex, mat].append(i)
+            
+            else:
+                for group in groupedBones:
+                    if (l1.mm, mat) in group:
+                        group.add((l2.mm, mat))
+                        group.add((l3.mm, mat))
+                        break
+                    elif (l2.mm, mat) in group:
+                        group.add((l1.mm, mat))
+                        group.add((l3.mm, mat))
+                        break
+                    elif (l3.mm, mat) in group:
+                        group.add((l1.mm, mat))
+                        group.add((l2.mm, mat))
+                        break
+                else:  # no break reached: need to create new group
+                    group = set()
+                    group.add((l1.mm, mat))
+                    group.add((l2.mm, mat))
+                    group.add((l3.mm, mat))
+                    groupedBones.append(group)
+        
+        # pass 1.5: make sure the groups make sense (fuse them when needed)
+        i=0  # indices pointing to the groups
+        j=0
+        while i < len(groupedBones)-1:  # -1 because we need a second group to compare to
+            j = i+1  # second group
+            while j<len(groupedBones):
+                for x in groupedBones[j]:
+                    if x in groupedBones[i]:
+                        groupedBones[i] = groupedBones[i].union(groupedBones[j])
+                        break
+                else:  # no break: groups are really different
+                    j += 1
+            # last group reached for j: compare from a new iSize
+            i += 1
+        
+        # groups are now solid per bone.
+        # pass 2: assign the multi-bone faces, and split per material
+        multiboneBatches = {group:None for group in groupedBones}
+        for face in secondpassFaces:
+            l1 = model.getLoop(face, 0)
+            mat = model.faces[face].material
+            for group in groupedBones:
+                if (l1, mat) in group:
+                    #if not multiboneBatches.get(group, None):
+                    #    multiboneBatches[group] = []
+                    
+                    multiboneBatches[group].append(face)
+        return singleboneBatches, multiboneBatches
+      
+    def insertSBBatches(self, sg, SBBatches):
+    
+        # function assumes that the SG node used for the call is a bone SG node
+        # warning : `SBBatches` here is {bone: [(mat, batch),...]}, not {(bone, mat): batch},
+        # `MBBatches` is ????
+        # and `batch` is an int, not a list of faces
+        # the batches need to be indexed beforehand
+        assert sg.type == 0x10
+        
+        # pass 1 : add the single-boned batches, add (too much) material SG nodes,
+        # and add flags onto the bone SG nodes to be able to clean those material batches
+        for bone in SBBatches.keys():
+            if bone == sg.index:
+                # simple case one material for this bone's batch
+                if len(SBBatches[bone]) == 1:
+                    # use a material SG node to apply to all of its children
+                    mat, batch = SBBatches[bone][0]
+                    matsg = Inf1.SceneGraph()
+                    matsg.type = 0x11
+                    matsg.index = mat
+                    matsg.children = sg.children
+                    sg.children = [matsg]
+                    # then add batch to children, and optimize remaining dict
+                    batchSG = Inf1.SceneGraph()
+                    batchSG.type = 0x12
+                    batchSG.index = batch
+                    matsg.children.append(batchSG)
+                    sg.material = mat
+                    
+                # if there are multiple materials: there is the need for multiple
+                # material SG nodes as children: do this smartly for a better cleanup
+                else:
+                    # this block's complexity is absurd but that's okay because
+                    # a batch won't have more than 5 children
+                    for child in sg.children:
+                        self.insertSBBatches(child, SBBatches)
+                    original_children = sg.children
+                    sg.children = []
+                    sg.material = []  # list of materials
+                    for mat, batch in SBBatches:
+                        sg.material.append(mat)
+                        matsg = Inf1.SceneGraph()
+                        matsg.index = mat
+                        matsg.type = 0x11
+                        batchSG = Inf1.SceneGraph()
+                        batchSG.type = 0x12
+                        batchSG.index = batch
+                        matsg.children.append(batchSG)
+                        
+                        # add the correct children nodes
+                        i = 0
+                        while i<len(original_children):
+                            child = original_children[i]
+                            if child.material == mat:
+                                matsg.children.append(child)
+                                del original_children[i]
+                            else:
+                                i+=1
+                        sg.children.append(matsg)
+                    # but there might still be some of the bone children left
+                    # XCX optimize for "multi-material bone nodes" too
+                    sg.children += original_children
+            # found the right bone in the SBBatches
+            del SBBatches[bone]
+            break
+        # last case: this bone doesn't have a dedicated batch:
+        # this is where the sg.material cache really shines.
+        else:
+            sg.material = sg.children[0].material
+        
+        # pass 2: clean the material nodes
+        
+        def remove_mat(sg, mat):
+            # look into the sg node's children and erase any material node
+            # from the tree, while keeping its children
+            i = 0
+            while i < len(sg.children):
+                child = sg.children[i]
+                if child.type == 0x11 and child.index==mat:
+                    sg.children += child.children
+                    del sg.children[i]
+                    break
+                    
+        for child in sg.children:
+            if child.type == 0x11:
+                for grandchild in child.children:
+                    remove_mat(grandchild, child)
+        
     def LoadModel(self, filePath):
         """loads mesh data from file"""
 
@@ -505,7 +791,72 @@ class BModel:
                 log.warning('Tag (%s) not recognized. Resulting mesh could be weird', strTag)
             br.SeekSet(streamPos)
 
-        self.tex.LoadData(br)
+        # self.tex.LoadData(br)  # why the heck would it be loaded twice?!
+        br.Close()
+
+    def DumpModel(self, filePath):
+        """loads mesh data from file"""
+
+        log.debug("Dumping model...")
+        # -- load model
+        bw = BinaryWriter.BinaryWriter()
+        bw.Open(filePath)
+        self._bmdFilePath = filePath
+        self._bmdDir = MaxH.getFilenamePath(self._bmdFilePath)
+        self._bmdFileName = MaxH.getFilenameFile(self._bmdFilePath)
+        self._bmdDir += self._bmdFileName + "\\"
+        try:
+            os.mkdir(self._bmdDir)
+        except FileExistsError:
+            pass
+        self._texturePath = self._bmdDir + "Textures"
+
+        # XCX what is the file header?
+
+        bw.SeekSet(0x20)
+
+
+        self.inf = Inf1.Inf1()
+        self.vtx = Vtx1.Vtx1()
+        self.shp = Shp1.Shp1()
+        self.jnt = Jnt1.Jnt1()
+        self.evp = Evp1.Evp1()
+        self.drw = Drw1.Drw1()
+        self._mat1 = Mat3.Mat3()
+        self._mat1V2 = Mat3V2.Mat3()
+        self.tex = Tex1.Tex1()
+        self.mdl = Mdl3.Mdl3()
+
+        while strTag != "TEX1":  # "TEX1 tag is the last one every time"
+            br.SeekCur(iSize)
+            streamPos = br.Position()
+            strTag = br.ReadFixedLengthString(4)
+            iSize = br.ReadDWORD()
+
+            br.SeekSet(streamPos)
+            if strTag == "INF1":
+                self.inf.LoadData(br)
+            elif strTag == "VTX1":
+                self.vtx.LoadData(br)
+            elif strTag == "SHP1":
+                self.shp.LoadData(br)
+            elif strTag == "JNT1":
+                self.jnt.LoadData(br)
+            elif strTag == "EVP1":
+                self.evp.LoadData(br)
+            elif strTag == "DRW1":
+                self.drw.LoadData(br)
+            elif strTag == "MAT3":
+                self._mat1.LoadData(br)
+                br.SeekSet(streamPos)
+                self._mat1V2.LoadData(br)
+            elif strTag == "TEX1":
+                self.tex.LoadData(br)
+            elif strTag == "MDL3":
+                self.mdl.LoadData(br)
+            br.SeekSet(streamPos)
+
+        # self.tex.LoadData(br)
         br.Close()
 
     def DrawBatch(self, index, matIndex):
@@ -526,8 +877,10 @@ class BModel:
             self.model.hasMatrixIndices = True
         if currBatch.attribs.hasNormals:
             self.model.hasNormals = True
+        else:
+            log.warning('batch %d has no normal coordinates. Expect crash later on', index)
 
-        matrixTable =[]
+        matrixTable = []
         # there should NEVER be more than 20 matrices per packet imo...even 10 sound like a lot...
         isMatrixWeighted = []
         # pos?
@@ -535,18 +888,15 @@ class BModel:
         # should be same count as matrixTable
         maxWeightIndices = 0
 
-
-        # print (self.vtx.self.texCoords.count as string)
-
+        # XCX should only be done once
         for uv in range(8):  # copying vtx.texcoords into self.tverts
             if self.vtx.texCoords[uv] is not None:
                 while len(self.tverts) <= uv:
                     self.tverts.append([])
+                self.tverts[uv] = [None] * len(self.vtx.texCoords[uv])
                 for i_temp in range(len(self.vtx.texCoords[uv])):
                     tvert = self.vtx.texCoords[uv][i_temp]
-                    while len(self.tverts[uv]) <= i_temp:
-                        self.tverts[uv].append(None)
-                    self.tverts[uv][i_temp] = (tvert.s, -tvert.t+1, 0)  # flip uv v element
+                    self.tverts[uv][i_temp] = (tvert.s, tvert.t)  # flip uv v element
 
         for packnum, currPacket in enumerate(currBatch.packets):
             Mat44.updateMatrixTable(self.evp, self.drw, self.jnt, currPacket,
@@ -578,7 +928,7 @@ class BModel:
                     newPos = mat*(self.vtx.positions[posIndex])
                     while len(self.model.vertices) <= posIndex:
                         self.model.vertices.append(None)
-                    self.model.vertices[posIndex] = Vector((newPos.x, -newPos.z, newPos.y))
+                    self.model.vertices[posIndex] = newPos.copy()
 
                 # manage primitive type
                 if currPrimitive.type == 0x98:
@@ -643,6 +993,16 @@ class BModel:
                         loop_0.normal = temp_normals[p0.normalIndex].copy()
                         loop_1.normal = temp_normals[p1.normalIndex].copy()
                         loop_2.normal = temp_normals[p2.normalIndex].copy()
+                        if loop_0.normal == Vector((0,0,0)):
+                            loop_0.normal.xyz = (0,0,1)
+                        if loop_1.normal == Vector((0,0,0)):
+                            loop_1.normal.xyz = (0,0,1)
+                        if loop_2.normal == Vector((0,0,0)):
+                            loop_2.normal.xyz = (0,0,1)
+                        loop_0.normal.normalize()
+                        loop_1.normal.normalize()
+                        loop_2.normal.normalize()
+
 
                     # materials
                     while len(self._materialIDS) <= self.faceIndex:
@@ -672,22 +1032,15 @@ class BModel:
         if n.type == 0x10:
             # --joint
             f = self.jnt.frames[n.index]  # fixed
-            effP = parentMatrix*Mat44.FrameMatrix(f)
-            while len(self.jnt.matrices) <= n.index:
-                self.jnt.matrices.append(None)
-            self.jnt.matrices[n.index] = effP
+            effP = parentMatrix * f.getFrameMatrix()
+            f.matrix = effP
 
-            fstartPoint = parentMatrix*f.t
-            fstartPoint = Vector(fstartPoint.xzy)  # convertion happes here
-            fstartPoint.y *= -1
+            fstartPoint = parentMatrix * f.t
 
             orientation = (Mat44.rotation_part(parentMatrix) *  # use rotation part of parent matrix
                           Euler((f.rx, f.ry, f.rz), 'XYZ').to_matrix().to_4x4() *  # apply local rotation
-                          Vector((0, 0, -self.params.boneThickness)))
-            orientation.y, orientation.z = (-orientation.z), orientation.y
-            # computing correct bone orientation (first in BMD coords, then convert on the fly)
-
-            # orientation = Vector((0, self.params.boneThickness, 0))
+                          Vector((0, self.params.boneThickness, 0)))
+            # computing correct bone orientation (first in BMD coords, then convert later)
 
             bone = PBones.Pseudobone(parentBone, f, effP,
                                      fstartPoint,
@@ -695,16 +1048,13 @@ class BModel:
 
             bone.scale = (f.sx, f.sy, f.sz)
 
-            mTransform = Euler((f.rx, f.ry, f.rz), 'XYZ').to_matrix().to_4x4() * parentMatrix
-            # mx = mathutils.Matrix.Rotation(f.rx, 4, 'X')
-            # my = mathutils.Matrix.Rotation(f.ry, 4, 'Y')
-            # mz = mathutils.Matrix.Rotation(f.rz, 4, 'Z')
-            # mTransform = (mx * my * mz) * parentMatrix
+            # mTransform = Euler((f.rx, f.ry, f.rz), 'XYZ').to_matrix().to_4x4() * parentMatrix
+            # (this was wrong anyway)
 
-            bone.rotation_euler = mTransform.to_euler("XYZ")
+            # bone.rotation_euler = mTransform.to_euler("XYZ")
             bone.width = bone.height = self.params.boneThickness
 
-            bone.inverted_static_mtx = effP.inverted()
+            # bone.inverted_static_mtx = effP.inverted()
 
         for com in sg.children:
             self.CreateBones(com, effP, bone)
@@ -712,7 +1062,32 @@ class BModel:
         if parentBone is None:
             return bone
 
-    # convenient method for a less messy scenegraph analysis
+    def AnalyseBones(self, sg, parentMatrix, parentBone):
+        """creates bone hierarchy (FrameNodes) and apply matrices(jnt1.frames used to compute jnt1.matrices)"""
+        bone = parentBone
+        n = sg
+
+        if n.type == 0x10:
+            # --joint
+            if len(self.jnt.frames) < n.index:
+                self.jnt.frames += [None] * (n.index - len(self.jnt.frames))
+            f = self.jnt.frames[n.index] = Jnt1.JntFrame()
+
+            f.matrix = bone.matrix
+
+            localMtx = parentMatrix.inverted() * bone.matrix
+
+            f.t, rot, sc = localMtx.decompose()
+
+            f.rx, f.ry, f.rz = rot.xyz
+
+            f.sx, f.sy, f.sz = sc.xyz
+
+        for com in sg.children:
+            self.AnalyseBones(com, bone.matrix, bone)
+
+        if parentBone is None:
+            return bone
 
     def DrawScenegraph(self, sg, parentMatrix, onDown=True, matIndex=0):
         """create faces and assign UVs, Vcolors, materials"""
@@ -730,15 +1105,26 @@ class BModel:
             matIndex = self._currMaterialIndex
             # assign index of the next material to the material index that will be applied to all children
 
-            # build material (old version)
+            # build material
             try:
                 if not self.params.use_nodes:
                     mat = self._mat1.materials[self._mat1.indexToMatIndex[n.index]]  # corrected *2
-                    self._currMaterial = MatH.build_material(self, self._mat1, mat, self.tex)
+                    # materials can be reused in a single file: cache them
+                    if mat.material:
+                        self._currMaterial = mat.material[0]
+                        matIndex = mat.material[1]
+                    else:
+                        self._currMaterial = MatH.build_material(self, self._mat1, mat, self.tex)
+                        mat.material = (self._currMaterial, matIndex)
                     # material build, first version
                 else:
                     mat = self._mat1V2.materials[self._mat1V2.indexToMatIndex[n.index]]
-                    self._currMaterial = Mat3V2.create_material(mat)
+                    if mat.material:
+                        self._currMaterial = mat.material[0]
+                        matIndex = mat.material[1]
+                    else:
+                        self._currMaterial = Mat3V2.create_material(mat)
+                        mat.material = (self._currMaterial, matIndex)
             except Exception as err:
                 log.error('Material not built correctly (error is %s)', err)
                 self._currMaterial = None
@@ -775,6 +1161,15 @@ class BModel:
 
         if n.type < 0x10 or n.type > 0x12:
             log.error("SceneGraph node has incorrect type. Might cause chaos.")
+
+    def BuildScenegraph(self, sg, bone):
+        sg.index = len(self._bones)
+        self._bones.append(bone)
+        for child in bone.children:
+            childSG = Inf1.SceneGraph()
+            sg.children.append(childSG)
+            childSG.type = 0x10
+            self.BuildScenegraph(childSG, child)
 
     def DrawScene(self):
         log.debug("DrawScene point reached")
@@ -818,91 +1213,95 @@ class BModel:
             log.critical('Mesh description in scene graph is nonsensical. (error is %s)', err)
             raise
         try:
-            modelMesh = self.BuildSingleMesh()
+            modelObj = self.BuildSingleMesh()
+
         except Exception as err:
             log.critical('mesh couldn\'t be built (error is %s)', err)
             raise
 
         if self.params.createBones and self.params.loadAnimations:
-            log.debug("animations: ")
-            animationCount = 1  # default pose at frame 0
+            self.LoadAnimations()
 
-            startFrame = 1
-            errMsg = ""
+    def LoadAnimations(self):
+        log.debug("animations: ")
+        animationCount = 1  # default pose at frame 0
 
-            if self.arm_obj.animation_data is None:
-                self.arm_obj.animation_data_create()
-                if self.params.animationType == 'SEPARATE':  # add NLA track compilation
-                    track = self.arm_obj.animation_data.nla_tracks.new()
-                    track.name = self.arm_obj.name + '_track'
+        startFrame = 1
+        errMsg = ""
 
-            bckFiles = []
-            for bckPath in self._bckPaths:
-                bckFiles += MaxH.getFiles(self._bmdDir + bckPath)
-            for f in bckFiles:
-                bckFileName = MaxH.getFilenameFile(f)
-                b = Bck.Bck_in()
-                try:
-                    b.LoadBck(f, len(self._bones))
-                except Exception as err:
-                    log.warning('an animation file was corrupted. (error is %s)', err)
-                    continue
+        if self.arm_obj.animation_data is None:
+            self.arm_obj.animation_data_create()
+            if self.params.animationType == 'SEPARATE':  # add NLA track compilation
+                track = self.arm_obj.animation_data.nla_tracks.new()
+                track.name = self.arm_obj.name + '_track'
 
-                if not len(b.anims):
-                    # file loader already knows that it won't fit
-                    errMsg += bckFileName + "\n"
-                else:
-                    if self.params.animationType == 'SEPARATE':
-                        try:
-                            b.AnimateBoneFrames(0, self._bones, 1, self.params.includeScaling)
-                            action = PBones.apply_animation(self._bones, self.arm_obj, self.jnt.frames, bckFileName)
-                        except Exception as err:
-                            log.error('animation file doesn\'t apply as expected (error is %s)', err)
-                            continue  # XDX
-                        finally:
-                            for com in self._bones:
-                                com.reset()
-                        bpy.context.scene.frame_end = startFrame + b.animationLength + 5
-                        # (create space to insert strip)
-                        try:
-                            track.strips.new(bckFileName+'_strip', startFrame, action)
-                        except Exception as err:
-                            # assume the previous action is out of range: move it.
-                            corrupted_action_track = self.arm_obj.animation_data.nla_tracks.new()
-                            corrupted_action_track.name = 'CORRUPTED_ACTION_'+str(animationCount)
-                            corrupted_action = track.strips[-1].action
-                            corrupted_action_track.strips.new('action', track.strips[-1].frame_start,
-                                                              corrupted_action)
-                            track.strips.remove(track.strips[-1])
-                            track.strips.new(bckFileName + '_strip', startFrame, action)  # try again
-                        # add action to NLA compilation
+        bckFiles = []
+        for bckPath in self._bckPaths:
+            bckFiles += MaxH.getFiles(self._bmdDir + bckPath)
+        for f in bckFiles:
+            bckFileName = MaxH.getFilenameFile(f)
+            b = Bck.Bck_in()
+            try:
+                b.LoadBck(f, len(self._bones))
+            except Exception as err:
+                log.warning('an animation file was corrupted. (error is %s)', err)
+                continue
 
-                    elif self.params.animationType == 'CHAINED':
-                        try:
-                            b.AnimateBoneFrames(startFrame, self._bones, 1, self.params.includeScaling)
-                        except Exception as err:
-                            log.error('Animation file doesn\'t apply as expected (error is %s)', err)
-                            continue
-                    numberOfFrames = b.animationLength
-                    if b.animationLength <= 0:
-                        numberOfFrames = 1
-                    endFrame = startFrame + b.animationLength
+            if not len(b.anims):
+                # file loader already knows that it won't fit
+                errMsg += bckFileName + "\n"
+            else:
+                if self.params.animationType == 'SEPARATE':
+                    try:
+                        b.AnimateBoneFrames(0, self._bones, 1, self.params.includeScaling)
+                        action = PBones.apply_animation(self._bones, self.arm_obj, self.jnt.frames, bckFileName)
+                    except Exception as err:
+                        log.error('animation file doesn\'t apply as expected (error is %s)', err)
+                        continue
+                    finally:
+                        for com in self._bones:
+                            com.reset()
+                    bpy.context.scene.frame_end = startFrame + b.animationLength + 5
+                    # (create space to insert strip)
+                    try:
+                        track.strips.new(bckFileName+'_strip', startFrame, action)
+                    except Exception as err:
+                        # assume the previous action is out of range: move it.
+                        corrupted_action_track = self.arm_obj.animation_data.nla_tracks.new()
+                        corrupted_action_track.name = 'CORRUPTED_ACTION_'+str(animationCount)
+                        corrupted_action = track.strips[-1].action
+                        corrupted_action_track.strips.new('action', track.strips[-1].frame_start,
+                                                          corrupted_action)
+                        track.strips.remove(track.strips[-1])
+                        track.strips.new(bckFileName + '_strip', startFrame, action)  # try again
+                    # add action to NLA compilation
 
-                        # kwXPortAnimationName += bckFileName + "," + str(startFrame) + "," + str(numberOfFrames)+ ",1;"
-                    startFrame = endFrame + 1
-                    animationCount += 1
+                elif self.params.animationType == 'CHAINED':
+                    try:
+                        b.AnimateBoneFrames(startFrame, self._bones, 1, self.params.includeScaling)
+                    except Exception as err:
+                        log.error('Animation file doesn\'t apply as expected (error is %s)', err)
+                        continue
+                numberOfFrames = b.animationLength
+                if b.animationLength <= 0:
+                    numberOfFrames = 1
+                endFrame = startFrame + b.animationLength
 
-            if self.params.animationType == 'CHAINED':
-                bpy.context.scene.frame_start = 0
-                bpy.context.scene.frame_end = startFrame
-                try:
-                    PBones.apply_animation(self._bones, self.arm_obj, self.jnt.frames)
-                except Exception as err:
-                    log.error('Animation doesn\'t apply as expected. Change animation importation parameters'
-                                'to isolate faulty file (error is %s)', err)
+                    # kwXPortAnimationName += bckFileName + "," + str(startFrame) + "," + str(numberOfFrames)+ ",1;"
+                startFrame = endFrame + 1
+                animationCount += 1
 
-            elif self.params.animationType == 'SEPARATE':
-                self.arm_obj.animation_data.action = None
+        if self.params.animationType == 'CHAINED':
+            bpy.context.scene.frame_start = 0
+            bpy.context.scene.frame_end = startFrame
+            try:
+                PBones.apply_animation(self._bones, self.arm_obj, self.jnt.frames)
+            except Exception as err:
+                log.error('Animation doesn\'t apply as expected. Change animation importation parameters'
+                            'to isolate faulty file (error is %s)', err)
+
+        elif self.params.animationType == 'SEPARATE':
+            self.arm_obj.animation_data.action = None
 
     def ExtractImages(self, force=False):
                 
@@ -993,10 +1392,10 @@ class BModel:
         fBTP.close()
 
     def Import(self, filename, use_nodes, imtype, packTextures, allowTextureMirror, loadAnimations, includeScaling,
-               forceCreateBones, boneThickness, dvg):
+               forceCreateBones, boneThickness, dvg, val_msh=False):
         self.params = Prog_params(filename, boneThickness, allowTextureMirror, forceCreateBones,
                                   loadAnimations != 'DONT', loadAnimations,
-                                  packTextures,  includeScaling, imtype, dvg, use_nodes)
+                                  packTextures,  includeScaling, imtype, dvg, use_nodes, val_msh)
 
         self._bckPaths.append("..\\..\\bck\\*.bck")
         self._bckPaths.append("..\\..\\bcks\\*.bck")

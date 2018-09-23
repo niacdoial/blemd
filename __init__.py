@@ -85,10 +85,10 @@ class ImportBmd(Operator, ImportHelper):
     filename_ext = ".bmd"
 
     filter_glob = StringProperty(
-            default="*.bmd;*.bdl",
-            options={'HIDDEN'},
-            maxlen=255,  # Max internal buffer length, longer would be clamped.
-            )
+        default="*.bmd;*.bdl",
+        options={'HIDDEN'},
+        maxlen=255,  # Max internal buffer length, longer would be clamped.
+    )
 
     # List of operator properties, the attributes will be assigned
     # to the class instance from the operator settings before calling.
@@ -106,7 +106,7 @@ class ImportBmd(Operator, ImportHelper):
                ('SEPARATE', "One Action per animation file", 'animations will be displayed one after the other on a "NLA strip"'
                                                              ' (for more advanced blender users)')),
         default='CHAINED'
-        )
+    )
 
     use_nodes = BoolProperty(
         name="use complete materials",
@@ -119,13 +119,19 @@ class ImportBmd(Operator, ImportHelper):
         name="Force create bones",
         description="",
         default=False
-        )
+    )
 
     mir_tx = BoolProperty(
         name="Allow mirrored textures",
         description="",
         default=True
-        )
+    )
+
+    val_msh = BoolProperty(
+        name="validate mesh",
+        description="can help if you have blender crashing problems. \n However, it culls some data almost every time",
+        default=False
+    )
 
     tx_pck = EnumProperty(
         name="Pack textures",
@@ -134,7 +140,7 @@ class ImportBmd(Operator, ImportHelper):
                ('DO', 'pack images in blender file', ''),
                ('PNG', 'pack images IN PNG FORMAT', 'conversion is made by blender')),
         default='DO'
-        )
+    )
 
     imtype = EnumProperty(
         name="Image format",
@@ -143,19 +149,13 @@ class ImportBmd(Operator, ImportHelper):
         items=(('TGA', "targa files", ""),
                ('DDS', "dds files", '(this format has less support from Blender)')),
         default='TGA'
-        )
+    )
 
     ic_sc = BoolProperty(
         name="include scaling",
         description="Will help make some models look right, has opposite effect on others.",
         default=True
-        )
-
-    dvg = BoolProperty(
-        name="DEBUG vertex groups",
-        description="DEBUG option. create Vgroups to show the original BMD structure (ram-intensive)",
-        default=False
-        )
+    )
 
     boneThickness = IntProperty(
         name="bone length",
@@ -167,6 +167,12 @@ class ImportBmd(Operator, ImportHelper):
         default=10
     )
 
+    dvg = BoolProperty(
+        name="DEBUG vertex groups",
+        description="DEBUG option. create Vgroups to show the original BMD structure (ram-intensive)",
+        default=False
+    )
+
     def execute(self, context):
         global log_out
         retcode = 'FINISHED'
@@ -176,7 +182,7 @@ class ImportBmd(Operator, ImportHelper):
         try:
             temp.SetBmdViewExePath(path + '\\')  # add backslash for good measure
             temp.Import(self.filepath, self.use_nodes, self.imtype, self.tx_pck, self.mir_tx,
-                        self.sv_anim, self.ic_sc, self.frc_cr_bn, self.boneThickness, self.dvg)
+                        self.sv_anim, self.ic_sc, self.frc_cr_bn, self.boneThickness, self.dvg, self.val_msh)
         except Exception as err:
             log.critical('An error happened. If it wasn\'t reported before, here it is: %s', err)
             retcode = 'ERROR'

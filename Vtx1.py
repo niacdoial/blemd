@@ -370,9 +370,9 @@ def StripIterator(lst):
     flip = False  # odd faces are in reversed index
     for com in range(len(lst)-2):
         if flip:
-            yield (lst[com+2], lst[com], lst[com+1])# (swap vertices ,n°2 and n°3)
+            yield (lst[com], lst[com+1], lst[com+2])  # correct order to have correct normals
         else:
-            yield (lst[com], lst[com+2], lst[com+1])# (swap vertices ,n°2 and n°3)
+            yield (lst[com+2], lst[com+1], lst[com])
         flip = not flip
 
 
@@ -380,3 +380,80 @@ def FanIterator(lst):
     print('This is a fan!')
     for com in range(1, len(lst)-1):
         yield (lst[0], lst[com+1], lst[com])  # faces need to be described like this in order to have correct normals
+
+
+def findFace(model, facelist, v0, v1, v2, exclude):
+    for face in facelist:
+        fv0, fv1, fv2 = model.getVerts(face)
+        if exclude==2:
+            if fv0 == v0 and fv1 == v1 and fv2 != v2:
+                return face
+        elif exclude == 0:
+            if fv0 != v0 and fv1 == v1 and fv2 == v2:
+                return face
+        else:
+            log.critical("findFace wasn't meant to exclude second vert in match. ***report bug***")
+            raise ValueError('~the dev is an idiot~')
+    return None
+
+
+def getStrip(model, facelist, startFace, v0, v1, v2):
+    stFaces = [startFace]
+    stVerts = [v2, v1, v0]  # first face is in reverse order
+    stLoops = [model.getLoop(startFace, 2),
+               model.getLoop(startFace, 1),
+               model.getLoop(startFace, 0)]
+
+    # faces have to be found from the 2->1 edge of the previous triangle (on their 1->2)
+    # or from the 1->0 edge of the previous triangle (on their 0->1), alternatively.
+    newFace = findFace(model, facelist, v0, v1, v2)  # second face found from 2->1
+    flip = False  # odd faces from 1->0 (False), even faces from 2->1 (True)
+    while newFace is not None:
+        stFaces.append(newFace)
+        fv0, fv1, fv2 = model.getVerts(newFace)
+        if flip:  # order: 2-1-0. append 0
+            stVerts.append(fv0)
+            stLoops.append(model.getLoop(newFace, 0))
+            flip = False
+            newFace = findFace(model, facelist, fv1, fv0, fv2, 2)  # find (odd face) from 1->0 on 0->1
+        else:  # order: 0-1-2. append 2
+            stVerts.append(fv2)
+            stLoops.append(model.getLoop(newFace, 2))
+            flip = True
+            newFace = findFace(model, facelist, fv0, fv2, fv1, 0)  # find (even face) from 2->1 on 1->2
+    return (stFaces, stLoops)
+
+
+def makestrips(model, facelist):
+    # notice : this function operates under the asumption that the faces make a somewhat manifold mesh,
+    # but won't crash if otherwise : it will only cause optimisation problems
+    strips = []
+    while facelist:
+        # generate a single strip from the first face of the facelist
+        face = facelist[0]
+        v0 = model.getLoop(face, 0).vertex
+        v1 = model.getLoop(face, 1).vertex
+        v2 = model.getLoop(face, 2).vertex
+
+        # starting from a single face, there are three strips that can be made.
+        st0 = getStrip(model, facelist, face, v0, v1, v2)
+        st1 = getStrip(model, facelist, face, v1, v2, v0)
+        st2 = getStrip(model, facelist, face, v2, v0, v1)
+
+        # only get the longest
+        if len(st0[0]) >= len(st1[0]):
+            st3 = st0
+        else:
+            st3 = st1
+        if len(st3[0]) >= len(st2[0]):
+            st = st3
+        else:
+            st = st2
+
+        strips.append(st)
+
+        # exclude strip faces from future strips
+        for face in st[0]:
+            facelist.remove(face)
+
+    return strips

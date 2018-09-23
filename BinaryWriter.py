@@ -194,3 +194,10 @@ class BinaryWriter:
         string = 'Padding '
         string = string * int(ceil(bcount/len(string)))
         self.writeString(string[:bcount])
+
+    def writePaddingTo16(self):
+        length = 16 - (self._f.tell() % 16)
+        self.writePadding(length)
+
+    def addPadding(self, size):
+        return 16 * (size//16 + 1)

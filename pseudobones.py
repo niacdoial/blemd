@@ -82,7 +82,7 @@ def cubic_interpolator(t1, y1, d1, t2, y2, d2, t):
 def get_dynamic_mtx(p_bone, frame):
     if frame not in p_bone.computed_d_matrices.keys():
         local_mtx_y, local_mtx_yd = p_bone.frames.get_mtx(frame)
-        inv_static_mtx = p_bone.jnt_frame.get_tr_mtx().inverted()
+        inv_static_mtx = p_bone.jnt_frame.getFrameMatrix().inverted()
         p_bone.computed_d_matrices[frame] = (inv_static_mtx * local_mtx_y,
                                              inv_static_mtx * local_mtx_yd)
     return p_bone.computed_d_matrices[frame]
@@ -235,10 +235,10 @@ class Pseudobone:
         self.orientation = vect_normalize(ori)
         self.scale = Vector((1, 1, 1))
         self.jnt_frame = None
-        self.rotation_euler = Euler((0, 0, 0), 'XYZ')
+        # self.rotation_euler = Euler((0, 0, 0), 'XYZ')
         self.position = startpoint
         self.frames = KeyFrames()
-        self.inverted_static_mtx = None
+        # self.inverted_static_mtx = None
         self.computed_d_matrices = {}
         self.computed_t_matrices = {}
         # self.scale_kf = {}  # keyframes (values)
@@ -318,6 +318,7 @@ class Pseudobone:
 
     def get_z(self):
         return NtoB*rotation_part(self.matrix)*BtoN * Vector((0,0,1))
+
 
 
 def getBoneByName(name):
