@@ -24,7 +24,7 @@ class Inf1Header:
     # This stores the scene graph of the file
 
     def DumpData(self, bw):
-        bw.writeString("inf1")
+        bw.writeString("INF1")
         bw.writeDword(self.sizeOfSection)
         bw.writeWord(self.unknown1)
         bw.writeWord(self.pad)  # 0xffff
@@ -61,6 +61,8 @@ class SceneGraph:
         self.type = 0
         self.index = 0
         self.children = []
+        # this var is only used as cache for the export process
+        self.material = None
 
 
 
@@ -109,7 +111,7 @@ class Inf1:
             self.extractEntries(s2, dest)
         relation_e = Inf1Entry()
         relation_e.type = 0x02  # up
-        relation_e.index = 0
+        relation_e.index = 0  # XCX are all the end delimitors here?
 
 
 
@@ -150,7 +152,7 @@ class Inf1:
         header.pad = 0xffff
         header.unknown2 = 0
         header.vertexCount = self.numVertices
-        header.offsetToEntries = 16 * ceil(Inf1Header.size/16)
+        header.offsetToEntries = bw.addPadding(Inf1Header.size)
 
         header.DumpData(bw)
         bw.writePadding(header.offsetToEntries - Inf1Header.size)
@@ -163,7 +165,7 @@ class Inf1:
         for entry in self.entries:
             entry.DumpData(bw)
 
-        bw.writePadding( 16*ceil(bw.Position()/16) - bw.Position() )
+        bw.writePaddingTo16()
 
         header.sizeOfSection = bw.Position() - inf1Offset
         bw.SeekSet(inf1Offset + 4)

@@ -112,6 +112,6 @@ def newUVlayer(mesh, representation, uv_id):
 
     for num, com in enumerate(representation.loops):
         if com.UVs[uv_id] is not None:
-            uvtex.data[num].uv = com.UVs[uv_id][0:2]
+            uvtex.data[num].uv = (com.UVs[uv_id][0], 1-com.UVs[uv_id][1])
         # else, will be zero
 

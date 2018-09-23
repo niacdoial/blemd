@@ -143,6 +143,8 @@ class MaterialBase:
 
         self.alphaCompIndex = [0] * 4
         self.blendIndex = [0] * 4
+        
+        self.cached = None  # cached result to avoid unnecessary calculations
 
 
 class Mat3:

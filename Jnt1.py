@@ -11,7 +11,7 @@ class Jnt1Header:
         pass
 
     def LoadData(self, br):
-        self.tag = br.ReadFixedLengthString(4)  # "jnt1"
+        self.tag = br.ReadFixedLengthString(4)  # "JNT1"
         self.sizeOfSection = br.ReadDWORD()
         self.count = br.ReadWORD()  # number of joints
         self.pad = br.ReadWORD()  # padding?
@@ -24,7 +24,7 @@ class Jnt1Header:
         self.stringTableOffset = br.ReadDWORD()  # names of joints
 
     def DumpData(self, bw):
-        bw.writeString("jnt1")  # XCX check caps
+        bw.writeString("JNT1")
         bw.writeDword(self.sizeOfSection)
         bw.writeWord(self.count)
         bw.writeWord(self.pad)
@@ -129,7 +129,7 @@ class JntEntry:
 
 class JntFrame:
     def __init__(self):  # GENERATED!
-        pass
+        self.matrix = None
 
     def InitFromJntEntry(self, e):
                 
@@ -147,14 +147,12 @@ class JntFrame:
         self._bbMax = e.bbMax
 
 
-    def get_tr_mtx(self):
+    def getFrameMatrix(self):
         return Matrix.Translation(self.t) * Euler((self.rx, self.ry, self.rz), 'XYZ').to_matrix().to_4x4()
 
 
 class Jnt1:
     def __init__(self):  # GENERATED!
-        self.matrices = []  # matrixes of the bones' base positions: used to computeoriginal vertex positions
-        self.isMatrixValid = []  # TODO: use this or delete it
         self.frames = []  # base position of bones, used as a reference to compute animations as a difference to this
 
     def LoadData(self, br):
@@ -201,7 +199,7 @@ class Jnt1:
         # prepare (incomplete) header, then write it
         header = Jnt1Header()
         header.count = len(self.frames)
-        header.jntEntryOffset = 16 * ceil(Jnt1Header.size / 16)
+        header.jntEntryOffset = bw.addPadding(Jnt1Header.size)
         header.unknownOffset = header.jntEntryOffset + header.count*JntEntry.size
         header.stringTableOffset = header.unknownOffset + 2 * header.count
         header.pad = 0xffff  # padding
@@ -232,7 +230,7 @@ class Jnt1:
         bw.writeStringTable(stringTable)
 
         # now complete and rewrite header
-        header.sizeOfSection = 16 * ceil((bw.Position()-jnt1Offset)/16)
+        header.sizeOfSection = bw.addPadding((bw.Position()-jnt1Offset))
         bw.writePadding(jnt1Offset + header.sizeOfSection - bw.Position())
         bw.SeekSet(jnt1Offset + 4)
         bw.writeDword(header.sizeOfSection)

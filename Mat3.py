@@ -133,6 +133,8 @@ class MatEntry:
         self.texGenInfo= []
         self.lightList= []
         self.tevSwapModeInfo= []
+        
+        self.material = None  # stores the outputted blender material, that could be used several times
 
     def LoadData(self, br, isMat2):
         for _ in range(8): self.unk.append(br.GetByte())
@@ -223,13 +225,13 @@ class Mat3:
 
         # ------------------
         br.SeekSet(mat3Offset + h.offsets[0])  # corrected     # -- offset[0] (MatEntries)
-        self.materials = []
+        self.materials = [None] * h.count
         # -- vector<int> indexToInitData(h.count); ' self.indexToMatIndex
 
-        for _ in range(h.count):
+        for i in range(h.count):
             m = MatEntry()
             m.LoadData(br, self.isMat2)
-            self.materials.append(m)
+            self.materials[i] = m
         # ------------------
         br.SeekSet(mat3Offset + h.offsets[1])  # corrected  # -- offset[1] (indirection table from indices to init data indices)
         maxIndex = 0
