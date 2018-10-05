@@ -84,6 +84,11 @@ class ModelRepresentation:
         self.hasColors = [False]*2
         self.hasMatrixIndices = False
         self.hasNormals = False
+        
+        self.dedup_verts = {} # {original_id: (new ids)}
+        # some faces might reference the same vert multiple times:
+        # for this (somewhat dumb and corner-case) occasion,
+        # "cloned" verts must be kept.
 
     def toarray(self, type):
         if type == 'co':
@@ -943,6 +948,38 @@ class BModel:
                     posIndex0 = p0.posIndex
                     posIndex1 = p1.posIndex
                     posIndex2 = p2.posIndex
+                    
+                    # vertex deduplication: if two of the `posIndex`es
+                    # are the same, vertex clones must be introduced for stability
+                    # (a polygon mustn't refer to the same vertex more than once)
+                    if posIndex0==posIndex1:
+                        if self.model.dedup_verts.get(posIndex0, None) is None:
+                            self.model.vertices.append(self.model.vertices[posIndex0])
+                            posIndex1 = len(self.model.vertices)-1
+                            self.model.dedup_verts[posIndex0] = (posIndex1,)
+                        else:
+                            posIndex1 = self.model.dedup_verts[posIndex0][0]
+                    
+                    if posIndex0==posIndex2:
+                        if self.model.dedup_verts.get(posIndex0, None) is None:
+                            self.model.vertices.append(self.model.vertices[posIndex0])
+                            posIndex2 = len(self.model.vertices)-1
+                            self.model.dedup_verts[posIndex0] = (posIndex2,)
+                        else:
+                            posIndex2 = self.model.dedup_verts[posIndex0][0]
+                    
+                    # third vert deduplication might sound trickier because duplication
+                    # might come from the original file but might also come from here,
+                    # but in truth, the second case just means that
+                    # the shared posIndex value is aready one of the vertex clones
+                    if posIndex1==posIndex2:
+                        if self.model.dedup_verts.get(posIndex1, None) is None:
+                            self.model.vertices.append(self.model.vertices[posIndex1])
+                            posIndex2 = len(self.model.vertices)-1
+                            self.model.dedup_verts[posIndex1] = (posIndex2,)
+                        else:
+                            posIndex2 = self.model.dedup_verts[posIndex1][0]
+                    
 
                     if self.params.DEBUGVG:
                         tempvg = self.DEBUGvgroups.get(str(batchid), None)
