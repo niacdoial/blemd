@@ -128,8 +128,9 @@ class ImportBmd(Operator, ImportHelper):
     )
 
     val_msh = BoolProperty(
-        name="validate mesh",
-        description="can help if you have blender crashing problems. \n However, it culls some data almost every time",
+        name="validate mesh [!]",
+        description="ONLY use if blender crashes otherwise.\nMesh WILL be very inaccurate for material mapping.\n"
+        "If you are forced to use this option, start an issue on github and please include the console log.",
         default=False
     )
 
