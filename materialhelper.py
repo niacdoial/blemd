@@ -3,6 +3,7 @@ import mathutils
 import os.path as OSPath
 from .texhelper import newtex_tslot, getTexImage, showTextureMap, getTexSlot
 from mathutils import Color
+from .matpipeline import createMaterialSystem
 
 
 def add_material(obj, mat):
@@ -121,6 +122,20 @@ def build_material(bmodel, mat1, material, tex):
 
     return currMaterial
 
+
+def build_material_v2(mIndex, mat1, tex1, texpath, ext):
+    mbase = mat1.materialbases[mIndex]
+    msys = createMaterialSystem(mIndex, mat1, tex1, texpath, ext)
+    # msys.flag = mat1.materialbases[mIndex].flag  # XCX needed?
+    mat1.materials[mIndex] = msys
+    material = bpy.data.materials.new('stupid_name_that_will_be_erased_in_a_moment')
+    material.use_nodes = True
+    material.use_transparency = True
+    material.transparency_method = 'Z_TRANSPARENCY'
+    msys.export(material.node_tree)
+
+    mbase.material = material
+    return material
 
 def add_vcolor_old(mesh, color_layer, cv_to_f_v, Faces, uvlayer, layerID):
 
