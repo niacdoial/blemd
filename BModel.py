@@ -18,20 +18,20 @@ log = logging.getLogger('bpy.ops.import_mesh.bmd.main')
 
 if LOADED:
     for module in (BinaryReader, BinaryWriter, Mat44, Inf1, Vtx1, Shp1, Jnt1, Evp1, Drw1,
-                   Bck, Mat3, Mat3V2, Tex1, Mdl3, Btp, MaxH, TexH, MatH, PBones):
+                   Bck, Mat3, Tex1, Mdl3, Btp, MaxH, TexH, MatH, PBones):
         reload(module)
 
 else:
     from . import (
         BinaryReader, BinaryWriter,
         Matrix44 as Mat44,
-        Inf1, Vtx1, Shp1, Jnt1, Evp1, Drw1, Bck, Mat3, Tex1, Btp, Mdl3,
-        materialV2 as Mat3V2,
+        Inf1, Vtx1, Shp1, Jnt1, Evp1, Drw1, Bck, Tex1, Btp, Mdl3, Mat3,
         maxheader as MaxH,
         texhelper as TexH,
         materialhelper as MatH,
         pseudobones as PBones
     )
+
 del LOADED
 
 
@@ -84,6 +84,11 @@ class ModelRepresentation:
         self.hasColors = [False]*2
         self.hasMatrixIndices = False
         self.hasNormals = False
+        
+        self.dedup_verts = {} # {original_id: (new ids)}
+        # some faces might reference the same vert multiple times:
+        # for this (somewhat dumb and corner-case) occasion,
+        # "cloned" verts must be kept.
 
     def toarray(self, type):
         if type == 'co':
@@ -756,7 +761,6 @@ class BModel:
         self.evp = Evp1.Evp1()
         self.drw = Drw1.Drw1()
         self._mat1 = Mat3.Mat3()
-        self._mat1V2 = Mat3V2.Mat3()
         self.tex = Tex1.Tex1()
         self.mdl = Mdl3.Mdl3()
 
@@ -781,8 +785,6 @@ class BModel:
                 self.drw.LoadData(br)
             elif strTag == "MAT3":
                 self._mat1.LoadData(br)
-                br.SeekSet(streamPos)
-                self._mat1V2.LoadData(br)
             elif strTag == "TEX1":
                 self.tex.LoadData(br)
             elif strTag == "MDL3":
@@ -823,7 +825,6 @@ class BModel:
         self.evp = Evp1.Evp1()
         self.drw = Drw1.Drw1()
         self._mat1 = Mat3.Mat3()
-        self._mat1V2 = Mat3V2.Mat3()
         self.tex = Tex1.Tex1()
         self.mdl = Mdl3.Mdl3()
 
@@ -848,8 +849,6 @@ class BModel:
                 self.drw.LoadData(br)
             elif strTag == "MAT3":
                 self._mat1.LoadData(br)
-                br.SeekSet(streamPos)
-                self._mat1V2.LoadData(br)
             elif strTag == "TEX1":
                 self.tex.LoadData(br)
             elif strTag == "MDL3":
@@ -943,6 +942,38 @@ class BModel:
                     posIndex0 = p0.posIndex
                     posIndex1 = p1.posIndex
                     posIndex2 = p2.posIndex
+                    
+                    # vertex deduplication: if two of the `posIndex`es
+                    # are the same, vertex clones must be introduced for stability
+                    # (a polygon mustn't refer to the same vertex more than once)
+                    if posIndex0==posIndex1:
+                        if self.model.dedup_verts.get(posIndex0, None) is None:
+                            self.model.vertices.append(self.model.vertices[posIndex0])
+                            posIndex1 = len(self.model.vertices)-1
+                            self.model.dedup_verts[posIndex0] = (posIndex1,)
+                        else:
+                            posIndex1 = self.model.dedup_verts[posIndex0][0]
+                    
+                    if posIndex0==posIndex2:
+                        if self.model.dedup_verts.get(posIndex0, None) is None:
+                            self.model.vertices.append(self.model.vertices[posIndex0])
+                            posIndex2 = len(self.model.vertices)-1
+                            self.model.dedup_verts[posIndex0] = (posIndex2,)
+                        else:
+                            posIndex2 = self.model.dedup_verts[posIndex0][0]
+                    
+                    # third vert deduplication might sound trickier because duplication
+                    # might come from the original file but might also come from here,
+                    # but in truth, the second case just means that
+                    # the shared posIndex value is aready one of the vertex clones
+                    if posIndex1==posIndex2:
+                        if self.model.dedup_verts.get(posIndex1, None) is None:
+                            self.model.vertices.append(self.model.vertices[posIndex1])
+                            posIndex2 = len(self.model.vertices)-1
+                            self.model.dedup_verts[posIndex1] = (posIndex2,)
+                        else:
+                            posIndex2 = self.model.dedup_verts[posIndex1][0]
+                    
 
                     if self.params.DEBUGVG:
                         tempvg = self.DEBUGvgroups.get(str(batchid), None)
@@ -1107,24 +1138,25 @@ class BModel:
 
             # build material
             try:
-                if not self.params.use_nodes:
-                    mat = self._mat1.materials[self._mat1.indexToMatIndex[n.index]]  # corrected *2
-                    # materials can be reused in a single file: cache them
-                    if mat.material:
-                        self._currMaterial = mat.material[0]
-                        matIndex = mat.material[1]
-                    else:
-                        self._currMaterial = MatH.build_material(self, self._mat1, mat, self.tex)
-                        mat.material = (self._currMaterial, matIndex)
-                    # material build, first version
+                mat = self._mat1.materialbases[self._mat1.indexToMatIndex[n.index]]
+                # materials can be reused in a single file: cache them
+                if mat.material:
+                    self._currMaterial = mat.material[0]
+                    matIndex = mat.material[1]
                 else:
-                    mat = self._mat1V2.materials[self._mat1V2.indexToMatIndex[n.index]]
-                    if mat.material:
-                        self._currMaterial = mat.material[0]
-                        matIndex = mat.material[1]
+                    if not self.params.use_nodes:
+                        self._currMaterial = MatH.build_material(self, self._mat1, mat, self.tex)
                     else:
-                        self._currMaterial = Mat3V2.create_material(mat)
-                        mat.material = (self._currMaterial, matIndex)
+                        try:
+                            self._currMaterial = MatH.build_material_v2(matIndex, self._mat1, self.tex,
+                                                                        self._texturePath, '.' + self.params.imtype.lower())
+                        except Exception as err:
+                            log.error(
+                                'node (GLSL) materials went wrong. Falling back to incomplete materials. (error is %s)',
+                                err)
+                            self._currMaterial = MatH.build_material(self, self._mat1, mat, self.tex)
+                    mat.material = (self._currMaterial, matIndex)
+
             except Exception as err:
                 log.error('Material not built correctly (error is %s)', err)
                 self._currMaterial = None
@@ -1141,7 +1173,7 @@ class BModel:
             if self._currMaterial is not None:  # mat.texStages[0] != 0xffff:  # do it if any texture has been made
                 # XCX is that the good condition?
                 if self.params.use_nodes:
-                    self._currMaterial.name = self._mat1V2.stringtable[n.index]
+                    self._currMaterial.name = self._mat1.stringtable[n.index]
                 else:
                     self._currMaterial.name = self._mat1.stringtable[n.index]
 
@@ -1187,14 +1219,6 @@ class BModel:
         except Exception as err:
             log.critical('Scenegraph (mesh description) is bad. stopping... (error is %s)', err)
             raise
-
-        try:
-            if self.params.use_nodes:
-                self._mat1V2.convert(self.tex, self._texturePath, '.'+self.params.imtype.lower())
-                # + self.params.texturePrefix)
-                # prepare material nodes
-        except Exception as err:
-            log.error('node (GLSL) materials went wrong. They will be missing. (error is %s)', err)
 
         if self.params.createBones:
             self._bones = rootBone.tree_to_array()

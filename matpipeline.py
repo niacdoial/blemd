@@ -406,9 +406,6 @@ class MaterialSpace:
 
         self.konsts = [None]*8
 
-        self.flag = 0  # scenegraph use
-
-        self.material = None  # used for mat sys that are used several times
 
     # those functions are used for node computation
     def getRegFromId(self, id):
