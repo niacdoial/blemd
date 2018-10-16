@@ -216,12 +216,24 @@ def add_vcolor(mesh, representation, layerID):
     """copies vertex colors (layer `layerID`) from the representation to the blender mesh"""
 
     vx_layer = mesh.vertex_colors.new("v_color_"+str(layerID))
-    vx_layer_a = mesh.vertex_colors.new("v_color_alpha_"+str(layerID))
+    # some really recent, unstable versions of blender 2.79 have alpha support in vertex colors.
+    # detect this and react accordingly (or an exception will be raised)
+    try:
+        vx_layer.data[0].color = (1,0,0,0)
+        alpha_support = True
+    except:
+        alpha_support = False
+        vx_layer_a = mesh.vertex_colors.new("v_color_alpha_"+str(layerID))
     # alpimg = bpy.data.images.new(mesh.name+'_vcol_alpha_'+str(layerID), 256, 256)
     # XCX image method buggy -> disabled
 
-    for num, com in enumerate(representation.loops):
-        if com.VColors[layerID] is not None:
-            vx_layer.data[num].color = mathutils.Color(com.VColors[layerID][:3])
-            vx_layer_a.data[num].color = mathutils.Color((com.VColors[layerID][3],)*3)
-        # else, will be white
+    if alpha_support:
+        for num, com in enumerate(representation.loops):
+            if com.VColors[layerID] is not None:
+                vx_layer.data[num].color = com.VColors[layerID]
+    else:
+        for num, com in enumerate(representation.loops):
+            if com.VColors[layerID] is not None:
+                vx_layer.data[num].color = mathutils.Color(com.VColors[layerID][:3])
+                vx_layer_a.data[num].color = mathutils.Color((com.VColors[layerID][3],)*3)
+            # else, will be white

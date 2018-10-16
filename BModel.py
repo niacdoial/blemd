@@ -18,7 +18,7 @@ log = logging.getLogger('bpy.ops.import_mesh.bmd.main')
 
 if LOADED:
     for module in (BinaryReader, BinaryWriter, Mat44, Inf1, Vtx1, Shp1, Jnt1, Evp1, Drw1,
-                   Bck, Mat3, Tex1, Mdl3, Btp, MaxH, TexH, MatH, PBones):
+                   Bck, Mat3, M3O, Tex1, Mdl3, Btp, MaxH, TexH, MatH, PBones):
         reload(module)
 
 else:
@@ -26,6 +26,7 @@ else:
         BinaryReader, BinaryWriter,
         Matrix44 as Mat44,
         Inf1, Vtx1, Shp1, Jnt1, Evp1, Drw1, Bck, Tex1, Btp, Mdl3, Mat3,
+        materialV2OLD as M2O,
         maxheader as MaxH,
         texhelper as TexH,
         materialhelper as MatH,
@@ -339,6 +340,7 @@ class BModel:
                     alpha_image = MatH.add_vcolor(modelMesh, self.model, 0)
                 except Exception as err:
                     log.error('Vertex color layer 0 failed (error is %s)', err)
+                    raise
             if self.model.hasColors[1]:
                 # if len(self.vtx.colors) > 1 and len(self.vtx.colors[1]):
                 try:
@@ -738,15 +740,6 @@ class BModel:
         # -- load model
         br = BinaryReader.BinaryReader()
         br.Open(filePath)
-        self._bmdFilePath = filePath
-        self._bmdDir = MaxH.getFilenamePath(self._bmdFilePath)
-        self._bmdFileName = MaxH.getFilenameFile(self._bmdFilePath)
-        self._bmdDir += self._bmdFileName + "\\"
-        try:
-            os.mkdir(self._bmdDir)
-        except FileExistsError:
-            pass
-        self._texturePath = self._bmdDir + "Textures"
 
         br.SeekSet(0x20)
 
@@ -761,6 +754,7 @@ class BModel:
         self.evp = Evp1.Evp1()
         self.drw = Drw1.Drw1()
         self._mat1 = Mat3.Mat3()
+        self._mat1O = M2O.Mat3()
         self.tex = Tex1.Tex1()
         self.mdl = Mdl3.Mdl3()
 
@@ -785,6 +779,8 @@ class BModel:
                 self.drw.LoadData(br)
             elif strTag == "MAT3":
                 self._mat1.LoadData(br)
+                br.SeekSet(streamPos)
+                self._mat1O.LoadData(br)
             elif strTag == "TEX1":
                 self.tex.LoadData(br)
             elif strTag == "MDL3":
@@ -803,15 +799,15 @@ class BModel:
         # -- load model
         bw = BinaryWriter.BinaryWriter()
         bw.Open(filePath)
-        self._bmdFilePath = filePath
-        self._bmdDir = MaxH.getFilenamePath(self._bmdFilePath)
-        self._bmdFileName = MaxH.getFilenameFile(self._bmdFilePath)
-        self._bmdDir += self._bmdFileName + "\\"
-        try:
-            os.mkdir(self._bmdDir)
-        except FileExistsError:
-            pass
-        self._texturePath = self._bmdDir + "Textures"
+        # self._bmdFilePath = filePath
+        # self._bmdDir = MaxH.getFilenamePath(self._bmdFilePath)
+        # self._bmdFileName = MaxH.getFilenameFile(self._bmdFilePath)
+        # self._bmdDir += self._bmdFileName + "\\"
+        # try:
+        #    os.mkdir(self._bmdDir)
+        # except FileExistsError:
+        #    pass
+        # self._texturePath = self._bmdDir + "Textures"
 
         # XCX what is the file header?
 
@@ -1331,11 +1327,6 @@ class BModel:
                 
         imageExt = '.' + self.params.imtype.lower()
 
-        bmdPath = MaxH.getFilenamePath(self._bmdFilePath) + MaxH.getFilenameFile(self._bmdFilePath)
-        try:
-            os.mkdir(bmdPath)
-        except FileExistsError:
-            pass
         try:
             os.mkdir(self._texturePath)
         except FileExistsError:
@@ -1428,18 +1419,29 @@ class BModel:
         TexH.MODE = self.params.packTextures
         TexH.textures_reset()  # avoid use of potentially deleted data
 
-        # print(filename)
+        #if filename = 'P:\ath\to\file.bmd',
+        self._bmdFilePath = filename
+        # this is 'P:\ath\to\file' and '.bmd' (the second string is useful because it can also be 'bdl'
+        temp_path, temp_ext = OSPath.splitext(filename)
+        # this is 'P:\ath\to\file_bmd\'
+        self._bmdDir = temp_path+ '_' + temp_ext[1:] + "\\"  # generates dir name from file name?
+        # P:\ath\to'
+        self._bmdPath = OSPath.split(temp_path)[0]
+        # file(.bmd?)
+        self._bmdFileName = MaxH.getFilenameFile(filename)
+        # P:\ath\to\file_bmd\Textures
+        self._texturePath = self._bmdDir + "Textures"
+        
+        try:
+            os.mkdir(self._bmdDir)
+        except FileExistsError:
+            pass
+        
         try:
             self.LoadModel(filename)
         except Exception as err:
             log.critical('Could not load bmd file: looks corrupted (error is %s)', err)
             raise
-
-        bmdPath = "".join(OSPath.splitext(self._bmdFilePath)) + "\\"  # generates dir name from file name?
-        try:
-            os.mkdir(bmdPath)
-        except FileExistsError:
-            pass
 
         #  XCX this should not be needed vvv
         # if (not exportTextures) or (exportTextures and self.ExtractImages()):
