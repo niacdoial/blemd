@@ -621,7 +621,7 @@ class MaterialSpace:
                 return
 
             else:  # (type==1)
-                pass  # TODO: need2fix
+                log.warning("getOp() type %d unexpected for op %x", type, op)  # TODO: need2fix
 
         elif op in (0xe, 0xf):
             if type == 1:
@@ -844,6 +844,7 @@ MIX_GROUP_NODETREE_C = None
 MIX_GROUP_NODETREE_A = None
 
 def get_mixgroup(type):
+    """returns a GLSL-style mix() as a node group"""
     global MIX_GROUP_NODETREE_C
     global MIX_GROUP_NODETREE_A
     if type == 'C':

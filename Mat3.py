@@ -708,7 +708,6 @@ class Mat3:
         f.SeekSet(mat3Offset + h.offsets[17])
         arrayresize(dst.colorS10, lengths[17] / (4 * 2))
         for i in range(len(dst.colorS10)):
-            col = [f.GetSHORT() for _ in range(4)]
             dst.colorS10[i] = MColor()
             dst.colorS10[i].LoadDataS(f)
 
@@ -785,3 +784,7 @@ class Mat3:
     #    for index in range(matnum):
     #        self.materials[index] = createMaterialSystem(index, self, tex1, texpath, ext)
     #        self.materials[index].flag = self.materialbases[index].flag  # for scenegraph use
+
+
+"""incorrect:
+ColorS10"""
