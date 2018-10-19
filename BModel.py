@@ -26,7 +26,6 @@ else:
         BinaryReader, BinaryWriter,
         Matrix44 as Mat44,
         Inf1, Vtx1, Shp1, Jnt1, Evp1, Drw1, Bck, Tex1, Btp, Mdl3, Mat3,
-        # materialV2OLD as M2O,
         maxheader as MaxH,
         texhelper as TexH,
         materialhelper as MatH,
@@ -754,7 +753,6 @@ class BModel:
         self.evp = Evp1.Evp1()
         self.drw = Drw1.Drw1()
         self._mat1 = Mat3.Mat3()
-        self._mat1O = M2O.Mat3()
         self.tex = Tex1.Tex1()
         self.mdl = Mdl3.Mdl3()
 
@@ -779,8 +777,6 @@ class BModel:
                 self.drw.LoadData(br)
             elif strTag == "MAT3":
                 self._mat1.LoadData(br)
-                br.SeekSet(streamPos)
-                self._mat1O.LoadData(br)
             elif strTag == "TEX1":
                 self.tex.LoadData(br)
             elif strTag == "MDL3":
