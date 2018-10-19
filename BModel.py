@@ -18,7 +18,7 @@ log = logging.getLogger('bpy.ops.import_mesh.bmd.main')
 
 if LOADED:
     for module in (BinaryReader, BinaryWriter, Mat44, Inf1, Vtx1, Shp1, Jnt1, Evp1, Drw1,
-                   Bck, Mat3, M3O, Tex1, Mdl3, Btp, MaxH, TexH, MatH, PBones):
+                   Bck, Mat3, Tex1, Mdl3, Btp, MaxH, TexH, MatH, PBones):
         reload(module)
 
 else:
@@ -26,7 +26,7 @@ else:
         BinaryReader, BinaryWriter,
         Matrix44 as Mat44,
         Inf1, Vtx1, Shp1, Jnt1, Evp1, Drw1, Bck, Tex1, Btp, Mdl3, Mat3,
-        materialV2OLD as M2O,
+        # materialV2OLD as M2O,
         maxheader as MaxH,
         texhelper as TexH,
         materialhelper as MatH,
