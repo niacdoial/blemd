@@ -16,10 +16,11 @@ class BckKey:
     # -- float 
     # <variable tangent>
     # -- float  //??
-    def __init__(self, tm=0, vl=0.0, tg=0.0):  # GENERATED!
+    def __init__(self, tm=0, vl=0.0, tgL=0.0, tgR=0.0):  # GENERATED!
         self.time = tm
         self.value = vl
-        self.tangent = tg
+        self.tangentL = tgL
+        self.tangentR = tgR
 
     def __lt__(self, other):
         return self.time < other.time
@@ -27,7 +28,8 @@ class BckKey:
     def __eq__(self, other):
         return (self.time == other.time and
                 isclose(self.value, other.value, rel_tol=1E-3) and
-                isclose(self.tangent, other.tangent, rel_tol=1E-3))
+                isclose(self.tangentL, other.tangentL, rel_tol=1E-3) and
+                isclose(self.tangentR, other.tangentR, rel_tol=1E-3))
 
 
 class BckJointAnim:
@@ -147,7 +149,7 @@ class BckAnimIndex:
     # -- u16 
     # <variable index>
     # -- u16 
-    # <variable zero>
+    # <variable double_tangent>
     # -- u16 always 0?? -> no (biawatermill01.bck) TODO: find out what it means
     # <function>
 
@@ -157,12 +159,12 @@ class BckAnimIndex:
     def LoadData(self, br):
         self.count = br.GetSHORT()
         self.index = br.GetSHORT()
-        self.zero = br.GetSHORT()
+        self.double_tangent = br.GetSHORT()
 
     def DumpData(self, bw):
         bw.writeShort(self.count)
         bw.writeShort(self.index)
-        bw.writeShort(self.zero)
+        bw.writeShort(self.double_tangent)
 
 
 class BckAnimComponent:
@@ -293,33 +295,44 @@ class Bck_in:
     def ConvRotation(self, rots, scale):
         for rot in rots:
             rot.value *= scale
-            rot.tangent *= scale
+            rot.tangentL *= scale
+            rot.tangentR *= scale
         return rots
 
     def ReadComp(self, src, index):
-        dst = []
+        if index.count <= 0:
+            log.warning("readComp(): count is <= 0")
+            return [BckKey()]
+        dst = [BckKey() for _ in range(index.count)]
         # -- dst.resize(index.count);
 
         # -- violated by biawatermill01.bck
 
-        if index.zero != 0:
-            log.warning("readComp(): index `zero` variable is non-zero. This animation might look broken")
-        if index.count <= 0:
-            log.warning("readComp(): count is <= 0")
-        elif index.count == 1:
-            dst.append(None)
-            dst[0] = BckKey()  # fixed 4 lines
+        # if index.double_tangent != 0:
+        #
+        if index.count == 1:
             dst[0].time = 0
             dst[0].value = src[index.index]
-            dst[0].tangent = 0
-        else:
+            dst[0].tangentL = 0
+            dst[0].tangentR = 0
+        elif index.double_tangent == 0:
+            for j in range(index.count):  # (int j = 0; j < index.count; ++j)
+                dst[j].time = src[(index.index + 3*j)]
+                dst[j].value = src[(index.index + 3*j + 1)]
+                dst[j].tangent_L = src[(index.index + 3*j + 2)]
+                dst[j].tangent_R = src[(index.index + 3*j + 2)]
+        elif index.double_tangent == 1:
             for j in range(index.count):  # (int j = 0; j < index.count; ++j)
                 while len(dst) <= j:
                     dst.append(None)
                 dst[j] = BckKey()
-                dst[j].time = src[(index.index + 3*j)]
-                dst[j].value = src[(index.index + 3*j + 1)]
-                dst[j].tangent = src[(index.index + 3*j + 2)]
+                dst[j].time = src[(index.index + 4 * j)]
+                dst[j].value = src[(index.index + 4 * j + 1)]
+                dst[j].tangent_L = src[(index.index + 4 * j + 2)]
+                dst[j].tangent_R = src[(index.index + 4 * j + 3)]
+        else:
+            log.error("readComp(): unknown `double_tangent` value %d. This animation wil not be loaded", index.double_tangent)
+            dst = [BckKey()]
         return dst
 
     def LoadAnk1(self, br, jointnum):
@@ -351,15 +364,12 @@ class Bck_in:
         # -- read joints
         rotScale = (pow(2., h.angleMultiplier) * pi / 32768.)  # result in RADIANS  per increment (in a short)
         br.SeekSet(ank1Offset + h.offsetToJoints)
-        self.anims = []
+        self.anims = [BckJointAnim() for _ in range(h.numJoints)]
         # -- bck.self.anims.resize(h.numJoints);
 
         for i in range(h.numJoints):
             joint = BckAnimatedJoint()
             joint.LoadData(br)
-            while len(self.anims) <= i:
-                self.anims.append(None)
-            self.anims[i] = BckJointAnim()
             self.anims[i].scalesX = self.ReadComp(scales, joint.x.s)
             self.anims[i].scalesY = self.ReadComp(scales, joint.y.s)
             self.anims[i].scalesZ = self.ReadComp(scales, joint.z.s)
@@ -495,10 +505,10 @@ class Bck_out:
 
     def dump_data(self, dst, src):
         index = BckAnimIndex()
-        index.zero = 0
+        index.double_tangent = 0
         index.count = len(src)
         if len(src) == 1:
-            if src[0].time or src[0].tangent:  # if non-zero
+            if src[0].time or src[0].tangentL or src[0].tangentR:  # if non-zero
                 raise ValueError("static animation should be static")
             if src[0].value in dst:
                 index.index = dst.index(src[0].value)
@@ -512,14 +522,16 @@ class Bck_out:
                 dst.append(com.time)
                 self.maxframe = max(self.maxframe, com.time)
                 dst.append(com.value)
-                dst.append(com.tangent)
+                dst.append(com.tangentL)
+                dst.append(com.tangentR)  # XCX simplify for identiqual tangents
 
         return index
 
     def calibrate_rotation(self, rots, scale):
         for j in range(len(rots)):  #
             rots[j].value = round(rots[j].value / scale)
-            rots[j].tangent = round(rots[j].tangent / scale)
+            rots[j].tangentL = round(rots[j].tangentL / scale)
+            rots[j].tangentR = round(rots[j].tangentR / scale)
 
     def dump_ank1(self, anims, bw):
 

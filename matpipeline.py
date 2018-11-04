@@ -737,46 +737,45 @@ def writeTexGen(material, texGen, i, matbase, mat3):
     material.texcoords[i] = dst
 
 
-def createMaterialSystem(index, mat3, tex1, texpath, extension):
+def createMaterialSystem(matBase, mat3, tex1, texpath, extension):
     # ## vertex shader part: ###########
-    currMat = mat3.materialbases[index]
     material = MaterialSpace()
-    if currMat.chanControls[0] < len(mat3.colorChanInfos):
+    if matBase.chanControls[0] < len(mat3.colorChanInfos):
         if __name__ == '__main__':
-            if mat3.colorChanInfos[currMat.chanControls[0]].matColorSource != 1:
+            if mat3.colorChanInfos[matBase.chanControls[0]].matColorSource != 1:
                 material.vcolorindex = 1
 
     # missing light enabeling, seems so.
-    if mat3.colorChanInfos[currMat.chanControls[0]].matColorSource == 1:
+    if mat3.colorChanInfos[matBase.chanControls[0]].matColorSource == 1:
         material.vertexcolorc.data = Node(data='VcolorC')
         material.vertexcolora.data = Node('get_r', Node(data='VcolorA'))
     else:
-        c = mat3.color1[currMat.color1[0]]
+        c = mat3.color1[matBase.color1[0]]
         material.vertexcolorc.data = Node(data=Color((c.r/255, c.g/255, c.b/255)))
         material.vertexcolora.data = Node(data=c.a/255)
-    if mat3.colorChanInfos[currMat.chanControls[0]].litMask:
+    if mat3.colorChanInfos[matBase.chanControls[0]].litMask:
         material.vertexcolorc.data = material.vertexcolorc.data * Color((0.5, 0.5, 0.5))
         # material.vertexcolora.data = material.vertexcolora.data * 0.5
-        # if currMat.color2[0] != 0xffff and currMat.color2[0] < len(mat3.color2):
-        #     amb = mat3.color2[currMat.color2[0]]
+        # if matBase.color2[0] != 0xffff and matBase.color2[0] < len(mat3.color2):
+        #     amb = mat3.color2[matBase.color2[0]]
 
-    for i in range(mat3.texGenCounts[currMat.texGenCountIndex]):  # num TexGens == num Textures
-        writeTexGen(material, mat3.texGenInfos[currMat.texGenInfos[i]], i, currMat, mat3)
+    for i in range(mat3.texGenCounts[matBase.texGenCountIndex]):  # num TexGens == num Textures
+        writeTexGen(material, mat3.texGenInfos[matBase.texGenInfos[i]], i, matBase, mat3)
 
     # ## fragment shader part
     for i in range(8):
-        if currMat.texStages[i] != 0xffff:
-            texId = mat3.texStageIndexToTextureIndex[currMat.texStages[i]]
+        if matBase.texStages[i] != 0xffff:
+            texId = mat3.texStageIndexToTextureIndex[matBase.texStages[i]]
             currTex =tex1.texHeaders[texId]
             material.textures[i] = Sampler(OSPath.join(texpath, tex1.stringtable[texId] + extension))
             material.textures[i].setTexWrapMode(currTex.wrapS, currTex.wrapT)  # XCX set min/mag filters
 
     # konst colors
     needK = [False]*4
-    for i in range(mat3.tevCounts[currMat.tevCountIndex]):
-        konstColor = currMat.constColorSel[i]
-        konstAlpha = currMat.constAlphaSel[i]
-        stage = mat3.tevStageInfos[currMat.tevStageInfo[i]]
+    for i in range(mat3.tevCounts[matBase.tevCountIndex]):
+        konstColor = matBase.constColorSel[i]
+        konstAlpha = matBase.constAlphaSel[i]
+        stage = mat3.tevStageInfos[matBase.tevStageInfo[i]]
 
         if (konstColor > 7 and konstColor < 0xc
            or konstAlpha > 7 and konstAlpha < 0x10):
@@ -794,13 +793,13 @@ def createMaterialSystem(index, mat3, tex1, texpath, extension):
 
     for i in range(4):
         if needK[i]:
-            c = mat3.color3[currMat.color3[i]]
+            c = mat3.color3[matBase.color3[i]]
             material.konsts[2*i] = Node(data=Color((c.r/255, c.g/255, c.b/255)))
             material.konsts[2*i+1] = Node(data=c.a/255)
 
     needReg = [False]*4
-    for i in range(mat3.tevCounts[currMat.tevCountIndex]):
-        stage = mat3.tevStageInfos[currMat.tevStageInfo[i]]
+    for i in range(mat3.tevCounts[matBase.tevCountIndex]):
+        stage = mat3.tevStageInfos[matBase.tevStageInfo[i]]
         needReg[stage.colorRegId] = True
         needReg[stage.alphaRegId] = True
 
@@ -812,26 +811,26 @@ def createMaterialSystem(index, mat3, tex1, texpath, extension):
     for i in range(4):
         if needReg[i]:
             if i == 0:
-                c = mat3.colorS10[currMat.colorS10[3]]
+                c = mat3.colorS10[matBase.colorS10[3]]
             else:
-                c = mat3.colorS10[currMat.colorS10[i-1]]
+                c = mat3.colorS10[matBase.colorS10[i-1]]
             material.getRegFromId(i)[0].data = Node(data=Color((c.r/255, c.g/255, c.b/255)))
             material.getRegFromId(i)[1].data = Node(data=c.a/255)
 
-    for i in range(mat3.tevCounts[currMat.tevCountIndex]):
-        order = mat3.tevOrderInfos[currMat.tevOrderInfo[i]]
-        stage = mat3.tevStageInfos[currMat.tevStageInfo[i]]
+    for i in range(mat3.tevCounts[matBase.tevCountIndex]):
+        order = mat3.tevOrderInfos[matBase.tevOrderInfo[i]]
+        stage = mat3.tevStageInfos[matBase.tevStageInfo[i]]
 
         colorIns = [None]*4
         for j in range(4):
-            colorIns[j] = material.getColorIn(stage.colorIn[j], currMat.constColorSel[i], order)
+            colorIns[j] = material.getColorIn(stage.colorIn[j], matBase.constColorSel[i], order)
 
         material.getOp(stage.colorOp, stage.colorBias, stage.colorScale,
                        stage.colorClamp, stage.colorRegId, colorIns, 0)
 
         alphaIns = [None]*4
         for j in range(4):
-            alphaIns[j] = material.getAlphaIn(stage.alphaIn[j], currMat.constAlphaSel[i], order)
+            alphaIns[j] = material.getAlphaIn(stage.alphaIn[j], matBase.constAlphaSel[i], order)
 
         print(end='')
         material.getOp(stage.alphaOp, stage.alphaBias, stage.alphaScale,

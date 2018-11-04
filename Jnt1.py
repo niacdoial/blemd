@@ -137,6 +137,19 @@ class JntFrame:
         self.sy = e.sy
         self.sz = e.sz
 
+        flag = False  # for logging purposes
+        if e.sx**2 < 0.01:
+            self.sx = 1
+            flag = True
+        if e.sy**2 < 0.01:
+            self.sy = 1
+            flag = True
+        if e.sz**2 < 0.01:
+            self.sz = 1
+            flag = True
+        if flag:
+            log.warning('Joint has zero scaling by default: corecting to 1 (mesh aspect may be weird)')
+
         self.rx = (e.rx/32768. * pi)  # angles are coded to be a full turn in 2**16 'ticks'
         self.ry = (e.ry/32768. * pi)  # and we need to use radians
         self.rz = (e.rz/32768. * pi)

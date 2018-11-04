@@ -44,6 +44,9 @@ def subtract2(vct1, vct2):
 
 def vect_normalize(vect):
     length = math.sqrt(vect.x**2 + vect.y**2 + vect.z**2)
+    if length < .01:
+        log.error('Vector to be normalized is near zero. Returning (0,0,1) to avoid crashes')
+        return Vector((0,0,1))
     tempv = vect
     tempv.x /= length
     tempv.y /= length
@@ -52,6 +55,9 @@ def vect_normalize(vect):
 
 
 def cubic_interpolator(t1, y1, d1, t2, y2, d2, t):
+    if -0.001 < t2-t1 < 0.001:
+        log.warning('cannot interpolate between almost identiqual times')
+        return (y1+y2) / 2,  0
     tn = (t-t1)/(t2-t1)  # normalized time coordinate
     d1 *= (t2-t1)  # adapted derivatives for the normalized time interval
     d2 *= (t2-t1)
@@ -69,7 +75,10 @@ def cubic_interpolator(t1, y1, d1, t2, y2, d2, t):
     dc = (-6*tn**2 + 6*tn) * y2
     dd = (3*tn**2 - 2*tn) * d2
 
-    return ya+yb+yc+yd, (da+db+dc+dd)/(t2-t1)
+    y = ya+yb+yc+yd
+    d = (da+db+dc+dd)/(t2-t1)
+
+    return y, d, d
 
 
 ###
@@ -81,45 +90,55 @@ def cubic_interpolator(t1, y1, d1, t2, y2, d2, t):
 
 def get_dynamic_mtx(p_bone, frame):
     if frame not in p_bone.computed_d_matrices.keys():
-        local_mtx_y, local_mtx_yd = p_bone.frames.get_mtx(frame)
+        local_mtx_y, local_mtx_ydL, local_mtx_ydR = p_bone.frames.get_mtx(frame)
         inv_static_mtx = p_bone.jnt_frame.getFrameMatrix().inverted()
         p_bone.computed_d_matrices[frame] = (inv_static_mtx * local_mtx_y,
-                                             inv_static_mtx * local_mtx_yd)
+                                             inv_static_mtx * local_mtx_ydL,
+                                             inv_static_mtx * local_mtx_ydR)
     return p_bone.computed_d_matrices[frame]
+
 
 def get_pos_vct(p_bone, frame):
     EPSILON = 1E-4
-    y, yd = get_dynamic_mtx(p_bone, frame)
+    y, ydL, ydR = get_dynamic_mtx(p_bone, frame)
     y = y.to_translation()
-    yd = yd.to_translation()
+    ydL = ydL.to_translation()
+    ydR = ydR.to_translation()
     # yd = get_dynamic_mtx(p_bone, frame+EPSILON).position()
-    d = (yd-y)/EPSILON
-    return y, d
+    dL = (ydL-y)/EPSILON
+    dR = (ydR-y)/EPSILON
+    return y, dL, dR
 
 
 def get_rot_vct(p_bone, frame):
     EPSILON = 1E-4
-    y, yd = get_dynamic_mtx(p_bone, frame)
+    y, ydL, ydR = get_dynamic_mtx(p_bone, frame)
     y = y.to_euler('XYZ')
-    yd = yd.to_euler('XYZ')
+    ydL = ydL.to_euler('XYZ')
+    ydR = ydR.to_euler('XYZ')
     # yd = get_dynamic_mtx(p_bone, frame+EPSILON).rotation()
-    d = product(1/EPSILON, subtract2(yd, y))
-    return y, d
+    dL = product(1/EPSILON, subtract2(ydL, y))
+    dR = product(1/EPSILON, subtract2(ydR, y))
+    return y, dL, dR
 
 
 def get_sc_vct(p_bone, frame):
 
-    y, d = p_bone.frames.get_sc(frame)
+    y, dL, dR = p_bone.frames.get_sc(frame)
 
     y.x /= p_bone.jnt_frame.sx
     y.y /= p_bone.jnt_frame.sy
     y.z /= p_bone.jnt_frame.sz
 
-    d.x /= p_bone.jnt_frame.sx
-    d.y /= p_bone.jnt_frame.sy
-    d.z /= p_bone.jnt_frame.sz
+    dL.x /= p_bone.jnt_frame.sx
+    dL.y /= p_bone.jnt_frame.sy
+    dL.z /= p_bone.jnt_frame.sz
 
-    return y, d
+    dR.x /= p_bone.jnt_frame.sx
+    dR.y /= p_bone.jnt_frame.sy
+    dR.z /= p_bone.jnt_frame.sz
+
+    return y, dL, dR
 
 
 instances = {}
@@ -134,33 +153,33 @@ class KeyFrames:
 
     def feed_anim(self, anim, include_sc=True, fr_sc=1, fr_of=0):
         for key in anim.translationsX:
-            self.positions[0][fr_sc*key.time+fr_of] = (key.value, key.tangent)
+            self.positions[0][fr_sc*key.time+fr_of] = (key.value, key.tangentL, key.tangentR)
             dict_get_set(self.times, fr_sc*key.time+fr_of, [False, False, False])[0] = True
         for key in anim.translationsY:
-            self.positions[1][fr_sc*key.time+fr_of] = (key.value, key.tangent)
+            self.positions[1][fr_sc*key.time+fr_of] = (key.value, key.tangentL, key.tangentR)
             dict_get_set(self.times, fr_sc*key.time+fr_of, [False, False, False])[0] = True
         for key in anim.translationsZ:
-            self.positions[2][fr_sc*key.time+fr_of] = (key.value, key.tangent)
+            self.positions[2][fr_sc*key.time+fr_of] = (key.value, key.tangentL, key.tangentR)
             dict_get_set(self.times, fr_sc*key.time+fr_of, [False, False, False])[0] = True
 
         for key in anim.rotationsX:
-            self.rotations[0][fr_sc*key.time+fr_of] = (key.value, key.tangent)
+            self.rotations[0][fr_sc*key.time+fr_of] = (key.value, key.tangentL, key.tangentR)
             dict_get_set(self.times, fr_sc*key.time+fr_of, [False, False, False])[1] = True
         for key in anim.rotationsY:
-            self.rotations[1][fr_sc*key.time+fr_of] = (key.value, key.tangent)
+            self.rotations[1][fr_sc*key.time+fr_of] = (key.value, key.tangentL, key.tangentR)
             dict_get_set(self.times, fr_sc*key.time+fr_of, [False, False, False])[1] = True
         for key in anim.rotationsZ:
-            self.rotations[2][fr_sc*key.time+fr_of] = (key.value, key.tangent)
+            self.rotations[2][fr_sc*key.time+fr_of] = (key.value, key.tangentL, key.tangentR)
             dict_get_set(self.times, fr_sc*key.time+fr_of, [False, False, False])[1] = True
         if include_sc:
             for key in anim.scalesX:
-                self.scales[0][fr_sc*key.time+fr_of] = (key.value, key.tangent)
+                self.scales[0][fr_sc*key.time+fr_of] = (key.value, key.tangentL, key.tangentR)
                 dict_get_set(self.times, fr_sc*key.time+fr_of, [False, False, False])[2] = True
             for key in anim.scalesY:
-                self.scales[1][fr_sc*key.time+fr_of] = (key.value, key.tangent)
+                self.scales[1][fr_sc*key.time+fr_of] = (key.value, key.tangentL, key.tangentR)
                 dict_get_set(self.times, fr_sc*key.time+fr_of, [False, False, False])[2] = True
             for key in anim.scalesZ:
-                self.scales[2][fr_sc*key.time+fr_of] = (key.value, key.tangent)
+                self.scales[2][fr_sc*key.time+fr_of] = (key.value, key.tangentL, key.tangentR)
                 dict_get_set(self.times, fr_sc*key.time+fr_of, [False, False, False])[2] = True
 
         # add last frame on everything (to avoid crashes), but not register them as 'real'
@@ -191,7 +210,7 @@ class KeyFrames:
             elif time < frame_t < next_t:
                 next_t = frame_t
 
-        return cubic_interpolator(prev_t, data[prev_t][0], data[prev_t][1],
+        return cubic_interpolator(prev_t, data[prev_t][0], data[prev_t][2],
                                   next_t, data[next_t][0], data[next_t][1], time)
 
     def get_pos(self, time):
@@ -199,30 +218,36 @@ class KeyFrames:
         temp_y = self._get_vt(self.positions[1], time)
         temp_z = self._get_vt(self.positions[2], time)
         return (Vector((temp_x[0], temp_y[0], temp_z[0])),
-                Vector((temp_x[1], temp_y[1], temp_z[1])))
+                Vector((temp_x[1], temp_y[1], temp_z[1])),
+                Vector((temp_x[2], temp_y[2], temp_z[2])))
 
     def get_rot(self, time):
         temp_x = self._get_vt(self.rotations[0], time)
         temp_y = self._get_vt(self.rotations[1], time)
         temp_z = self._get_vt(self.rotations[2], time)
         return (Euler((temp_x[0], temp_y[0], temp_z[0]), 'XYZ'),
-                Euler((temp_x[1], temp_y[1], temp_z[1]), 'XYZ'))
+                Euler((temp_x[1], temp_y[1], temp_z[1]), 'XYZ'),
+                Euler((temp_x[2], temp_y[2], temp_z[2]), 'XYZ'))
 
     def get_sc(self, time):
         temp_x = self._get_vt(self.scales[0], time)
         temp_y = self._get_vt(self.scales[1], time)
         temp_z = self._get_vt(self.scales[2], time)
         return (Vector((temp_x[0], temp_y[0], temp_z[0])),
-                Vector((temp_x[1], temp_y[1], temp_z[1])))
+                Vector((temp_x[1], temp_y[1], temp_z[1])),
+                Vector((temp_x[2], temp_y[2], temp_z[2])))
 
     def get_mtx(self, time):
         EPSILON = 1E-4
-        vct_y, vct_d = self.get_pos(time)
-        rot_y, rot_d = self.get_rot(time)
-        vct_yd = sum2(vct_y, product(EPSILON, vct_d))
-        rot_yd = sum2(rot_y, product(EPSILON, rot_d))
+        vct_y, vct_dL, vct_dR = self.get_pos(time)
+        rot_y, rot_dL, rot_dR = self.get_rot(time)
+        vct_ydL = sum2(vct_y, product(EPSILON, vct_dL))
+        rot_ydL = sum2(rot_y, product(EPSILON, rot_dL))
+        vct_ydR = sum2(vct_y, product(EPSILON, vct_dR))
+        rot_ydR = sum2(rot_y, product(EPSILON, rot_dR))
         return ( (Matrix.Translation(vct_y) * rot_y.to_matrix().to_4x4()),
-                 (Matrix.Translation(vct_yd) * rot_yd.to_matrix().to_4x4()) )
+                 (Matrix.Translation(vct_ydL) * rot_ydL.to_matrix().to_4x4()),
+                 (Matrix.Translation(vct_ydR) * rot_ydR.to_matrix().to_4x4()) )
 
 
 class Pseudobone:
@@ -394,67 +419,67 @@ def apply_animation(bones, arm_obj, jntframes, name=None):
             bpy.context.scene.frame_current = frame
             # flip y and z
             if com.frames.times[frame][0]:
-                vct, tgt = get_pos_vct(com, frame)
+                vct, tgL, tgR = get_pos_vct(com, frame)
                 if not math.isnan(vct.x):
                     posebone.location[0] = vct.x
                     co = bonedict['location'][0].keyframe_points[-1].co
-                    bonedict['location'][0].keyframe_points[-1].handle_left = co+Vector((-1, -tgt.x))
-                    bonedict['location'][0].keyframe_points[-1].handle_right = co+Vector((1, tgt.x))
+                    bonedict['location'][0].keyframe_points[-1].handle_left = co+Vector((-1, -tgL.x))
+                    bonedict['location'][0].keyframe_points[-1].handle_right = co+Vector((1, tgR.x))
                     posebone.keyframe_insert('location', 0)
                     # fixed: add frame to keyframes AFTER setting the right value to it. so conter-intuitive.
                 if not math.isnan(vct.z):
                     posebone.location[1] = -vct.z
                     co = bonedict['location'][1].keyframe_points[-1].co
-                    bonedict['location'][1].keyframe_points[-1].handle_left = co + Vector((-1, tgt.z))
-                    bonedict['location'][1].keyframe_points[-1].handle_right = co + Vector((1, -tgt.z))
+                    bonedict['location'][1].keyframe_points[-1].handle_left = co + Vector((-1, tgL.z))
+                    bonedict['location'][1].keyframe_points[-1].handle_right = co + Vector((1, -tgR.z))
                     posebone.keyframe_insert('location', 1)
                 if not math.isnan(vct.y):
                     posebone.location[2] = vct.y
                     co = bonedict['location'][2].keyframe_points[-1].co
-                    bonedict['location'][2].keyframe_points[-1].handle_left = co + Vector((-1, -tgt.y))
-                    bonedict['location'][2].keyframe_points[-1].handle_right = co + Vector((1, tgt.y))
+                    bonedict['location'][2].keyframe_points[-1].handle_left = co + Vector((-1, -tgL.y))
+                    bonedict['location'][2].keyframe_points[-1].handle_right = co + Vector((1, tgR.y))
                     posebone.keyframe_insert('location', 2)
 
             if com.frames.times[frame][1]:
-                vct, tgt = get_rot_vct(com, frame)
+                vct, tgL, tgR = get_rot_vct(com, frame)
                 if not math.isnan(vct.x):
                     posebone.rotation_euler[0] = vct.x
                     co = bonedict['rotation_euler'][0].keyframe_points[-1].co
-                    bonedict['rotation_euler'][0].keyframe_points[-1].handle_left = co + Vector((-1, -tgt.x))
-                    bonedict['rotation_euler'][0].keyframe_points[-1].handle_right = co + Vector((1, tgt.x))
+                    bonedict['rotation_euler'][0].keyframe_points[-1].handle_left = co + Vector((-1, -tgL.x))
+                    bonedict['rotation_euler'][0].keyframe_points[-1].handle_right = co + Vector((1, tgR.x))
                     posebone.keyframe_insert('rotation_euler', 0)
                 if not math.isnan(vct.z):
                     posebone.rotation_euler[1] = -vct.z
                     co = bonedict['rotation_euler'][1].keyframe_points[-1].co
-                    bonedict['rotation_euler'][1].keyframe_points[-1].handle_left = co + Vector((-1, tgt.z))
-                    bonedict['rotation_euler'][1].keyframe_points[-1].handle_right = co + Vector((1, -tgt.z))
+                    bonedict['rotation_euler'][1].keyframe_points[-1].handle_left = co + Vector((-1, tgL.z))
+                    bonedict['rotation_euler'][1].keyframe_points[-1].handle_right = co + Vector((1, -tgR.z))
                     posebone.keyframe_insert('rotation_euler', 1)
                 if not math.isnan(vct.y):
                     posebone.rotation_euler[2] = vct.y
                     co = bonedict['rotation_euler'][2].keyframe_points[-1].co
-                    bonedict['rotation_euler'][2].keyframe_points[-1].handle_left = co + Vector((-1, -tgt.y))
-                    bonedict['rotation_euler'][2].keyframe_points[-1].handle_right = co + Vector((1, tgt.y))
+                    bonedict['rotation_euler'][2].keyframe_points[-1].handle_left = co + Vector((-1, -tgL.y))
+                    bonedict['rotation_euler'][2].keyframe_points[-1].handle_right = co + Vector((1, tgR.y))
                     posebone.keyframe_insert('rotation_euler', 2)
 
             if com.frames.times[frame][2]:
-                vct, tgt = get_sc_vct(com, frame)
+                vct, tgL, tgR = get_sc_vct(com, frame)
                 if not math.isnan(vct.x):
                     posebone.scale[0] = vct.x
                     co = bonedict['scale'][0].keyframe_points[-1].co
-                    bonedict['scale'][0].keyframe_points[-1].handle_left = co + Vector((-1, -tgt.x))
-                    bonedict['scale'][0].keyframe_points[-1].handle_right = co + Vector((1, tgt.x))
+                    bonedict['scale'][0].keyframe_points[-1].handle_left = co + Vector((-1, -tgL.x))
+                    bonedict['scale'][0].keyframe_points[-1].handle_right = co + Vector((1, tgR.x))
                     posebone.keyframe_insert('scale', 0)
                 if not math.isnan(vct.z):
                     posebone.scale[1] = vct.z
                     co = bonedict['scale'][1].keyframe_points[-1].co
-                    bonedict['scale'][1].keyframe_points[-1].handle_left = co + Vector((-1, tgt.z))
-                    bonedict['scale'][1].keyframe_points[-1].handle_right = co + Vector((1, -tgt.z))
+                    bonedict['scale'][1].keyframe_points[-1].handle_left = co + Vector((-1, tgL.z))
+                    bonedict['scale'][1].keyframe_points[-1].handle_right = co + Vector((1, -tgR.z))
                     posebone.keyframe_insert('scale', 1)
                 if not math.isnan(vct.y):
                     posebone.scale[2] = vct.y
                     co = bonedict['scale'][2].keyframe_points[-1].co
-                    bonedict['scale'][2].keyframe_points[-1].handle_left = co + Vector((-1, -tgt.y))
-                    bonedict['scale'][2].keyframe_points[-1].handle_right = co + Vector((1, tgt.y))
+                    bonedict['scale'][2].keyframe_points[-1].handle_left = co + Vector((-1, -tgL.y))
+                    bonedict['scale'][2].keyframe_points[-1].handle_right = co + Vector((1, tgR.y))
                     posebone.keyframe_insert('scale', 2)
 
     return arm_obj.animation_data.action
