@@ -76,7 +76,7 @@ def build_material(bmodel, mat1, material, tex):
             # self._currMaterial.twoSided = True # -- anything with alpha is always two sided?
             newtex_tslot(fileName, 'ALPHA', currMaterial)
 
-        showTextureMap(currMaterial)  # -- display self.texture in view
+        showTextureMap(currMaterial)  # -- display texture in view
 
         # -- messageBox (matName + (self.tex.self.texHeaders[v2].wrapS as string) + "+" + (self.tex.self.texHeaders[v2].wrapT as string))
         # -- NOTE: check ash.bmd for case when wrapS=2 and wrap=2. u_offset = 0.5 and V_offset = -0.5 [note negative on v]
@@ -89,7 +89,7 @@ def build_material(bmodel, mat1, material, tex):
                 pass
             elif tex.texHeaders[v2].wrapS == 2:
                 currMaterial.name += "_U"  # -- add suffix to let the modeler know where mirror should be used
-                if bmodel._allowTextureMirror:
+                if bmodel._allowTextureMirror:  # XCX remove this super old code!
                     getTexSlot(currMaterial, fileName).scale[0] = -1
                     # self._currMaterial.diffusemap.coords.U_Tile = False
                     # self._currMaterial.diffusemap.coords.U_offset = 0.5
@@ -125,7 +125,7 @@ def build_material(bmodel, mat1, material, tex):
 
 def build_material_v2(mIndex, mat1, tex1, texpath, ext):
     mbase = mat1.materialbases[mIndex]
-    msys = createMaterialSystem(mIndex, mat1, tex1, texpath, ext)
+    msys = createMaterialSystem(mbase, mat1, tex1, texpath, ext)
     # msys.flag = mat1.materialbases[mIndex].flag  # XCX needed?
     mat1.materials[mIndex] = msys
     material = bpy.data.materials.new('stupid_name_that_will_be_erased_in_a_moment')
@@ -134,7 +134,6 @@ def build_material_v2(mIndex, mat1, tex1, texpath, ext):
     material.transparency_method = 'Z_TRANSPARENCY'
     msys.export(material.node_tree)
 
-    mbase.material = material
     return material
 
 def add_vcolor_old(mesh, color_layer, cv_to_f_v, Faces, uvlayer, layerID):

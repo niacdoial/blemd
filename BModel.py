@@ -1062,7 +1062,7 @@ class BModel:
 
             orientation = (Mat44.rotation_part(parentMatrix) *  # use rotation part of parent matrix
                           Euler((f.rx, f.ry, f.rz), 'XYZ').to_matrix().to_4x4() *  # apply local rotation
-                          Vector((0, self.params.boneThickness, 0)))
+                          Vector((0, 0, -self.params.boneThickness)))
             # computing correct bone orientation (first in BMD coords, then convert later)
 
             bone = PBones.Pseudobone(parentBone, f, effP,
@@ -1133,21 +1133,21 @@ class BModel:
                 mat = self._mat1.materialbases[self._mat1.indexToMatIndex[n.index]]
                 # materials can be reused in a single file: cache them
                 if mat.material:
-                    self._currMaterial = mat.material[0]
-                    matIndex = mat.material[1]
+                    self._currMaterial = mat.material[0].copy()
+                    # matIndex = mat.material[1]
                 else:
                     if not self.params.use_nodes:
                         self._currMaterial = MatH.build_material(self, self._mat1, mat, self.tex)
                     else:
                         try:
-                            self._currMaterial = MatH.build_material_v2(matIndex, self._mat1, self.tex,
+                            self._currMaterial = MatH.build_material_v2(self._mat1.indexToMatIndex[n.index],
+                                                                        self._mat1, self.tex,
                                                                         self._texturePath, '.' + self.params.imtype.lower())
                         except Exception as err:
                             log.error(
                                 'node (GLSL) materials went wrong. Falling back to incomplete materials. (error is %s)',
                                 err)
                             self._currMaterial = MatH.build_material(self, self._mat1, mat, self.tex)
-                    mat.material = (self._currMaterial, matIndex)
 
             except Exception as err:
                 log.error('Material not built correctly (error is %s)', err)
@@ -1164,10 +1164,7 @@ class BModel:
 
             if self._currMaterial is not None:  # mat.texStages[0] != 0xffff:  # do it if any texture has been made
                 # XCX is that the good condition?
-                if self.params.use_nodes:
-                    self._currMaterial.name = self._mat1.stringtable[n.index]
-                else:
-                    self._currMaterial.name = self._mat1.stringtable[n.index]
+                self._currMaterial.name = self._mat1.stringtable[n.index]
 
                 while self._currMaterialIndex >= len(self._subMaterials):
                     self._subMaterials.append(None)
