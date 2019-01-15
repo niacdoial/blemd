@@ -1,13 +1,13 @@
 import bpy
 import bpy_extras
 import mathutils
-from .maxheader import getFilenameFile, stdout_redirected
+from .common import getFilenameFile, stdout_redirected
 import logging
 log = logging.getLogger('bpy.ops.import_mesh.bmd.texhelper')
 
 
 imported_tslots = {}
-imported_textures = {}
+imported_textures = {}  # 'Texture' objects or images. depents on the run. Probably fully migrating to second
 
 DIFFUSE = 'DIFFUSE'
 ALPHA = 'ALPHA'
@@ -39,7 +39,6 @@ def getTexSlot(mat, fname):
                 return com
 
 def newtex_tex(fname):
-    global forced_names
     global imported_textures
     global MODE
     if fname in imported_textures.keys():
@@ -65,6 +64,24 @@ def newtex_tex(fname):
 
     imported_textures[fname] = tex
     return tex
+
+def newtex_image(fname):
+    global imported_textures
+    global MODE  # XXX this thing is old. migrate to new glocals philosiphy
+    if fname in imported_textures.keys():
+        return imported_textures[fname]
+    try:
+        img = bpy.data.images.load(fname)
+        if MODE == 'DO':
+            img.pack()
+        elif MODE == 'PNG':
+            img.pack(as_png=True)
+    except Exception as err:
+        log.warning('Problem with image %s (error is %s)', fname, err)
+        raise
+
+    imported_textures[fname] = img
+    return img
 
 def newtex_tslot(fname, type, mat):
     global imported_tslots

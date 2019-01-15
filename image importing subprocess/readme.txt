@@ -6,5 +6,5 @@ To be reached by the main part fo the add-on, it must be renamed "bmdview.exe" a
 
 Caution: this means the add-on *only works on windows* for now.
 
-To adapt it for other platforms, you will need to recompile the executable, but you will need to edit the main folder's "maxheader.py"
-The function to edit is labeled as such.
+To adapt it for other platforms, you will need to recompile the executable, but you will need to edit the main folder's "common.py"
+The function to edit is called SubProcCall.

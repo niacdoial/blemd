@@ -1,6 +1,6 @@
 #! /usr/bin/python3
 import os
-from .maxheader import MessageBox
+from .common import MessageBox
 from math import log2, floor, ceil
 import sys
 import logging

@@ -1,6 +1,6 @@
 #! /usr/bin/python3
 import os
-from .maxheader import MessageBox, newfile
+from .common import MessageBox, newfile
 from array import array
 import logging
 log = logging.getLogger('bpy.ops.import_mesh.bmd.fileIn')

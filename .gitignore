@@ -83,7 +83,16 @@ venv/
 ENV/
 
 # Spyder project settings
-.spyderproject
+.spyproject/
+.directory
+.project
+.pydevproject
 
 # Rope project settings
 .ropeproject
+
+
+# other stuff
+image importing subprocess/.settings/
+image importing subprocess/.cproject
+image importing subprocess/.gitignore

@@ -2,6 +2,8 @@
 from mathutils import Vector
 import mathutils
 import logging
+from . import common
+import math
 log = logging.getLogger('bpy.ops.import_mesh.bmd.vtx1')
 
 
@@ -149,7 +151,6 @@ class Vtx1:
         # -- convert array to float (so we have n + m cases, not n*m)
         data = []
         # -- vector<float>
-        bytesRead = 0  # -- int
 
          # -- print ("af.dataType=" + (af.dataType as string) + ": af.arrayType=" + (af.arrayType as string)  )
 
@@ -158,7 +159,10 @@ class Vtx1:
             # -- size = length/2
             count = length/2
             if int(count) != count:
-                raise ValueError('invalid count (length not even)')
+                if common.GLOBALS.PARANOID:
+                    raise ValueError('invalid count (length not even)')
+                else:
+                    log.error('invalid array length. last point will use whatever is neext in file')
             count = int(count)
             scale = 1/(2**af.decimalPoint)
             tmp = [-1] * count
@@ -172,7 +176,10 @@ class Vtx1:
         elif af.dataType == 4:  # f32
             count = length/4
             if int(count) != count:
-                raise ValueError('invalid count (length not *4)')
+                if common.GLOBALS.PARANOID:
+                    raise ValueError('invalid count (length not *4)')
+                else:
+                    log.error('invalid array length. last point will use whatever is neext in file')
             count = int(count)
             for _ in range(count):
                 data.append(br.GetFloat())
@@ -187,7 +194,10 @@ class Vtx1:
             # --messageBox "Vtx1: af.dataType == 5. NYI"
 
         else:
-            log.warning("unknown array data type %d", af.dataType)
+            if common.GLOBALS.PARANOID:
+                raise ValueError('unknown array type %d' % af.dataType)
+            else:
+                log.warning("unknown array data type %d", af.dataType)
 
         # --print "DATA: "
         # --print data
@@ -198,8 +208,12 @@ class Vtx1:
                 self.positions = []
                 posCount = len(data) / 2
                 if int(posCount) != posCount:
-                    raise ValueError('invalid posCount (length not even)')
-                posCount = int(posCount)
+                    if common.GLOBALS.PARANOID:
+                        raise ValueError('invalid posCount (length not even)')
+                    else:
+                        log.error('invalid array posCount. last point will use whatever is neext in file')
+                    
+                posCount = math.ceil(posCount)
                 k = 0
                 for j in range(posCount):
                     pos = Vector((data[k], data[k+1], 0))
@@ -263,7 +277,11 @@ class Vtx1:
                     # --for(int j = 0, k = 0; j < arrays.self.normals.size(); ++j, k += 3)
                     # --  arrays.self.normals[j].setXYZ(data[k], data[k + 1], data[k + 2]);
             else:
-                raise ValueError("Warning: vtx1: unsupported componentCount for self.normals array")
+                if common.GLOBALS.PARANOID:
+                    raise ValueError("vtx1: unsupported componentCount for normals array")
+                else:
+                    log.warning("unsupported componentCount for normals array")
+
 
         elif af.arrayType == 0xb or af.arrayType == 0xc:  # -- color0 or color1
             index = af.arrayType - 0xb
@@ -285,7 +303,10 @@ class Vtx1:
                     k += 4
 
             else:
-                log.warning("unsupported componentCount for self.colors array")
+                if common.GLOBALS.PARANOID:
+                    raise ValueError("vtx1: unsupported componentCount for colors array")
+                else:
+                    log.warning("unsupported componentCount for colors array")
         # -- texcoords 0 - 7 [13]
 
         elif af.arrayType == 0xd or\
@@ -326,9 +347,15 @@ class Vtx1:
                 # --   arrays.self.texCoords[index][j].setST(data[k], data[k + 1]);
 
             else:
-                raise ValueError("WARNING: vtx1: unsupported componentCount for texcoords array")
+                if common.GLOBALS.PARANOID:
+                    raise ValueError("vtx1: unsupported componentCount for texcoords array")
+                else:
+                    log.warning('unsupported componentCount for texcoords array')
         else:
-            raise ValueError("WRONG ArrayType in VTX1")
+            if common.GLOBALS.PARANOID:
+                raise ValueError("WRONG ArrayType in VTX1")
+            else:
+                log.warning('WRONG ArrayType in VTX1')
 
     def LoadData(self, br):
                 
@@ -377,7 +404,7 @@ def StripIterator(lst):
 
 
 def FanIterator(lst):
-    print('This is a fan!')
+    log.warning('This is a fan!')
     for com in range(1, len(lst)-1):
         yield (lst[0], lst[com+1], lst[com])  # faces need to be described like this in order to have correct normals
 
