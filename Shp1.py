@@ -1,13 +1,13 @@
 #! /usr/bin/python
 import logging
-import common
+from . import common
 log = logging.getLogger('bpy.ops.import_mesh.bmd.shp1')
 
 """
 Okay.
 Mesh structure:
 Batches define the attributes that can be contained in them (see ShpAttributes)
-Packets define the relative weights 
+Packets define the relative weights
 Primitives contain loops (`ShpIndex`es)
 """
 
@@ -16,9 +16,9 @@ class ShpIndex:
     # <variable matrixIndex>
     # -- u16 -- can be undefined
     # <variable posIndex>
-    # -- u16 
+    # -- u16
     # <variable normalIndex>
-    # -- u16 
+    # -- u16
     # <variable colorIndex>
     # -- u16[2]
     # <variable texCoordIndex>
@@ -181,11 +181,11 @@ class ShpAttributes:
     # <variable hasMatrixIndices>
     # <variable hasPositions>
     # <variable hasNormals>
-    # -- bool 
+    # -- bool
     # <variable hasColors>
-    # -- bool[2] 
+    # -- bool[2]
     # <variable hasTexCoords>
-    # -- bool[8]; 
+    # -- bool[8];
     def __init__(self):  # GENERATED!
         self.hasColors = [False]*2  # Bools[2]
         self.hasTexCoords = [False]*8  # Bools[8]
@@ -293,7 +293,7 @@ class Shp1BatchAttrib:
         pass
 
     def LoadData(self, br):
-                
+
         self.attrib = br.ReadDWORD()
         # cf. ArrayFormat.arrayType
         self.dataType= br.ReadDWORD()
@@ -359,7 +359,7 @@ class Shp1:
         self.matrices_table = []
 
     def GetBatchAttribs(self, br, offset):
-                
+
         origPos = br.Position()
         br.SeekSet(offset)
         batchAttribs = []
@@ -377,7 +377,7 @@ class Shp1:
         return batchAttribs
 
     def makeBatch(self, br, batchSrc, header, baseOffset, dst):
-                
+
         # -- read and interpret batch vertex attribs
         attribs = self.GetBatchAttribs(br, baseOffset + header.offsetToBatchAttribs + batchSrc.offsetToAttribs)
 
