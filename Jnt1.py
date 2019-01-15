@@ -2,7 +2,7 @@
 from .common import MessageBox
 from mathutils import Vector, Matrix, Euler
 from math import pi, ceil
-import common
+from . import common
 import logging
 log = logging.getLogger('bpy.ops.import_mesh.bmd.jnt1')
 
@@ -46,7 +46,7 @@ class JntEntry:
         self.bbMax = []
 
     def LoadData(self, br):
-                
+
         # values flipped late
         self.unknown = br.ReadWORD()
         # no idea how this works...always 0, 1 or 2.
@@ -136,7 +136,7 @@ class JntFrame:
         self.matrix = None
 
     def InitFromJntEntry(self, e):
-                
+
         self.sx = e.sx  # scale
         self.sy = e.sy
         self.sz = e.sz
