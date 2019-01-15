@@ -36,9 +36,9 @@ def config_logging():
 if LOADED:
     from importlib import reload
     reload(BModel)
-    reload(MaxH)
+    reload(common)
     log = logging.getLogger('bpy.ops.import_mesh.bmd')
-    log_out = log.handlers[1].stream  # kinda hacky, but it works (?)
+    #log_out = log.handlers[1].stream  # kinda hacky, but it works (?)
 
 else:
     if not logging.root.handlers:
@@ -46,7 +46,7 @@ else:
         # here, it isn't
         config_logging()
     from . import (
-        maxheader as MaxH,
+        common,
         BModel )
     log = logging.getLogger('bpy.ops.import_mesh.bmd')
 del LOADED
@@ -173,6 +173,11 @@ class ImportBmd(Operator, ImportHelper):
         description="DEBUG option. create Vgroups to show the original BMD structure (ram-intensive)",
         default=False
     )
+    
+    paranoia = BoolProperty(
+        name="DEBUG crashes",
+        description="option for debug purposes: will prefer a clean crash over a weird result",
+        default=False)
 
     def execute(self, context):
         global log_out
@@ -181,9 +186,9 @@ class ImportBmd(Operator, ImportHelper):
         path = OSPath.abspath(OSPath.split(__file__)[0])  # automatically find where we are
         print(__file__)
         try:
-            temp.SetBmdViewExePath(path + '\\')  # add backslash for good measure
+            temp.SetBmdViewExePath(path + common.SEP)  # add 'backslash' for good measure
             temp.Import(self.filepath, self.use_nodes, self.imtype, self.tx_pck, self.mir_tx,
-                        self.sv_anim, self.ic_sc, self.frc_cr_bn, self.boneThickness, self.dvg, self.val_msh)
+                        self.sv_anim, self.ic_sc, self.frc_cr_bn, self.boneThickness, self.dvg, self.val_msh, self.paranoia)
         except Exception as err:
             log.critical('An error happened. If it wasn\'t reported before, here it is: %s', err)
             retcode = 'ERROR'

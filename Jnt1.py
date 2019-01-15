@@ -1,7 +1,8 @@
 #! /usr/bin/python3
-from .maxheader import MessageBox
+from .common import MessageBox
 from mathutils import Vector, Matrix, Euler
 from math import pi, ceil
+import common
 import logging
 log = logging.getLogger('bpy.ops.import_mesh.bmd.jnt1')
 
@@ -77,7 +78,10 @@ class JntEntry:
 
         if self.unknown < 0 or self.unknown > 2:
             msg = "jnt1: self.unknown of " + str(self.unknown) + " joint not in [0, 2]"
-            raise ValueError(msg)
+            if common.GLOBALS.PARANOID:
+                raise ValueError(msg)
+            else:
+                log.error(msg)
 
 
     def FromFrame(self, f):
@@ -180,7 +184,11 @@ class Jnt1:
 
         if len(stringTable) != header.count :
             log.error("jnt1: number of strings doesn't match number of joints")
-            raise ValueError("jnt1: number of strings doesn't match number of joints")
+            if common.GLOBALS.PARANOID:
+                raise ValueError("jnt1: number of strings doesn't match number of joints")
+            else:
+                for i in range(header.count-len(stringTable)):
+                    stringTable.append('unknown name %d' %i)
 
 
 
@@ -199,10 +207,7 @@ class Jnt1:
             f = JntFrame()
             f.InitFromJntEntry(e)
 
-            if i < len(stringTable):  # -- should always be true
-                f.name = stringTable[i]
-            else:
-                raise ValueError("i < stringtable.count %d %d " % (i, len(stringTable)))
+            f.name = stringTable[i]
             self.frames[i] = f
 
     def DumpData(self, bw):

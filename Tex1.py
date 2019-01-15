@@ -1,4 +1,8 @@
 #! /usr/bin/python3
+import re
+import logging
+log = logging.getLogger('bpy.ops.import_mesh.bmd.tex1')
+
 class ImageHeader:
     # <variable data>
     # -- Image* 
@@ -173,9 +177,17 @@ class Tex1:
         h.LoadData(br)
         # -- read self.stringtable
         self.stringtable = br.ReadStringTable(tex1Offset + h.stringTableOffset)  # readStringtable(tex1Offset + h.stringTableOffset, f, self.stringtable);
-
+        for i in range(len(self.stringtable)):
+            if re.search(r'[\\/]', self.stringtable[i]):
+                log.critical('weird characters found in image stringtable. THIS MIGHT HAVE BEEN AN ATTACK')
+                raise KeyboardInterrupt('\n\n>>>>>>POSSIBLE ATTACK. TERMINATING. <<<<<<')
+        
         if len(self.stringtable) != h.numImages:
-            raise ValueError("tex1: number of strings doesn't match number of images")
+            if common.GLOBALS.PARANOID:
+                raise ValueError("tex1: number of strings doesn't match number of images")
+            else:
+                for i in range(h.numImages - len(self.stringtable)):
+                    self.stringtable.append('unknown name %d' %i)
 
           # -- read all image headers before loading the actual image
           # -- data, because several headers can refer to the same data

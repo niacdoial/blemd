@@ -1,5 +1,6 @@
 #! /usr/bin/python
 import logging
+import common
 log = logging.getLogger('bpy.ops.import_mesh.bmd.shp1')
 
 """
@@ -88,7 +89,8 @@ class ShpPacket:
                             readBytes += 2
                         else:
                             log.error("X shp1: got invalid data type in packet. should never happen because dumpBatch() should check this before calling dumpPacket()")
-                            raise ValueError("ERROR")
+                            if common.GLOBALS.PARANOID:
+                                raise ValueError("ERROR")
 
                         # -- set appropriate index
                         if attribs[k].attrib == 0:
@@ -107,7 +109,8 @@ class ShpPacket:
                             curPoint.texCoordIndex[(attribs[k].attrib - 0xd)] = val  # fixed
                         else:
                             log.error("impossible SHP attribute %d", attribs[k].attrib)
-                            raise ValueError('~the dev was an idiot~')
+                            if common.GLOBALS.PARANOID:
+                                raise ValueError('~the dev was an idiot~')
                             #-- messageBox "WARNING shp1: got invalid attrib in packet. should never happen because dumpBatch() should check this before calling dumpPacket()"
                             #--print curPrimative
                             #-- throw "shp1: got invalid attrib in packet. should never happen because dumpBatch() should check this before calling dumpPacket()"
@@ -151,7 +154,8 @@ class ShpPacket:
                         val = curPoint.texCoordIndex[(attribs[k].attrib - 0xd)]  # fixed
                     else:
                         log.error("impossible SHP attribute %d", attribs[k].attrib)
-                        raise ValueError('~the dev was an idiot~')
+                        if common.GLOBALS.PARANOID:
+                            raise ValueError('~the dev was an idiot~')
 
                     if attribs[k].dataType == 1:  # -- s8
                         bw.writeByte(val)
@@ -161,7 +165,8 @@ class ShpPacket:
                         writtenBytes += 2
                     else:
                         log.error("shp1: invalid data type %d", attribs[k].dataType)
-                        raise ValueError("ERROR")
+                        if common.GLOBALS.PARANOID:
+                            raise ValueError("ERROR")
                         # -- messageBox "WARNING shp1: got invalid attrib in packet. should never happen because dumpBatch() should check this before calling dumpPacket()"
                         # --print curPrimative
                         # -- throw "shp1: got invalid attrib in packet. should never happen because dumpBatch() should check this before calling dumpPacket()"

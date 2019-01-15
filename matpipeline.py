@@ -1,849 +1,35 @@
 from mathutils import Color, Vector
 import os.path as OSPath
-from .texhelper import newtex_tex
+from .texhelper import newtex_image
 import logging
 log = logging.getLogger('bpy.ops.import_mesh.bmd.matpipeline')
 import bpy
 
-class Holder:
-    """class to hold a variable: this variable can be set after this object is returned"""
-    def __init__(self, data):
-        self.data = data
-
-
-class Node:
-    """goal: temporary node system describing shader, to be converted in blender nodes.
-    MaterialSpace holds reused variables from original glsl application"""
-
-    def __init__(self, op='', data=0.0, inputs=()):
-
-        if op:
-            self.type = 'op'
-            if type(op) == Color:
-                print(end='')
-            self.op = op
-            self.value = data
-            self.inputs = inputs
-            if op == 'mixC' and inputs[1] == None:
-                pass
-        else:
-            self.type = 'val'
-        self.value = data
-
-        self.exported = None  # exported blender node
-
-    def __add__(self, other):
-        if not isinstance(other, Node):
-            other = Node(data=other)
-        if other.type == 'val':
-            if other.value in (0, Color((0,0,0)), Vector((0,0,0))):
-                return self  # useless addition if other is zero
-        if self.type == 'val':
-            if self.value in (0, Color((0,0,0)), Vector((0,0,0))):
-                return other  # useless addition if other is zero
-        return Node('ADD', inputs=(self, other))
-
-    def __mul__(self, other):
-        if not isinstance(other, Node):
-            other = Node(data=other)
-        if other.type == 'val':
-            if other.value in (1, Color((1,1,1)), Vector((1,1,1))):
-                return self  # useless addition if other is zero
-        if self.type == 'val':
-            if self.value in (1, Color((1,1,1)), Vector((1,1,1))):
-                return other  # useless addition if other is zero
-        return Node('MULTIPLY', inputs=(self, other))
-
-    def __sub__(self, other):
-        if not isinstance(other, Node):
-            other = Node(data=other)
-        if other.type == 'val':
-            if other.value in (0, Color((0,0,0)), Vector((0,0,0))):
-                return self  # useless addition if other is zero
-        if self.type == 'val':
-            if self.value in (0, Color((0,0,0)), Vector((0,0,0))):
-                return other  # useless addition if other is zero
-        return Node('SUBTRACT', inputs=(self, other))
-
-    def __le__(self, other):
-        if not isinstance(other, Node):
-            other = Node(data=other)
-        return Node("bool", other - self + 0.000001)
-
-    def __ge__(self, other):
-        if not isinstance(other, Node):
-            other = Node(data=other)
-        return Node("bool", self - other + 0.000001)
-
-    def __lt__(self, other):
-        if not isinstance(other, Node):
-            other = Node(data=other)
-        return Node("bool", other - self)
-
-    def __gt__(self, other):
-        if not isinstance(other, Node):
-            other = Node(data=other)
-        return Node("bool", self - other)
-
-    def export(self, nodetree):
-        if self.exported is None:
-            self.exported = self.export_inner(nodetree)
-        return self.exported
-
-    def export_inner(self, nodetree):
-        """creates blender nodes from Node class.
-        returns blender node output socket"""
-        # to return, explicitly do it with a special socket,
-        # or leave `node` as name of the final blender node which output 0 should be used
-
-        # nodes that holds a value
-        node = 'UNDEFINED'  # XCX DEBUG value to detect error and not crash stupidly
-        if self.type == 'val':
-
-            if type(self.value) in (float, int):  # value
-                node = nodetree.nodes.new('ShaderNodeValue')
-                node.outputs[0].default_value = self.value
-
-            elif type(self.value) == Color:
-                node = nodetree.nodes.new('ShaderNodeRGB')
-                node.outputs[0].default_value = (self.value.r, self.value.g, self.value.b, 1.0)
-
-            elif type(self.value) == Vector:
-                raise ValueError('Vector inputs should have been dealed with beforehand')
-
-            elif self.value[:2] == 'uv':  # get UV coordinates
-                node = nodetree.nodes.new('ShaderNodeGeometry')
-                node.uv_layer = 'UV '+self.value[2]
-                return node.outputs[4]
-
-            elif self.value == 'pos':  # get TRANSFORMED position
-                node = nodetree.nodes.new('ShaderNodeGeometry')
-                return node.outputs[0]
-
-            elif self.value == 'nor':  # get TRANSFORMED normal
-                node = nodetree.nodes.new('ShaderNodeGeometry')
-                return node.outputs[5]
-
-            elif self.value == 'VcolorC':  # get Vcolor
-                node = nodetree.nodes.new('ShaderNodeGeometry')
-                node.color_layer = 'v_color_0'  # XCX what about layer 2?
-                return node.outputs[6]
-
-            elif self.value == 'VcolorA':  # get Vcolor alpha
-                node = nodetree.nodes.new('ShaderNodeGeometry')
-                node.color_layer = 'v_color_alpha_0'
-                return node.outputs[6]
-
-        else:  # operation nodes
-            if len(self.inputs) > 1:  # for type-sensitive operations,
-                # need to detect type, but first input might be typeless
-                if type(self.inputs[0].value) not in (float, int, Color, Vector)\
-                        or self.inputs[0].type == 'op':
-                    # the first input is special. the second one should have a defined type
-                    if self.inputs[1].type == 'op':  # both special:
-                        if self.inputs[1].op in ('mixC', 'triple', 'texture_color', 'texture_3alpha'):
-                            typeeval = Color()  # type is color: use a dumb var to express it
-                        elif self.inputs[1].op in ('mixA', 'get_r', 'get_g', 'get_b', 'texture_alpha'):
-                            typeeval = 0.0  # type is number: use a dumb var to express it
-                        else:
-                            raise ValueError('operator not recognized for type detection. ({})'
-                                             .format(self.inputs[1].op))
-                    else:
-                        typeeval = self.inputs[1].value
-                else:
-                    typeeval = self.inputs[0].value
-            if self.op in ('ADD', 'SUBTRACT'):
-                if type(typeeval) in (float, int):  # value
-                    node = nodetree.nodes.new('ShaderNodeMath')
-                    in_a = self.inputs[0].export(nodetree)
-                    in_b = self.inputs[1].export(nodetree)
-                    node.operation = self.op
-                    nodetree.links.new(in_a, node.inputs[0])
-                    nodetree.links.new(in_b, node.inputs[1])
-
-                if type(typeeval) == Color:
-                    node = nodetree.nodes.new('ShaderNodeMixRGB')
-                    in_a = self.inputs[0].export(nodetree)
-                    in_b = self.inputs[1].export(nodetree)
-                    node.blend_type = self.op
-                    node.inputs[0].default_value = 1.0  # make sure the factor is 1
-                    nodetree.links.new(in_a, node.inputs[1])
-                    nodetree.links.new(in_b, node.inputs[2])
-
-                if type(typeeval) == Vector:
-                    node = nodetree.nodes.new('ShaderNodeVectorMath')
-                    node.operation = self.op
-                    if self.inputs[0].type != 'val':  # vector values doesn't exist here
-                        in_a = self.inputs[0].export(nodetree)
-                        nodetree.links.new(in_a, node.inputs[0])
-                    else:
-                        node.inputs[0].default_value[0] = self.inputs[0].value.x
-                        node.inputs[0].default_value[1] = self.inputs[0].value.y
-                        node.inputs[0].default_value[2] = self.inputs[0].value.z
-                    if self.inputs[1].type != 'val':
-                        in_b = self.inputs[1].export(nodetree)
-                        nodetree.links.new(in_b, node.inputs[1])
-                    else:
-                        node.inputs[1].default_value[0] = self.inputs[1].value.x
-                        node.inputs[1].default_value[1] = self.inputs[1].value.y
-                        node.inputs[1].default_value[2] = self.inputs[1].value.z
-
-            elif self.op == 'MULTIPLY':  # vector multiplication is more difficult: need to do it with RGB
-
-                if type(typeeval) in (float, int):  # value
-                    node = nodetree.nodes.new('ShaderNodeMath')
-                    in_a = self.inputs[0].export(nodetree)
-                    in_b = self.inputs[1].export(nodetree)
-                    node.operation = self.op
-                    nodetree.links.new(in_a, node.inputs[0])
-                    nodetree.links.new(in_b, node.inputs[1])
-
-                if type(typeeval) == Color:
-                    node = nodetree.nodes.new('ShaderNodeMixRGB')
-                    in_a = self.inputs[0].export(nodetree)
-                    in_b = self.inputs[1].export(nodetree)
-                    node.blend_type = self.op
-                    node.inputs[0].default_value = 1.0  # make sure the factor is 1
-                    nodetree.links.new(in_a, node.inputs[1])
-                    nodetree.links.new(in_b, node.inputs[2])
-
-                if type(typeeval) == Vector:  # need color mix to multiply vectors
-                    node = nodetree.nodes.new('ShaderNodeMixRGB')
-                    node.blend_type = self.op
-                    node.inputs[0].default_value = 1
-                    if self.inputs[0].type != 'val' or type(self.inputs[0].value) == str:
-                        # vector values doesn't exist here
-                        in_a = self.inputs[0].export(nodetree)
-                        nodetree.links.new(in_a, node.inputs[1])
-                    else:
-                        node.inputs[1].default_value[0] = self.inputs[0].value.x
-                        node.inputs[1].default_value[1] = self.inputs[0].value.y
-                        node.inputs[1].default_value[2] = self.inputs[0].value.z
-                    if self.inputs[1].type != 'val' or type(self.inputs[1].value) == str:
-                        in_b = self.inputs[1].export(nodetree)
-                        nodetree.links.new(in_b, node.inputs[2])
-                    else:
-                        node.inputs[2].default_value[0] = self.inputs[1].value.x
-                        node.inputs[2].default_value[1] = self.inputs[1].value.y
-                        node.inputs[2].default_value[2] = self.inputs[1].value.z
-
-            elif self.op == 'clamp':
-                in_n = self.value.export(nodetree)
-                if in_n.node.type in ('MATH', 'MIX_RGB'):
-                    in_n.node.use_clamp = True
-                    return in_n  # clamp can be done on previous nodes (for color and floats)
-                else:  # need to add clamping node:
-                    if in_n.type == 'VALUE':  # treat floats
-                        node = nodetree.nodes.new('ShaderNodeMath')
-                        node.operation = 'ADD'  # add zero to clamp
-                        node.use_clamp = True
-                        node.inputs[1].default_value = 0.0
-
-                        nodetree.links.new(in_n, node.inputs[0])  # link with other node
-                    else:  # treat color or vector
-                        node = nodetree.nodes.new('ShaderNodeMixRGB')
-                        node.blend_type = 'ADD'  # add zero to clamp
-                        node.use_clamp = True
-                        node.inputs[0].default_value = 1.0  # add fully
-
-                        node.inputs[2].default_value[0] = 0.0  # add zero
-                        node.inputs[2].default_value[1] = 0.0
-                        node.inputs[2].default_value[2] = 0.0
-
-                        nodetree.links.new(in_n, node.inputs[1])  # link with other node
-
-            elif self.op == 'mixC':
-                in_n = self.value.export(nodetree)
-                if self.value.type == 'val':
-                    if self.value.value in (Color((0,0,0)), Vector((0,0,0))):
-                        return self.inputs[0].export(nodetree)
-                    elif self.value.value in (Color((1,1,1)), Vector((1,1,1))):
-                        return self.inputs[1].export(nodetree)
-                if in_n.node.type == 'COMBRGB' and False:  # use it PLZ
-                    pass
-                else:
-                    nodegroup = get_mixgroup('C')
-                    node = nodetree.nodes.new('ShaderNodeGroup')
-                    node.node_tree = nodegroup
-
-                    nodetree.links.new(in_n, node.inputs[0])
-                    nodetree.links.new(self.inputs[0].export(nodetree), node.inputs[1])
-                    nodetree.links.new(self.inputs[1].export(nodetree), node.inputs[2])
-
-            elif self.op == 'mixA':
-                if self.value.type == 'val':
-                    if self.value.value == 0.0:
-                        return self.inputs[0].export(nodetree)
-                    elif self.value.value == 1.0:
-                        return self.inputs[1].export(nodetree)
-
-                in_n = self.value.export(nodetree)
-
-                nodegroup = get_mixgroup('A')
-                node = nodetree.nodes.new('ShaderNodeGroup')
-                node.node_tree = nodegroup
-
-                nodetree.links.new(in_n, node.inputs[0])
-                nodetree.links.new(self.inputs[0].export(nodetree), node.inputs[1])
-                nodetree.links.new(self.inputs[1].export(nodetree), node.inputs[2])
-
-
-
-
-            elif self.op in ('get_3r', 'get_3g', 'get_3b'):
-                channelid = ['r','g','b'].index(self.op[-1])
-                in_n = nodetree.nodes.new('ShaderNodeSeparateRGB')
-                nodetree.links.new(self.value.export(nodetree), in_n.inputs[0])
-                node = nodetree.nodes.new('ShaderNodeCombineRGB')
-                nodetree.links.new(in_n.outputs[channelid], node.inputs[0])
-                nodetree.links.new(in_n.outputs[channelid], node.inputs[1])
-                nodetree.links.new(in_n.outputs[channelid], node.inputs[2])
-
-            elif self.op in ('get_r', 'get_g', 'get_b'):
-                channelid = ['r', 'g', 'b'].index(self.op[-1])
-                in_n = nodetree.nodes.new('ShaderNodeSeparateRGB')
-                nodetree.links.new(self.value.export(nodetree), in_n.inputs[0])
-                return in_n.outputs[channelid]
-
-            elif self.op == 'triple':
-                in_n = self.value.export(nodetree)
-                node = nodetree.nodes.new('ShaderNodeCombineRGB')
-                nodetree.links.new(in_n, node.inputs[0])
-                nodetree.links.new(in_n, node.inputs[1])
-                nodetree.links.new(in_n, node.inputs[2])
-
-            elif self.op in ('texture_color', 'texture_alpha', 'texture_3alpha'):  # no need for 3alpha?
-                method = ['alpha', 'color'].index(self.op[-5:])
-                texture = newtex_tex(self.inputs[0].name)
-                texnode = nodetree.nodes.new('ShaderNodeTexture')
-                texnode.texture = texture
-                uv_vect = self.value.export(nodetree)
-                # XCX image mapping (clamp, mirror)
-                if self.inputs[0].mirrorS or self.inputs[0].mirrorT:
-                    r_fct = 1
-                    g_fct = 1
-                    if self.inputs[0].mirrorS:
-                        # r_fct = 0.5
-                        # texture.repeat_x = 2
-                        texture.use_mirror_x = True
-                    if self.inputs[0].mirrorT:
-                        # g_fct = 0.5
-                        # texture.repeat_y = 2
-                        texture.use_mirror_y = True
-                    #multnode = nodetree.nodes.new('ShaderNodeMixRGB')
-                    #multnode.inputs[2].default_value[0] = r_fct
-                    #multnode.inputs[2].default_value[1] = g_fct
-                    #multnode.inputs[2].default_value[2] = 0
-                    #multnode.inputs[0].default_value = 1
-                    #multnode.blend_type = 'MULTIPLY'
-                    #nodetree.links.new(uv_vect, multnode.inputs[1])
-                    #if self.inputs[0].mirrorT:  # scale done around (0,1)
-                    #    addnode = nodetree.nodes.new('ShaderNodeMixRGB')
-                    #    addnode.blend_type = 'SUBTRACT'
-                    #    addnode.inputs[0].default_value = 1
-                    #    addnode.inputs[1].default_value[0] = 0
-                    #    addnode.inputs[1].default_value[1] = 1.5
-                    #    addnode.inputs[1].default_value[2] = 0
-                    #    nodetree.links.new(multnode.outputs[0], addnode.inputs[2])
-                    #    nodetree.links.new(addnode.outputs[0], texnode.inputs[0])
-                    #else:
-                    #    nodetree.links.new(multnode.outputs[0], texnode.inputs[0])
-
-                # else:
-                nodetree.links.new(uv_vect, texnode.inputs[0])
-                # endif
-                return texnode.outputs[method]
-
-        return node.outputs[0]  # default
-
-
-class Sampler:
-    def __init__(self, name):
-        self.name = name
-        self.wrapS = True
-        self.wrapT = True
-        self.mirrorS = False
-        self.mirrorT = False
-
-    def setTexWrapMode(self, smode, tmode):
-        if smode == 0:
-            self.wrapS = False
-        elif smode == 1:
-            pass
-        elif smode == 2:
-            self.mirrorS = True
-        else:
-            raise ValueError('invalid WrapMode')
-
-        if tmode == 0:
-            self.wrapT = False
-        elif tmode == 1:
-            pass
-        elif tmode == 2:
-            self.mirrorT = True
-        else:
-            raise ValueError('invalid WrapMode')
-
-
-class MaterialSpace:
-    """holds reused variables for code->node system conversion"""
-    def __init__(self):
-        self.finalcolorc = Holder(Node(data=Color()))
-        self.finalcolora = Holder(Node(data=0.0))
-        self.vertexcolorc = Holder(Node(data=Color()))
-        self.vertexcolora = Holder(Node(data=0.0))
-        self.reg1c = Holder(Node(data=Color()))
-        self.reg1a = Holder(Node(data=0.0))
-        self.reg2c = Holder(Node(data=Color()))
-        self.reg2a = Holder(Node(data=0.0))
-        self.reg3c = Holder(Node(data=Color()))
-        self.reg3a = Holder(Node(data=0.0))
-
-        self.texcoords = []
-        self.vcolorindex = 0
-
-        self.textures = [None]*8
-
-        self.konsts = [None]*8
-
-
-    # those functions are used for node computation
-    def getRegFromId(self, id):
-        if id == 0:
-            return self.finalcolorc, self.finalcolora
-        elif id == 1:
-            return self.reg1c, self.reg1a
-        elif id == 2:
-            return self.reg2c, self.reg2a
-        elif id == 3:
-            return self.reg3c, self.reg3a
-
-    def getTexAccess(self, info, type):
-        return Node(op='texture_'+type, data=self.texcoords[info.texCoordId], inputs=(self.textures[info.texMap],))
-
-    def getRasColor(self, info):
-        return self.vertexcolorc.data, self.vertexcolora.data
-        # return self.vertexcolorc, self.vertexcolora
-        """switch(info.chanId)
-          {
-            case 0:
-              return "gl_Color.rgb";
-            case 1:
-              return "gl_SecondaryColor.rgb";
-            case 2:
-              return "gl_Color.a";
-            case 3:
-              return "gl_SecondaryColor.a";
-            case 4:
-              return "return gl_Color";
-            case 5:
-              return "return gl_SecondaryColor";
-            case 6:
-              return "vec4(0.0, 0.0, 0.0, 0.0);";
-            //TODO: 7, 8
-            default:
-            {
-              warn("getRasColor(): unknown chanId 0x%x", info.chanId);
-              return "vec4(0.0, 1.0, 0.0, 1.0);";
-            }"""
-
-    def getColorIn(self, op, konst, info):
-        if op <= 7:
-            if op % 2:
-                return Node('triple', self.getRegFromId(op//2)[1].data)
-            else:
-                return self.getRegFromId(op//2)[0].data
-        elif op == 8:
-            return self.getTexAccess(info, 'color')
-        elif op == 9:
-            return Node('triple', self.getTexAccess(info, 'alpha'))
-            # XCX are you sure that alpha channel can be used like that?
-        elif op == 10:
-            return self.getRasColor(info)[0]
-        elif op == 11:
-            return Node('triple', self.getRasColor(info)[1])
-        elif op == 12:
-            return Node(data=Color((1,1,1)))
-        elif op == 13:
-            return Node(data=Color((0.5, 0.5, 0.5)))
-        elif op == 14:
-            if konst <= 7:
-                val = (8-konst)/8
-                return Node(data=Color((val,val,val)))
-            elif konst < 0xc:
-                log.warn("getColorOp(): unknown konst %x", konst)
-                return Node(data=Color((1,0,0)))
-
-            konst -= 0xc
-            var = self.konsts[(konst % 4)*2]
-            if konst//4 == 4:  # triple alpha
-                return Node('triple', self.konsts[(konst % 4)*2+1])
-            elif konst//4 == 0:
-                return var
-            elif konst//4 == 1:
-                return Node('get_3r', var)
-            elif konst//4 == 2:
-                return Node('get_3g', var)
-            elif konst//4 == 3:
-                return Node('get_3b', var)
-        else:
-            if op != 15:
-                log.warning("Unknown colorIn %d", op)
-            return Node(data=Color((0, 0, 0)))
-
-    def getAlphaIn(self, op, konst, info):
-        if op <= 3:
-            if self.getRegFromId(op)[1].data is None:
-                pass
-            return self.getRegFromId(op)[1].data
-        elif op == 4:
-            if self.getTexAccess(info, 'alpha') is None:
-                pass
-            return self.getTexAccess(info, 'alpha')
-        elif op == 5:
-            if self.getRasColor(info)[1] is None:
-                pass
-            return self.getRasColor(info)[1]
-        elif op == 6:
-            if konst <= 7:
-                return Node(data=(8-konst)/8)
-            elif konst < 0x10:
-                log.warn("getColorOp(): unknown konst %x", konst)
-                return Node(data=0.0)
-            konst -= 0x10
-            var = self.konsts[(konst % 4) * 2]
-            if konst // 4 == 3:  # alpha
-                return self.konsts[(konst % 4) * 2 + 1]
-            elif konst // 4 == 0:
-                return Node('get_r', var)
-            elif konst // 4 == 1:
-                return Node('get_g', var)
-            elif konst // 4 == 2:
-                return Node('get_b', var)
-        elif op == 7:
-            return Node(data=0.0)
-        else:
-            raise ValueError('undefined OP')
-
-    def getMods(self, dest, bias, scale, clamp, type):
-        if bias == 0:
-            ret = dest
-        elif bias <= 2:
-            if bias == 2:
-                val = -0.5
-            else:
-                val = 0.5
-            if type == 1:
-                ret = Node(data=Color((val, val, val)))
-            else:
-                ret = Node(data=val)
-            ret = dest + ret
-        else:
-            log.warning("getMods(): unknown bias %d", bias)
-            if type == 1:
-                ret = Node(data=Color((0,0,0)))
-            else:
-                ret = Node(data=0)
-
-        if scale == 0:
-            pass
-        elif scale == 1:
-            ret *= (Node('triple', Node(data=2)), 2)[type]  # auto select type
-        elif scale == 2:
-            ret *= (Node('triple', Node(data=4)), 4)[type]
-        elif scale == 3:
-            ret *= (Node('triple', Node(data=0.5)), 0.5)[type]
-        else:
-            log.warning("getMods(): unknown scale %d", scale)
-
-        if clamp:
-            ret = Node('clamp', ret)
-
-        return ret
-
-    def getOp(self, op, bias, scale, clamp, regId, ins, type):
-
-        dest = self.getRegFromId(regId)[type]
-
-        if op in (0,1):
-            if type==0:  #color
-                dest.data = Node('mixC', ins[2], (ins[0], ins[1]))
-            else:  # alpha
-                dest.data = Node('mixA', ins[2], (ins[0], ins[1]))
-            if op == 0:
-                dest.data = ins[3] + dest.data
-            else:
-                dest.data = ins[3] - dest.data
-                log.warning("getOp(): op 1 might not work")
-
-            dest.data = self.getMods(dest.data, bias, scale, clamp, type)
-            return
-
-        elif op >= 8 and op <= 0xd:
-            if type == 0:
-              # out << "  if("
-
-                temp = ins[0]
-
-                if op in (8,9):
-                    temp = Node('get_r', temp)
-                elif op in (0xa,0xb):
-                    temp = Node('dot', inputs=(Node('get_rg',temp),
-                                               Node(data=Vector((255.0/65535.0, 255.0*256.0/65535.0, 0))) ))
-                elif op in (0xc, 0xd):
-                    temp = Node('dot', inputs=(temp, Node(Vector((255.0/16777215.0,
-                                                                  255.0*256.0/16777215.0,
-                                                                  255.0*65536.0/16777215.0))) ))
-
-                temp2 = ins[0]
-
-                if op in (8, 9):
-                    temp2 = Node('get_r', temp)
-                elif op in (0xa, 0xb):
-                    temp2 = Node('dot', inputs=(Node('get_rg', temp),
-                                               Node(data=Vector((255.0 / 65535.0, 255.0 * 256.0 / 65535.0, 0)))))
-                elif op in (0xc, 0xd):
-                    temp2 = Node('dot', inputs=(temp, Node(Vector((255.0 / 16777215.0,
-                                                                  255.0 * 256.0 / 16777215.0,
-                                                                  255.0 * 65536.0 / 16777215.0)))))
-
-                # if(op%2 == 0) out << "temp > temp2";
-                # else out << "temp == temp2";  # XCX this is not working yet
-
-                #out << ")\n    " << dest << " = " << ins[2] << ";\n"
-                #    << "  else\n    " << dest << " = " << ins[3] << ";\n";
-
-                #out << getMods(dest, 0, scale, clamp, type);
-                if(bias != 3 or scale != 1 or clamp != 1):
-                    log.warning("getOp() comp0: unexpected bias %d, scale %d, clamp %d", bias, scale, clamp)
-
-                dest.data=None
-                return
-
-            else:  # (type==1)
-                log.warning("getOp() type %d unexpected for op %x", type, op)  # TODO: need2fix
-
-        elif op in (0xe, 0xf):
-            if type == 1:
-                #out << "  if(" << ins[0];
-                #if(op == 0xe):
-                #    out << " > ";
-                #else:
-                #    out << " == ";
-                #out << ins[1] << ")\n    " << dest << " = " << ins[2] << ";\n"
-                #    << "  else\n    " << dest << " = " << ins[3] << ";\n";
-
-                # out << getMods(dest, 0, scale, clamp, type)
-                if bias != 3 or scale != 1 or clamp != 1:
-                    log.warning("getOp() comp0: unexpected bias %d, scale %d, clamp %d", bias, scale, clamp)
-
-                return
-            # //TODO: gnd.bdl uses 0xe on type == 0
-
-        else:
-            log.warning("getOp(): unsupported op %d", op)
-            if type == 0:
-              dest.data = None  # " = vec3(0., 1., 0.); //(unsupported)";
-            else:
-              dest.data = None  # " = 0.5; //(unsupported)";
-            return
-
-    # this is a transfer function to create blender nodes
-    def export(self, nodetree):
-        # first, delete existing nodes
-        while len(nodetree.nodes):
-            nodetree.nodes.remove(nodetree.nodes[0])
-
-        # then, create output and matertial nodes
-        out_node = nodetree.nodes.new('ShaderNodeOutput')
-        mat_node = nodetree.nodes.new('ShaderNodeMaterial')
-        mat_node.material = get_dumb_material()
-
-        # link them
-        nodetree.links.new(mat_node.outputs[0], out_node.inputs[0])  # material:out_color -> output:color
-
-        # create alpha and link
-        alnode = self.finalcolora.data.export(nodetree)
-        # converter = nodetree.nodes.new('ShaderNodeRGBToBW')
-        #nodetree.links.new(alnode, converter.inputs[0])
-        #nodetree.links.new(converter.outputs[0], out_node.inputs[1])
-        nodetree.links.new(alnode, out_node.inputs[1])
-        # node:out_alpha -> output:alpha
-
-        # create color and link
-        colnode = self.finalcolorc.data.export(nodetree)
-
-        nodetree.links.new(colnode, mat_node.inputs[0])  # node:out_color -> material:diffuse
-
-
-def writeTexGen(material, texGen, i, matbase, mat3):
-    while len(material.texcoords) <= i:
-        material.texcoords.append(None)
-    dst = Node(data=1)
-
-    if texGen.texGenType in (0, 1):
-        if texGen.matrix == 0x3c:
-            pass  # no texture matrix
-        elif (texGen.matrix >= 0x1e and texGen.matrix <= 0x39):
-            dst = Node(data=1)  #(texGen.matrix - 0x1e)/3)  # XCX get the right matrix
-            # XCX trap: do not set this node with this value: act as multiplier right now
-        else:
-            log.warning("writeTexGen() type %s: unsupported matrix %x", texGen.texGenType, texGen.matrix)
-
-        if (texGen.texGenSrc >=4 and texGen.texGenSrc <=11):
-            dst = dst*Node(data='uv'+str(texGen.texGenSrc-4))
-        elif texGen.texGenSrc == 0:
-            log.warning("writeTexGen() type 0: Found src 0, might not yet work (use transformed or untransformed pos?)")
-            dst = dst*Node(data='pos')
-        elif texGen.texGenSrc == 1:
-            log.warning("writeTexGen() type 0: Found src 1, might not yet work (use transformed or untransformed normal?)")
-            dst = dst*Node(data='nor')
-        else:
-            log.warning("writeTexGen() type %d: unsupported src 0x%x", texGen.texGenType, texGen.texGenSrc)
-            dst = Node(data=Vector((0,0,0)))  # "null" vector
-
-        # dirty hack(doesn't work with animations for example) (TODO):
-
-        # try if texcoord scaling is where i think it is
-        if matbase.texMtxInfos[i] != 0xffff:
-            tmi = mat3.texMtxInfos[matbase.texMtxInfos[i]]
-            dst = dst*Node(data=Vector((tmi.scaleU, tmi.scaleV, 1)))
-            dst = dst+Node(data=Vector((tmi.scaleCenterX*(1 - tmi.scaleU),
-                                        (1 - tmi.scaleCenterY) * (1 - tmi.scaleV), 0)))
-
-    elif texGen.texGenType == 0xa:
-        if (texGen.matrix != 0x3c):
-            log.warning("writeTexGen() type 0xa: unexpected matrix %x", texGen.matrix)
-        if (texGen.texGenSrc != 0x13):
-            log.warning("writeTexGen() type 0xa: unexpected src %x", texGen.texGenSrc)
-
-        log.warning("writeTexGen(): Found type 0xa (SRTG), doesn't work right yet")
-
-        #// t << "sphereMap*vec4(gl_NormalMatrix*gl_Normal, 1.0)";
-
-        #out << "  vec3 u = normalize(gl_Position.xyz);\n";
-        #out << "  vec3 refl = u - 2.0*dot(gl_Normal, u)*gl_Normal;\n";
-        #out << "  refl.z += 1.0;\n";
-        #out << "  float m = .5*inversesqrt(dot(refl, refl));\n";
-        #out << "  " << dest << ".st = vec2(refl.x*m + .5, refl.y*m + .5);";
-
-        #// out << "  " << dest << " = gl_MultiTexCoord0; //(unsupported)\n";
-        #// out << "  " << dest << " = vec4(0.0, 0.0, 0.0, 0.0); //(unsupported)\n";
-        #out << "  " << dest << " = color; //(not sure...)\n";
-    else:
-        log.warning("writeTexGen: unsupported type %x", hex(texGen.texGenType))
-        #out << "  " << dest << " = vec4(0.0, 0.0, 0.0, 0.0); //(unsupported texgentype)\n"
-
-    material.texcoords[i] = dst
-
-
-def createMaterialSystem(matBase, mat3, tex1, texpath, extension):
-    # ## vertex shader part: ###########
-    material = MaterialSpace()
-    if matBase.chanControls[0] < len(mat3.colorChanInfos):
-        if __name__ == '__main__':
-            if mat3.colorChanInfos[matBase.chanControls[0]].matColorSource != 1:
-                material.vcolorindex = 1
-
-    # missing light enabeling, seems so.
-    if mat3.colorChanInfos[matBase.chanControls[0]].matColorSource == 1:
-        material.vertexcolorc.data = Node(data='VcolorC')
-        material.vertexcolora.data = Node('get_r', Node(data='VcolorA'))
-    else:
-        c = mat3.color1[matBase.color1[0]]
-        material.vertexcolorc.data = Node(data=Color((c.r/255, c.g/255, c.b/255)))
-        material.vertexcolora.data = Node(data=c.a/255)
-    if mat3.colorChanInfos[matBase.chanControls[0]].litMask:
-        material.vertexcolorc.data = material.vertexcolorc.data * Color((0.5, 0.5, 0.5))
-        # material.vertexcolora.data = material.vertexcolora.data * 0.5
-        # if matBase.color2[0] != 0xffff and matBase.color2[0] < len(mat3.color2):
-        #     amb = mat3.color2[matBase.color2[0]]
-
-    for i in range(mat3.texGenCounts[matBase.texGenCountIndex]):  # num TexGens == num Textures
-        writeTexGen(material, mat3.texGenInfos[matBase.texGenInfos[i]], i, matBase, mat3)
-
-    # ## fragment shader part
-    for i in range(8):
-        if matBase.texStages[i] != 0xffff:
-            texId = mat3.texStageIndexToTextureIndex[matBase.texStages[i]]
-            currTex =tex1.texHeaders[texId]
-            material.textures[i] = Sampler(OSPath.join(texpath, tex1.stringtable[texId] + extension))
-            material.textures[i].setTexWrapMode(currTex.wrapS, currTex.wrapT)  # XCX set min/mag filters
-
-    # konst colors
-    needK = [False]*4
-    for i in range(mat3.tevCounts[matBase.tevCountIndex]):
-        konstColor = matBase.constColorSel[i]
-        konstAlpha = matBase.constAlphaSel[i]
-        stage = mat3.tevStageInfos[matBase.tevStageInfo[i]]
-
-        if (konstColor > 7 and konstColor < 0xc
-           or konstAlpha > 7 and konstAlpha < 0x10):
-            log.warning("createFragmentShaderString: Invalid color sel")
-            continue  # should never happen
-
-        if (konstColor > 7
-            and (stage.colorIn[0] == 0xe or stage.colorIn[1] == 0xe
-                 or stage.colorIn[2] == 0xe or stage.colorIn[3] == 0xe)):
-            needK[(konstColor - 0xc) % 4] = True
-        if (konstAlpha > 7
-            and (stage.alphaIn[0] == 6 or stage.alphaIn[1] == 6
-                 or stage.alphaIn[2] == 6 or stage.alphaIn[3] == 6)):
-            needK[(konstAlpha - 0x10) % 4] = True
-
-    for i in range(4):
-        if needK[i]:
-            c = mat3.color3[matBase.color3[i]]
-            material.konsts[2*i] = Node(data=Color((c.r/255, c.g/255, c.b/255)))
-            material.konsts[2*i+1] = Node(data=c.a/255)
-
-    needReg = [False]*4
-    for i in range(mat3.tevCounts[matBase.tevCountIndex]):
-        stage = mat3.tevStageInfos[matBase.tevStageInfo[i]]
-        needReg[stage.colorRegId] = True
-        needReg[stage.alphaRegId] = True
-
-        for j in range(4):
-            if stage.colorIn[j] <= 7:
-                needReg[stage.colorIn[j]//2] = True
-            if stage.alphaIn[j] <= 3:
-                needReg[stage.alphaIn[j]] = True
-    for i in range(4):
-        if needReg[i]:
-            if i == 0:
-                c = mat3.colorS10[matBase.colorS10[3]]
-            else:
-                c = mat3.colorS10[matBase.colorS10[i-1]]
-            material.getRegFromId(i)[0].data = Node(data=Color((c.r/255, c.g/255, c.b/255)))
-            material.getRegFromId(i)[1].data = Node(data=c.a/255)
-
-    for i in range(mat3.tevCounts[matBase.tevCountIndex]):
-        order = mat3.tevOrderInfos[matBase.tevOrderInfo[i]]
-        stage = mat3.tevStageInfos[matBase.tevStageInfo[i]]
-
-        colorIns = [None]*4
-        for j in range(4):
-            colorIns[j] = material.getColorIn(stage.colorIn[j], matBase.constColorSel[i], order)
-
-        material.getOp(stage.colorOp, stage.colorBias, stage.colorScale,
-                       stage.colorClamp, stage.colorRegId, colorIns, 0)
-
-        alphaIns = [None]*4
-        for j in range(4):
-            alphaIns[j] = material.getAlphaIn(stage.alphaIn[j], matBase.constAlphaSel[i], order)
-
-        print(end='')
-        material.getOp(stage.alphaOp, stage.alphaBias, stage.alphaScale,
-                       stage.alphaClamp, stage.alphaRegId, alphaIns, 1)
-
-    return material
-
-
+# ### a few storage variables
 MIX_GROUP_NODETREE_C = None
 MIX_GROUP_NODETREE_A = None
+MIX_GROUP_MTX = {}
+
+
+# ### helper functions (some use those storage variables)
+def makelink(nt, a, b):
+    """automatically links a and b,
+    `b` being a node socket and `a` being either another node socker or a value"""
+    if isinstance(a, bpy.types.NodeSocket):
+        nt.links.new(a,b)
+    else:
+        # sometimes, default_value behaves weirdly (with color, and maybe vector
+        # Color()s have a length of 3 (except for recent dev versions of 2.79),
+        # but default_value might want length 4 (the case for every new version, hopefully)
+        try:
+            b.default_value = a
+        except Exception:
+            # assume we are dealing with color for now.
+            value = (a.r, a.g, a.b, 1.0)
+            b.default_value = value
 
 def get_mixgroup(type):
-    """returns a GLSL-style mix() as a node group"""
+    """returns a GLSL-style mix() as a node group (for colors or floats)"""
     global MIX_GROUP_NODETREE_C
     global MIX_GROUP_NODETREE_A
     if type == 'C':
@@ -929,6 +115,860 @@ def get_mixgroup(type):
 
             gnt.links.new(node.outputs[0], out_n.inputs[0])
         return MIX_GROUP_NODETREE_A
+
+def get_mtxmix(id, mtx):
+    """returns a node group which multiplies a vector by a matrix (M*v)"""
+    if id not in MIX_GROUP_MTX.keys():
+        MIX_GROUP_MTX[id] = gnt = bpy.data.node_groups.new('matrix product(%x)'%id, 'ShaderNodeTree')
+        in_n = gnt.nodes.new('NodeGroupInput')
+        out_n = gnt.nodes.new('NodeGroupOutput')  # creating real input and output nodes
+        #gnt.inputs.new('COLOR', 'blend_value')
+        #gnt.inputs.new('COLOR', 'input_A')
+        #gnt.inputs.new('COLOR', 'input_B')
+        #gnt.outputs.new('COLOR', 'output')
+
+        mtx_lines = [gnt.nodes.new('ShaderNodeVectorMath') for _ in (0,1,2)]
+
+        recombine = gnt.nodes.new('ShaderNodeCombineXYZ')
+        translation = gnt.nodes.new('ShaderNodeVectorMath')
+        translation.operation = 'ADD'
+        gnt.links.new(recombine.outputs[0], translation.inputs[0])
+        gnt.links.new(translation.outputs[0], out_n.inputs[0])
+
+        # XCX complete matrix
+
+        for compindex in (0, 1, 2):
+            # this operation must be done for each matrix row
+            
+            gnt.links.new(in_n.outputs[0], mtx_lines[compindex].inputs[1])
+            mtx_lines[compindex].operation = 'DOT_PRODUCT'
+            gnt.links.new(mtx_lines[compindex].outputs[1], recombine.inputs[compindex])
+
+            # XCX complete mateix
+
+    return MIX_GROUP_MTX[id]
+
+def makeOpNode(placer, in1, in2, type='value', op='ADD', **placerkw):
+    """ returns a node for mathematical operations""" # XCX redo this
+    # type in 'value', 'color', 'vector'
+    if type=='value':
+        node = placer.add('ShaderNodeMath', **placerkw)
+        in1_id = 0
+        in2_id = 1
+        node.operation=op
+    elif type=='color':
+        node = placer.add('ShaderNodeMixRGB', **placerkw)
+        in1_id = 1
+        in2_id = 2
+        node.blend_type=op
+        node.inputs[0].default_value = 1.0
+    elif type=='vector':
+        # XCX implement this
+        log.error('ya done goofed')
+        raise ValueError('YA DONE GOOFED')
+    else:
+        log.warning('makeOpNode: unknown node type %s', type)
+        raise ValueError('blame the dev')
+    
+    makelink(placer.nt, in1, node.inputs[in1_id])
+    makelink(placer.nt, in2, node.inputs[in2_id])
+    return node, node.outputs[0]
+        
+def getTexture(placer, image_header, coords, is_alpha=False):
+    """returns a node to get a texture acces
+    (coords is the nodesocket giving the texture coordinates)"""
+    image = newtex_image(image_header.name)
+    texnode = placer.add('ShaderNodeTexImage', row=int(is_alpha))
+    texnode.image = image
+    # XCX image mapping (clamp, mirror)
+    if image_header.mirrorS or image_header.mirrorT:
+        local_frame = placer.add('NodeFrame', 'mirroring', int(is_alpha))
+        local_placer = NodePlacer(placer.nt, local_frame, 10, False, 2)
+        
+        sep = local_placer.add('ShaderNodeSeparateXYZ')
+        cmb = local_placer.add('ShaderNodeCombineXYZ')
+        
+        # inversion code: if *coord* in [odd, even] then coord *= -1
+        # coord *= (-1 + 2(coord%2 < 1))
+        # (this is going to be coded in nodes, but it looks like a black box)
+        
+        if image_header.mirrorS:
+            nodes = [local_placer.add('ShaderNodeMath', row=0) for _ in range(5)]
+            for i in range(4):
+                placer.nt.links.new(nodes[i].outputs[0], nodes[i+1].inputs[0])
+            placer.nt.links.new(sep.outputs[0], nodes[0].inputs[0])
+            placer.nt.links.new(nodes[4].outputs[0], cmb.inputs[0])
+            
+            nodes[0].operation = 'MODULO'
+            nodes[0].inputs[1].default_value = 2
+            nodes[1].operation = 'LESS_THAN'
+            nodes[1].inputs[1].default_value = 1
+            nodes[2].operation = 'MULTIPLY'
+            nodes[2].inputs[1].default_value = 2
+            nodes[3].operation = 'SUBTRACT'
+            nodes[3].inputs[1].default_value = -1
+            nodes[4].operation = 'MULTIPLY'
+            placer.nt.links.new(sep.outputs[0], nodes[4].inputs[1])
+        else:
+            placer.nt.links.new(sep.outputs[0], cmb.inputs[0])
+        if image_header.mirrorT:
+            nodes = [local_placer.add('ShaderNodeMath', row=1) for _ in range(5)]
+            for i in range(4):
+                placer.nt.links.new(nodes[i].outputs[0], nodes[i+1].inputs[0])
+            placer.nt.links.new(sep.outputs[1], nodes[0].inputs[0])
+            placer.nt.links.new(nodes[4].outputs[0], cmb.inputs[1])
+            
+            nodes[0].operation = 'MODULO'
+            nodes[0].inputs[1].default_value = 2
+            nodes[1].operation = 'LESS_THAN'
+            nodes[1].inputs[1].default_value = 1
+            nodes[2].operation = 'MULTIPLY'
+            nodes[2].inputs[1].default_value = 2
+            nodes[3].operation = 'SUBTRACT'
+            nodes[3].inputs[1].default_value = -1
+            nodes[4].operation = 'MULTIPLY'
+            placer.nt.links.new(sep.outputs[1], nodes[4].inputs[1])
+        else:
+            placer.nt.links.new(sep.outputs[1], cmb.inputs[1])
+
+        placer.nt.links.new(coords, sep.inputs[0])
+        placer.nt.links.new(cmb.outputs[0], texnode.inputs[0])
+        local_placer.reappend(cmb)
+        local_placer.update()
+    else:
+        placer.nt.links.new(coords, texnode.inputs[0])
+    return texnode.outputs[int(is_alpha)]
+
+
+class Holder:
+    """class to hold a variable: this variable can be set after this object is returned"""
+    def __init__(self, data=None):
+        self.data = data
+
+class Sampler:
+    """a class to hold texture access information"""
+    def __init__(self, name):
+        self.name = name
+        self.wrapS = True
+        self.wrapT = True
+        self.mirrorS = False
+        self.mirrorT = False
+
+    def setTexWrapMode(self, smode, tmode):
+        if smode == 0:
+            self.wrapS = False
+        elif smode == 1:
+            pass
+        elif smode == 2:
+            self.mirrorS = True
+        else:
+            raise ValueError('invalid WrapMode')
+
+        if tmode == 0:
+            self.wrapT = False
+        elif tmode == 1:
+            pass
+        elif tmode == 2:
+            self.mirrorT = True
+        else:
+            raise ValueError('invalid WrapMode')
+
+
+class NodePlacer:
+    """a class to automatically place nodes on a 2D space, in a logical way."""
+    def __init__(self, nt, frame=None, spacing=60, vertical=False, nrows=1):
+        self.nt = nt
+        self.frame = frame
+        # self.pos = 0  # holds a position 'cursor'
+        self.spacing = spacing
+        self.is_vert = vertical
+        self.rows = [[] for _ in range(nrows)]
+        
+    def add(self, nodetype, name=None, row=None):
+        """adds a new node to the placer (and to the nodetree)"""
+        node = self.nt.nodes.new(nodetype)
+        if name is not None:
+            node.name = name
+            node.label = name
+        if self.frame:
+            node.parent = self.frame
+                
+        if row is not None:
+            self.rows[row].append(node)
+        else:  # all rows
+            for r in self.rows:
+                r.append(node)
+        return node
+    
+    def update(self):
+        """updates the placing for all registered nodes"""
+        # first, update "vertical" row size (and store max ro length)
+        max_row_length = len(self.rows[0])
+        for i in range(1, len(self.rows)):
+            max_y = 0
+            max_row_length = max(max_row_length, len(self.rows[i]))
+            for node in self.rows[i-1]:
+                max_y = min(max_y, self.getend_c2(node))  # use minimum for y!
+            for node in self.rows[i]:
+                node.location[int(not self.is_vert)] = max_y - self.spacing
+        
+        # update "horizontal" position
+        # that means column per columns, but all rows might not
+        # have the same size
+        prev_position = 0
+        for i in range(max_row_length):
+            new_position = prev_position
+            for r in self.rows:
+                if len(r) > i:
+                    r[i].location[int(self.is_vert)] = prev_position
+                    new_position = max(new_position, self.getend_c1(r[i]))
+            prev_position = new_position + self.spacing
+        # TODO: slight problem if a multi_row node is large and at different positions in rows
+        
+        # update frame dimentions
+        if self.frame is None:
+            return  # next part is useless if there is no frame
+        
+        max_y = 0
+        for node in self.rows[-1]:
+            if len(r):
+                max_y = max(max_y, self.getend_c2(node))
+        max_x = 0 
+        for r in self.rows:
+            if len(r):
+                max_x = max(max_x, self.getend_c1(r[-1]))
+        if self.is_vert:
+            self.frame.width = max_y + 60
+            self.frame.height = max_x + 60
+        else:
+            self.frame.width = max_x + 60
+            self.frame.height = max_y + 60  # this is native frame padding
+            
+    def reappend(self, node):
+        for r in self.rows:
+            if node in r:
+                r.remove(node)
+                r.append(node)
+    
+    def __del__(self):
+        self.update()  # make a last layout change before closing
+            
+    def getend_c1(self, node):
+        """returns 'end' of a node, with its first coordinate (usually x)"""
+        if self.is_vert:
+            return node.location[1] - node.height  # height goes negative!
+        else:
+            return node.location[0] + node.width
+    def getend_c2(self, node):
+        """returns 'end' of a node, with its first coordinate (usually y)"""
+        if self.is_vert:
+            return node.location[0] + node.width
+        else:
+            return node.location[1] - node.height
+
+def getAlphaCompare(ac):
+    if ac.comp0==0:
+        a = False  # 'do not discard'
+    elif ac.comp0==7:
+        a = True
+    else:
+        return 'default'  # alpha compare depends(?) on actual alpha channel
+        # quit this function early
+    if ac.comp1==0:
+        b=False
+    elif ac.comp1==7:
+        b=True
+    else:
+        return 'default'
+    
+    if ac.alphaOp == 0:
+        return not (a and b)
+    elif ac.alphaOp==1:
+        return not (a or b)
+    elif ac.alphaOp==2:
+        return not ( (a or b) and not (a and b) )  # not xor
+    else:
+        return ( (a or b) and not (a and b) )
+
+class MaterialSpace:
+    """holds reused variables for code->node system conversion"""
+    def __init__(self, nodetree):
+        self.nt = nodetree
+        
+        self.finalcolorc = Holder()
+        self.finalcolora = Holder()
+        self.vertexcolorc = Holder()
+        self.vertexcolora = Holder()
+        self.reg1c = Holder()
+        self.reg1a = Holder()
+        self.reg2c = Holder()
+        self.reg2a = Holder()
+        self.reg3c = Holder()
+        self.reg3a = Holder()
+        self.ac_const = 'default'  # for alpha compare. can force transparent or opaque
+
+        self.texcoords = []
+        self.vcolorindex = 0
+
+        self.textures = [None]*8
+
+        self.konsts = [None]*8
+        
+        self.placer = NodePlacer(self.nt)
+
+
+    # those functions are used for node computation
+    def getRegFromId(self, id):
+        if id == 0:
+            return self.finalcolorc, self.finalcolora
+        elif id == 1:
+            return self.reg1c, self.reg1a
+        elif id == 2:
+            return self.reg2c, self.reg2a
+        elif id == 3:
+            return self.reg3c, self.reg3a
+
+    def getTexAccess(self, info, type, placer):
+        return getTexture(placer, self.textures[info.texMap], self.texcoords[info.texCoordId], type)
+
+    def getRasColor(self, info):
+        return self.vertexcolorc.data, self.vertexcolora.data
+        """switch(info.chanId)
+          {
+            case 0:
+              return "gl_Color.rgb";
+            case 1:
+              return "gl_SecondaryColor.rgb";
+            case 2:
+              return "gl_Color.a";
+            case 3:
+              return "gl_SecondaryColor.a";
+            case 4:
+              return "return gl_Color";
+            case 5:
+              return "return gl_SecondaryColor";
+            case 6:
+              return "vec4(0.0, 0.0, 0.0, 0.0);";
+            //TODO: 7, 8
+            default:
+            {
+              warn("getRasColor(): unknown chanId 0x%x", info.chanId);
+              return "vec4(0.0, 1.0, 0.0, 1.0);";
+            }"""
+
+    def getColorIn(self, op, konst, info, placer):
+        if op <= 7:
+            if op % 2:
+                node = placer.add('ShaderNodeCombineRGB', row=0)
+                for i in (0,1,2):
+                    makelink(self.nt, self.getRegFromId(op//2)[1].data, node.inputs[i])
+                return node.outputs[0]
+            else:
+                return self.getRegFromId(op//2)[0].data
+        elif op == 8:
+            return self.getTexAccess(info, 0, placer)
+        elif op == 9:
+            tex_out = self.getTexAccess(info, 1, placer)
+            node = placer.add('ShaderNodeCombineRGB', row=0)
+            for i in (0,1,2):
+                self.nt.links.new(tex_out, node.inputs[i])
+            return node.outputs[0]
+            # XCX are you sure that alpha channel can be used like that?
+        elif op == 10:
+            return self.getRasColor(info)[0]
+        elif op == 11:
+            node = placer.add('ShaderNodeCombineRGB', row=0)
+            for i in (0,1,2):
+                makelink(self.nt, self.getRasColor(info)[1], node.inputs[i])
+            return node.outputs[0]
+        elif op == 12:
+            return Color((1,1,1))
+        elif op == 13:
+            return Color((0.5, 0.5, 0.5))
+        elif op == 14:
+            if konst <= 7:
+                val = (8-konst)/8
+                return Color((val,val,val))
+            elif konst < 0xc:
+                log.warn("getColorOp(): unknown konst %x", konst)
+                return Color((1,0,0))
+
+            konst -= 0xc
+            var = self.konsts[(konst % 4)*2]
+            if konst//4 == 4:  # triple alpha
+                node = placer.add('ShaderNodeCombineRGB', row=0)
+                for i in (0,1,2):
+                    makelink(self.nt, self.konsts[(konst % 4)*2+1], node.inputs[i])
+                return node.outputs[0]
+            elif konst//4 == 0:
+                return var
+            else:
+                node1 = placer.add('ShaderNodeSeparateRGB', row=0)
+                node2 = placer.add('ShaderNodeCombineRGB', row=0)
+                makelink(self.nt, var, node1.inputs[0])
+                for i in (0,1,2):
+                    self.nt.links.new(node1.outputs[konst//4 -1], node2.inputs[i])
+                return node2.outputs[0]
+        else:
+            if op != 15:
+                log.warning("Unknown colorIn %d", op)
+            return Color((0, 0, 0))
+
+    def getAlphaIn(self, op, konst, info, placer):
+        if op <= 3:
+            if self.getRegFromId(op)[1].data is None:
+                pass
+            return self.getRegFromId(op)[1].data
+        elif op == 4:
+            # if self.getTexAccess(info, 'alpha') is None:
+            #     pass  # XCX reimplement? erase?
+            return self.getTexAccess(info, 1, placer)
+        elif op == 5:
+            if self.getRasColor(info)[1] is None:
+                pass
+            return self.getRasColor(info)[1]
+        elif op == 6:
+            if konst <= 7:
+                return (8-konst)/8
+            elif konst < 0x10:
+                log.warn("getColorOp(): unknown konst %x", konst)
+                return 0.0
+            konst -= 0x10
+            if konst // 4 == 3:  # alpha
+                return self.konsts[(konst % 4) * 2 + 1]
+            else:
+                node = placer.add('ShaderNodeSeparateRGB', row=1)
+                makelink(self.nt, self.konsts[(konst % 4) * 2], node.inputs[0])
+                return node.outputs[konst//4]
+        elif op == 7:
+            return 0.0
+        else:
+            raise ValueError('undefined OPerator in GetAlphaIn')
+
+    def getMods(self, destnode, dest, bias, scale, clamp, type, placer):
+        if type not in (0,1):
+            log.error("getMods(): unknown type %d", type)
+            raise ValueError()
+        if bias == 0:
+            ret = dest
+            node = destnode
+        else:
+            if bias <= 2:
+                if bias == 2:
+                    val = -0.5
+                else:
+                    val = 0.5
+                if type == 0:
+                    bias_out = Color((val, val, val))
+                else:
+                    bias_out = val
+            else:
+                log.warning("getMods(): unknown bias %d", bias)
+                if type == 0:
+                    bias_out = Color((0,0,0))
+                else:
+                    bias_out = 0
+            if type==1:
+                node, ret = makeOpNode(placer, dest, bias_out, 'value', 'ADD', row=1)
+            else:
+                node, ret = makeOpNode(placer, dest, bias_out, 'color', 'ADD', row=0)
+
+        if scale == 0:
+            pass
+        elif 0 < scale <=3 :
+            scale =  ('unused', 2, 4, 0.5)[scale]
+            if type==1:
+                node, ret = makeOpNode(placer, ret, scale, 'value', 'MULTIPLY', row=1)
+            else:
+                node, ret = makeOpNode(placer, ret, Color(3*(scale,)), 'color', 'MULTIPLY', row=0)
+
+        else:
+            log.warning("getMods(): unknown scale %d", scale)
+
+        if clamp:
+            node.use_clamp=True
+        return ret
+
+    def getOp(self, op, bias, scale, clamp, regId, ins, type, placer):
+        dest = self.getRegFromId(regId)[type]
+
+        if op in (0,1):
+            if type==0:  # color
+                nodegroup = get_mixgroup('C')
+                node = placer.add('ShaderNodeGroup', row=0)
+                node.node_tree = nodegroup
+
+                makelink(self.nt, ins[2], node.inputs[0])
+                makelink(self.nt, ins[0], node.inputs[1])
+                makelink(self.nt, ins[1], node.inputs[2])
+            else:  # alpha
+                nodegroup = get_mixgroup('A')
+                node = placer.add('ShaderNodeGroup', row=1)
+                node.node_tree = nodegroup
+
+                makelink(self.nt, ins[2], node.inputs[0])
+                makelink(self.nt, ins[0], node.inputs[1])
+                makelink(self.nt, ins[1], node.inputs[2])
+            dest.data = node.outputs[0]
+            mix_out = node.outputs[0]
+            if op == 0:
+                op_str = 'ADD'
+            else:
+                op_str = 'SUBTRACT'
+                log.warning("getOp(): op 1 might not work (using subtraction)")
+
+            node, ret = makeOpNode(placer, ins[3], mix_out, ['color', 'value'][type], op_str, row=type)
+
+            #if type(typeeval) == Vector:
+            #    node = nodetree.nodes.new('ShaderNodeVectorMath')
+            #    node.operation = op_str
+            #    self.nt.links.new(mix_out, node.inputs[0])
+            #    
+            #    if self.inputs[1].type != 'val':  # vector values DO exist here
+            #    in_b = self.inputs[1].export(self.nt)
+            #        self.nt.links.new(in_b, node.inputs[1])
+            #    else:
+            #        node.inputs[1].default_value[0] = self.inputs[1].value.x
+            #        node.inputs[1].default_value[1] = self.inputs[1].value.y
+            #        node.inputs[1].default_value[2] = self.inputs[1].value.z
+
+            dest.data = self.getMods(node, ret, bias, scale, clamp, type, placer)
+            return
+
+        elif op >= 8 and op <= 0xd:
+            log.warning('as_int color comparaison is not supported yet.')
+            dest.data = None
+            return
+            if type == 0:
+                pass
+                # out << "  if(";
+
+                # if op >= 0xa:
+                #     out << "dot(";
+        
+                # out << ins[0]
+                
+                # switch(op)
+                # {
+                # case 8:
+                # case 9:
+                #     out << ".r"; break;
+                # case 0xa:
+                # case 0xb:
+                #     out << ".rg, vec2(255.0/65535.0, 255.0*256.0/65535.0))"; break;
+                # case 0xc:
+                # case 0xd:
+                #     out << ".rgb, vec3(255.0/16777215.0, 255.0*256.0/16777215.0, 255.0*65536.0/16777215.0))"; break;
+                # }
+
+                # if op%2 == 0:
+                #     out << " > ";
+                # else:
+                #     out << " == ";
+
+                # if op >= 0xa:
+                #     out << "dot(";
+
+                # out << ins[1];
+                
+                # switch(op)
+                # {
+                # case 8:
+                # case 9:
+                #   out << ".r"; break;
+                # case 0xa:
+                # case 0xb:
+                #     out << ".rg, vec2(255.0/65535.0, 255.0*256.0/65535.0))"; break;
+                # case 0xc:
+                # case 0xd:
+                #     out << ".rgb, vec3(255.0/16777215.0, 255.0*256.0/16777215.0, 255.0*65536.0/16777215.0))"; break;
+                # }
+
+
+                # out << ")\n    " << dest << " = " << ins[2] << ";\n"
+                #     << "  else\n    " << dest << " = " << ins[3] << ";\n";
+
+                # //out << getMods(dest, 0, scale, clamp, type);
+                # if(bias != 3 || scale != 1 || clamp != 1)
+                #     warn("getOp() comp0: unexpected bias %d, scale %d, clamp %d", bias, scale, clamp);
+
+                # return out.str();
+            else:  # (type==1)
+                pass
+                # log.warning("getOp() type %d unexpected for op %x", type, op)  # TODO: need2fix
+
+        elif op in (0xe, 0xf):
+            if type == 1:
+                # out << "  if(" << ins[0];
+                # if(op == 0xe):
+                #     out << " > ";
+                # else:
+                #     out << " == ";
+                # out << ins[1] << ")\n    " << dest << " = " << ins[2] << ";\n"
+                #    << "  else\n    " << dest << " = " << ins[3] << ";\n";
+
+                # //out << getMods(dest, 0, scale, clamp, type)
+                # if bias != 3 or scale != 1 or clamp != 1:
+                #     log.warning("getOp() comp0: unexpected bias %d, scale %d, clamp %d", bias, scale, clamp)
+
+                return
+            # //TODO: gnd.bdl uses 0xe on type == 0
+
+        else:
+            log.warning("getOp(): unsupported op %d", op)
+            if type == 0:
+                dest.data = Vector((0,1,0))  # unsupported
+            else:
+                dest.data = 0.5  # unsupported
+            return
+
+    # this is a transfer function to create blender nodes
+    def export(self):
+        # then, create output and matertial nodes
+        mat_node = self.placer.add('ShaderNodeBsdfDiffuse')
+        alpha_node = self.placer.add('ShaderNodeBsdfTransparent')
+        mix_node = self.placer.add('ShaderNodeMixShader')
+        out_node = self.placer.add('ShaderNodeOutputMaterial')
+
+        # link them
+        self.nt.links.new(mat_node.outputs[0], mix_node.inputs[2])  # material:out_color -> output:color
+        self.nt.links.new(alpha_node.outputs[0], mix_node.inputs[1])
+        self.nt.links.new(mix_node.outputs[0], out_node.inputs[0])
+
+        # create color and link
+        makelink(self.nt, self.finalcolorc.data, mat_node.inputs[0])
+        
+        # create alpha and link
+        # alpha testing!!
+        
+        if self.ac_const == 'default' or True:
+            makelink(self.nt, self.finalcolora.data, mix_node.inputs[0])  # amount of alpha
+        elif self.ac_const == True:  # discard
+            mix_node.inputs[0].default_value = 0
+        elif self.ac_const == False:
+            mix_node.inputs[0].default_value = 1
+        else:
+            raise ValueError('alpha compare failed.')
+
+
+def makeTexCoords(material, texGen, i, matbase, mat3, data_placer):
+    """???"""
+    if texGen.texGenType in (0, 1):
+        if (texGen.texGenSrc >=4 and texGen.texGenSrc <=11):
+            nodesrc = data_placer.add('ShaderNodeUVMap', row=i+2)
+            nodesrc.uv_map = 'UV '+str(texGen.texGenSrc-4)
+            dst = nodesrc.outputs[0]
+        elif texGen.texGenSrc in (0,1):
+            nodesrc = data_placer.add('ShaderNodeNewGeometry', row=i+2)
+            log.warning("writeTexGen() type 0: Found src %d, might not yet work (use transformed or untransformed coordinate?)", texGen.texGenSrc)
+            dst = nodesrc.outputs[texGen.texGenSrc]
+        else:
+            log.warning("writeTexGen() type %d: unsupported src 0x%x", texGen.texGenType, texGen.texGenSrc)
+            dst = Vector((0,0,0))  # "null" vector
+
+        if texGen.matrix == 0x3c:
+            pass  # no texture matrix
+        elif (texGen.matrix >= 0x1e and texGen.matrix <= 0x39):
+            log.warning('Texture uses nativs matrix. Plz implement')
+            # #(texGen.matrix - 0x1e)/3)  # XCX get the right matrix
+            # nodemult = get_mtxmix((texGen.matrix - 0x1e)//3)
+            # XCX trap: do not set this node with this value: act as multiplier right now
+        else:
+            log.warning("writeTexGen() type %s: unsupported matrix %x", texGen.texGenType, texGen.matrix)
+
+        # dirty hack(doesn't work with animations for example) (TODO):
+
+        # try if texcoord scaling is where i think it is
+        if matbase.texMtxInfos[i] != 0xffff:
+            tmi = mat3.texMtxInfos[matbase.texMtxInfos[i]]
+            local_placer = NodePlacer(material.nt, data_placer.add('NodeFrame', 'TexCoordMatrix %d'%i, i+2),
+                                      20, False, 2)
+            combine = local_placer.add('ShaderNodeCombineXYZ')
+            sep = local_placer.add('ShaderNodeSeparateXYZ')
+            mul_u = local_placer.add('ShaderNodeMath', row=0)
+            mul_v = local_placer.add('ShaderNodeMath', row=1)
+            add_u = local_placer.add('ShaderNodeMath', row=0)
+            add_v = local_placer.add('ShaderNodeMath', row=1)
+            local_placer.reappend(combine)
+            mul_u.operation = mul_v.operation = 'MULTIPLY'
+            add_u.operation = add_v.operation = 'ADD'
+            
+            mul_u.inputs[1].default_value = tmi.scaleU
+            mul_v.inputs[1].default_value = tmi.scaleV
+            add_u.inputs[1].default_value = (tmi.scaleCenterX*(1 - tmi.scaleU))
+            add_v.inputs[1].default_value = (1 - tmi.scaleCenterY) * (1 - tmi.scaleV)
+
+            material.nt.links.new(sep.outputs[0], mul_u.inputs[0])
+            material.nt.links.new(sep.outputs[1], mul_v.inputs[0])
+            material.nt.links.new(mul_u.outputs[0], add_u.inputs[0])
+            material.nt.links.new(mul_v.outputs[0], add_v.inputs[0])
+            material.nt.links.new(add_u.outputs[0], combine.inputs[0])
+            material.nt.links.new(add_v.outputs[0], combine.inputs[1])
+            
+            makelink(material.nt, dst, sep.inputs[0])
+            dst = combine.outputs[0]
+
+    elif texGen.texGenType == 0xa:
+        if (texGen.matrix != 0x3c):
+            log.warning("writeTexGen() type 0xa: unexpected matrix %x", texGen.matrix)
+        if (texGen.texGenSrc != 0x13):
+            log.warning("writeTexGen() type 0xa: unexpected src %x", texGen.texGenSrc)
+
+        log.warning("writeTexGen(): Found type 0xa (SRTG), doesn't work right yet")
+
+        #// t << "sphereMap*vec4(gl_NormalMatrix*gl_Normal, 1.0)";
+
+        #out << "  vec3 u = normalize(gl_Position.xyz);\n";
+        #out << "  vec3 refl = u - 2.0*dot(gl_Normal, u)*gl_Normal;\n";
+        #out << "  refl.z += 1.0;\n";
+        #out << "  float m = .5*inversesqrt(dot(refl, refl));\n";
+        #out << "  " << dest << ".st = vec2(refl.x*m + .5, refl.y*m + .5);";
+
+        #// out << "  " << dest << " = gl_MultiTexCoord0; //(unsupported)\n";
+        #// out << "  " << dest << " = vec4(0.0, 0.0, 0.0, 0.0); //(unsupported)\n";
+        #out << "  " << dest << " = color; //(not sure...)\n";
+    else:
+        log.warning("writeTexGen: unsupported type %x", hex(texGen.texGenType))
+        #out << "  " << dest << " = vec4(0.0, 0.0, 0.0, 0.0); //(unsupported texgentype)\n"
+
+    material.texcoords[i] = dst
+
+
+def createMaterialSystem(matBase, mat3, tex1, texpath, extension, nt):
+    """converts the data from a materialBase object to a blender node tree"""
+    # ### vertex shader part:
+    
+    # ## first, delete existing nodes from tree
+    while len(nt.nodes):
+        nt.nodes.remove(nt.nodes[0])
+    
+    # ## then start preparing the material 'namespace'
+    material = MaterialSpace(nt)
+    if matBase.chanControls[0] < len(mat3.colorChanInfos):
+        if __name__ == '__main__':  #XCX WHAT THE FLIP?!
+            if mat3.colorChanInfos[matBase.chanControls[0]].matColorSource != 1:
+                material.vcolorindex = 1
+
+    data_placer = NodePlacer(nt, material.placer.add('NodeFrame', 'data'), 30, False,
+                             3 + mat3.texGenCounts[matBase.texGenCountIndex])
+    
+    # missing light enabeling, seems so.
+    if mat3.colorChanInfos[matBase.chanControls[0]].matColorSource == 1:
+        node = data_placer.add('ShaderNodeAttribute', row=0)
+        node.attribute_name = 'v_color_0'  # XCX what about layer 2 (this is more complicated than expected)?
+        material.vertexcolorc.data = node.outputs[0]
+
+        node = data_placer.add('ShaderNodeAttribute', row=1)
+        node.attribute_name = 'v_color_alpha_0'
+        temp = node.outputs[0]
+        node = data_placer.add('ShaderNodeSeparateRGB', row=1)
+        nt.links.new(temp, node.inputs[0])
+        material.vertexcolora.data = node.outputs[0]
+    else:
+        c = mat3.color1[matBase.color1[0]]
+        material.vertexcolorc.data = Color((c.r/255, c.g/255, c.b/255))
+        material.vertexcolora.data = c.a/255
+    if mat3.colorChanInfos[matBase.chanControls[0]].litMask:
+        # XCX manage light better
+        pass
+        # material.vertexcolorc.data = material.vertexcolorc.data * Color((0.5, 0.5, 0.5))
+        
+        # # material.vertexcolora.data = material.vertexcolora.data * 0.5
+        # # if matBase.color2[0] != 0xffff and matBase.color2[0] < len(mat3.color2):
+        # #     amb = mat3.color2[matBase.color2[0]]
+
+    material.texcoords = [None] * mat3.texGenCounts[matBase.texGenCountIndex]
+    for i in range(mat3.texGenCounts[matBase.texGenCountIndex]):  # num TexGens == num Textures
+        makeTexCoords(material, mat3.texGenInfos[matBase.texGenInfos[i]], i, matBase, mat3, data_placer)
+
+    # ## fragment shader part
+    for i in range(8):
+        if matBase.texStages[i] != 0xffff:
+            texId = mat3.texStageIndexToTextureIndex[matBase.texStages[i]]
+            currTex =tex1.texHeaders[texId]
+            material.textures[i] = Sampler(OSPath.join(texpath, tex1.stringtable[texId] + extension))
+            material.textures[i].setTexWrapMode(currTex.wrapS, currTex.wrapT)  # XCX set min/mag filters ?
+
+    # konst colors
+    # first determine if they are needed or not, then actually create the associated nodes.
+    # XCX make it happen on the fly? not now.
+    needK = [False]*4
+    for i in range(mat3.tevCounts[matBase.tevCountIndex]):
+        konstColor = matBase.constColorSel[i]
+        konstAlpha = matBase.constAlphaSel[i]
+        stage = mat3.tevStageInfos[matBase.tevStageInfo[i]]
+
+        if (konstColor > 7 and konstColor < 0xc
+           or konstAlpha > 7 and konstAlpha < 0x10):
+            log.warning("createFragmentShaderString: Invalid color sel")
+            continue  # should never happen
+
+        if (konstColor > 7
+            and (stage.colorIn[0] == 0xe or stage.colorIn[1] == 0xe
+                 or stage.colorIn[2] == 0xe or stage.colorIn[3] == 0xe)):
+            needK[(konstColor - 0xc) % 4] = True
+        if (konstAlpha > 7
+            and (stage.alphaIn[0] == 6 or stage.alphaIn[1] == 6
+                 or stage.alphaIn[2] == 6 or stage.alphaIn[3] == 6)):
+            needK[(konstAlpha - 0x10) % 4] = True
+
+    for i in range(4):
+        if needK[i]:
+            c = mat3.color3[matBase.color3[i]]
+            material.konsts[2*i] = Color((c.r/255, c.g/255, c.b/255))
+            material.konsts[2*i+1] = c.a/255
+
+     # same thing with the registries
+    needReg = [False]*4
+    for i in range(mat3.tevCounts[matBase.tevCountIndex]):
+        stage = mat3.tevStageInfos[matBase.tevStageInfo[i]]
+        needReg[stage.colorRegId] = True
+        needReg[stage.alphaRegId] = True
+
+        for j in range(4):
+            if stage.colorIn[j] <= 7:
+                needReg[stage.colorIn[j]//2] = True
+            if stage.alphaIn[j] <= 3:
+                needReg[stage.alphaIn[j]] = True
+
+    for i in range(4):
+        if needReg[i]:
+            if i == 0:
+                c = mat3.colorS10[matBase.colorS10[3]]
+            else:
+                c = mat3.colorS10[matBase.colorS10[i-1]]
+            material.getRegFromId(i)[0].data = Color((c.r/255, c.g/255, c.b/255))
+            material.getRegFromId(i)[1].data = c.a/255
+    data_placer.update()
+
+    # finally generate the tevStages
+    for i in range(mat3.tevCounts[matBase.tevCountIndex]):
+        order = mat3.tevOrderInfos[matBase.tevOrderInfo[i]]
+        stage = mat3.tevStageInfos[matBase.tevStageInfo[i]]
+        
+        local_frame = material.placer.add('NodeFrame', 'tevStage %d' % i)
+        local_placer = NodePlacer(material.nt, local_frame, 60, False, 2)
+
+        colorIns = [None]*4
+        for j in range(4):
+            colorIns[j] = material.getColorIn(stage.colorIn[j], matBase.constColorSel[i], order, local_placer)
+
+        material.getOp(stage.colorOp, stage.colorBias, stage.colorScale,
+                       stage.colorClamp, stage.colorRegId, colorIns, 0, local_placer)
+
+        alphaIns = [None]*4
+        for j in range(4):
+            alphaIns[j] = material.getAlphaIn(stage.alphaIn[j], matBase.constAlphaSel[i], order, local_placer)
+
+        print(end='')
+        material.getOp(stage.alphaOp, stage.alphaBias, stage.alphaScale,
+                       stage.alphaClamp, stage.alphaRegId, alphaIns, 1, local_placer)
+        
+        local_placer.update()
+
+    material.ac_const = getAlphaCompare(mat3.alphaCompares[matBase.alphaCompIndex])
+    material.export()
+
 
 DUMB_MAT = None
 def get_dumb_material():

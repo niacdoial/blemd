@@ -1,10 +1,12 @@
 // some classic VS BS here. do not use it if you can.
 // (it doesn't do much)
-#include "stdafx.h"
+//#include "stdafx.h"
 
 //by thakis
 //updated (by niacdoial) with code from BMDView2 (also by Thakis?)
+#include <string.h>
 
+#include <locale>  // needed for string conversion
 #include <cstdio>
 #include <cstdlib>
 #include <iostream>
@@ -39,6 +41,30 @@ using std::endl;
 #if (defined __LITTLE_ENDIAN__ || defined LITTLE_ENDIAN) && defined GC_BIG_ENDIAN
 #error Unable to determine endianness
 #endif
+
+
+//linux port stuff (apparently some functions have to get redefined)
+void* memcpy(void *s1, const void *s2, size_t n);
+
+
+#ifdef WIN32
+#define memcpy_s2(dest, maxsz, src, sz) \
+	(memcpy_s(dest, maxsz, src, sz))
+#define FILEPATH(str) (to_wstr(str))
+#define pathstr_t std::wstring
+#define Xcout wcout
+#define SEP '\\'
+#define SEP_STR "\\"
+#else
+#define memcpy_s2(dest, maxsz, src, sz) \
+	(memcpy(dest, src, sz))
+#define FILEPATH(str) str
+#define pathstr_t std::string
+#define Xcout cout
+#define SEP '/'
+#define SEP_STR "/"
+#endif
+
 
 enum IMAGETYPE
 {
@@ -141,13 +167,25 @@ inline void writeDWORD_le(ostream& f, u32 v)
 	f.write((char*)&v, 4);
 }
 
-inline std::wstring to_wstr(std::string str)
+inline std::wstring to_wstr(const std::string str)
 {
 	std::wstringstream sstr;
 	const char *temp = str.c_str();
 	sstr << temp;
 	//delete[] temp;
 	return sstr.str();
+}
+
+inline std::string to_unwstr(const std::wstring& str, char dfault = '?',
+                      const std::locale& loc = std::locale::classic() )
+{
+	const wchar_t *s = str.c_str();
+	std::ostringstream stm;
+
+	while( *s != L'\0' ) {
+		stm << std::use_facet< std::ctype<wchar_t> >( loc ).narrow( *s++, dfault );
+	}
+	return stm.str();
 }
 
 struct Tex1Header
@@ -1142,11 +1180,11 @@ void flipVertical(std::vector<u8>& vec, int w, int h, int bpp)
 	u8* up = &vec[0], *down = &vec[w*(h - 1)*bpp];
 	for (int y = 0; y < h / 2; ++y)
 	{
-		memcpy_s(&tmpLine[0], tmpLine.size(), up, w*bpp);
+		memcpy_s2(&tmpLine[0], tmpLine.size(), up, w*bpp);
 		//std::copy(up, up + w*bpp, tmpLine.begin());
-		memcpy_s(up, w*bpp, down, w*bpp);
+		memcpy_s2(up, w*bpp, down, w*bpp);
 		//std::copy(down, down + w*bpp, up);
-		memcpy_s(down, w*bpp, &tmpLine[0], tmpLine.size());
+		memcpy_s2(down, w*bpp, &tmpLine[0], tmpLine.size());
 		//std::copy(tmpLine.begin(), tmpLine.end(), down);
 
 		up += w*bpp;
@@ -1170,7 +1208,7 @@ DdsHeader createDdsHeader(int w, int h, int numMips)
 	return ret;
 }
 
-void saveTextureDds(const std::wstring& filename, const Image& img)
+void saveTextureDds(const pathstr_t& filename, const Image& img)
 {
 	DdsHeader h = createDdsHeader(img.width, img.height, img.mipmaps.size());
 	switch (img.format)
@@ -1211,7 +1249,7 @@ void saveTextureDds(const std::wstring& filename, const Image& img)
 	file.close();
 }
 
-void saveTextureTga(const std::wstring& filename, const Image& img)
+void saveTextureTga(const pathstr_t& filename, const Image& img)
 {
 	TgaHeader h(img.width, img.height);
 
@@ -1270,7 +1308,7 @@ void saveTextureTga(const std::wstring& filename, const Image& img)
 }
 
 void saveTexture(IMAGETYPE imgType, const Image& img,
-	const std::wstring& filename, bool doMirrorX, bool doMirrorY)
+	const pathstr_t& filename, bool doMirrorX, bool doMirrorY)
 {
 	Image tmp, tmp2;
 	const Image* imageToUse = &img;
@@ -1283,17 +1321,17 @@ void saveTexture(IMAGETYPE imgType, const Image& img,
 	switch (imgType)
 	{
 	case DDS:
-		saveTextureDds(filename + L".dds", *imageToUse);
+		saveTextureDds(filename + ".dds", *imageToUse);
 		break;
 	case TGA:
-		saveTextureTga(filename + L".tga", *imageToUse);
+		saveTextureTga(filename + ".tga", *imageToUse);
 		break;
 	}
 }
 
 
-std::wstring g_name;
-std::wstring g_folder;
+pathstr_t g_name;
+pathstr_t g_folder;
 IMAGETYPE im_type;
 
 
@@ -1352,7 +1390,7 @@ void readBmd(std::istream& f)
 
 			//create dummy file to make sure everybody sees the failure:
 			//sprintf_s<2048>(filename, "%s %d FAILED: %s %d.dds", g_name, k, strings[k].c_str(), tx.format);
-			wstring filename = g_folder + to_wstr(strings[k])+ wstring(L".ERROR");
+			pathstr_t filename = g_folder + FILEPATH(strings[k]+ string(".ERROR"));
 
 			ofstream outF;
 			outF.open(filename, ios::binary);
@@ -1362,7 +1400,7 @@ void readBmd(std::istream& f)
 		}
 
 		//sprintf_s<2048>(filename, "%s %d %s %d.dds", g_name, k, strings[k].c_str(), tx.format);
-		std::wstring filename = g_folder + to_wstr(strings[k]);
+		pathstr_t filename = g_folder + FILEPATH(strings[k]);
 
 		Image tempImage;
 		loadAndConvertImage(f, tx, t, tempImage);
@@ -1372,12 +1410,12 @@ void readBmd(std::istream& f)
 }
 
 //it's supposed to be:
-//int main(int argc, wchar_t* argv[])
-int _tmain(int argc, wchar_t* argv[])
+int main(int argc, char* argv[])
+//int _tmain(int argc, wchar_t* argv[])
 {
 	for (int k = 0; k < argc; k++)
 	{
-		wcout << argv[k];
+		Xcout << argv[k];
 		cout << "   " << /*ToStr(argv[k]) <<*/ endl;
 	}
 	if (argc < 3)// || (f = fopen(argv[1], "rb")) == NULL)
@@ -1387,7 +1425,7 @@ int _tmain(int argc, wchar_t* argv[])
 		switch (argc)
 		{
 		case 2:
-			cout << "1 : " << argv[1] << endl;
+			Xcout << "1 : " << argv[1] << endl;
 			// do not break here
 		case 1:
 			//cout << "0 : " << argv[0] << endl;
@@ -1404,33 +1442,33 @@ int _tmain(int argc, wchar_t* argv[])
 		g_folder = argv[2];
 		im_type = DDS;
 	}
-	std::wstring g_folder2 = g_folder;  // this is a "ghost" for debugging purposes
+	pathstr_t g_folder2 = g_folder;  // this is a "ghost" for debugging purposes
 
 	if (argc >= 4)
 	{
-		wstring temp(argv[3]);
+		pathstr_t temp(argv[3]);
 		if (temp.size()>=3 &&
-			temp[0] == L'T' &&
-			temp[1] == L'G' &&
-			temp[2] == L'A')   // THIS IS HIDEOUS!
+			temp[0] == 'T' &&
+			temp[1] == 'G' &&
+			temp[2] == 'A')   // THIS IS HIDEOUS!
 			im_type = TGA;
 	}
 	if (g_folder[g_folder.size() - 1] == '\"')
 	{
 		//cout << "g_folder: " << g_folder2;
 		g_folder.erase(g_folder.end() - 1);
-		wcout << "g_folder: " << g_folder;
+		Xcout << "g_folder: " << g_folder;
 	}
-	if (g_folder[g_folder.size() - 1] != '\\')
+	if (g_folder[g_folder.size() - 1] != SEP)
 	{
-		g_folder += wstring(L"\\");
+		g_folder += FILEPATH(string(SEP_STR));
 	}
-	wcout << "textures: " << g_folder << endl;
+	Xcout << "textures: " << g_folder << endl;
 
 	std::ifstream is(g_name, ios_base::binary);
 	if (!(is.is_open() || is.good()))
 	{
-		wcout << "cannot open file " << g_name << endl;
+		Xcout << "cannot open file " << g_name << endl;
 		return EXIT_FAILURE;
 	}
 
@@ -1438,7 +1476,7 @@ int _tmain(int argc, wchar_t* argv[])
 	{
 		readBmd(is);
 	}
-	catch (exception err)
+	catch (exception& err)
 	{
 		cout << endl << err.what() << endl;
 	}

@@ -2,7 +2,7 @@ from mathutils import Vector, Euler, Matrix
 import bpy
 import math
 import re
-from .maxheader import dict_get_set
+from .common import dict_get_set
 from .Matrix44 import rotation_part
 # import weakref
 import logging
