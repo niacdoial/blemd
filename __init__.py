@@ -21,6 +21,7 @@ def config_logging():
                 'class': 'logging.StreamHandler',  # 'logging.ReloadingHandler',
                 'formatter': 'default',
                 # 'place': 'sys.stdout',
+                'level': 'DEBUG',
                 'stream': 'ext://sys.stderr'},
             'pipe': {
                 'class': 'logging.StreamHandler',
@@ -28,7 +29,7 @@ def config_logging():
                 'level': 'WARNING',
                 'stream': log_out}},
         'root': {
-            'level': 'INFO',
+            'level': 'DEBUG',
             'handlers': ['console', 'pipe']}
     })
 
@@ -173,11 +174,12 @@ class ImportBmd(Operator, ImportHelper):
         description="DEBUG option. create Vgroups to show the original BMD structure (ram-intensive)",
         default=False
     )
-    
+
     paranoia = BoolProperty(
         name="DEBUG crashes",
         description="option for debug purposes: will prefer a clean crash over a weird result",
-        default=False)
+        default=False
+    )
 
     def execute(self, context):
         global log_out
@@ -196,6 +198,7 @@ class ImportBmd(Operator, ImportHelper):
         finally:
             try:
                 message = log_out.getvalue()
+                message = common.dedup_lines(message)
                 log_out.truncate(0)
             except:
                 message = "warning: logging glitched out. see system console for a more complete result"

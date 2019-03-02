@@ -3,6 +3,7 @@ import bpy
 import math
 import re
 from .common import dict_get_set
+from . import common
 from .Matrix44 import rotation_part
 # import weakref
 import logging
@@ -366,7 +367,7 @@ finder = re.compile(r'''pose\.bones\[['"](\w*)['"]\]\.(\w*)''')
 def apply_animation(bones, arm_obj, jntframes, name=None):
     """apply keyframes from pseudobones to real, armature bones"""
     if name:
-        arm_obj.animation_data.action = bpy.data.actions.new(arm_obj.name + '_' + name)
+        arm_obj.animation_data.action = bpy.data.actions.new(name + '_action')
     else:
         arm_obj.animation_data.action = bpy.data.actions.new(arm_obj.name+'_action')
     bpy.context.scene.frame_current = 0
@@ -389,9 +390,12 @@ def apply_animation(bones, arm_obj, jntframes, name=None):
 
     for curve in fcurves:
         # create data in dicts ({bonename:{datatype:[0,1,2]...}...})
-        bonename, datatype = finder.match(curve.data_path).groups()
-        data[bonename] = bonedict = data.get(bonename, {})
-        bonedict[datatype] = datadict = bonedict.get(datatype, [None, None, None])
+        try:
+            bonename, datatype = finder.match(curve.data_path).groups()
+        except TypeError:  # cannit unpack None: this fsurve is not interesting
+            continue
+        bonedict = common.dict_get_set(data, bonename, {})
+        datadict = common.dict_get_set(bonedict, datatype, [None, None, None])
         datadict[curve.array_index] = curve
 
     # create keyframes, with tengents

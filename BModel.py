@@ -63,7 +63,7 @@ class ModelRepresentation:
         self.hasColors = [False]*2
         self.hasMatrixIndices = False
         self.hasNormals = False
-        
+
         self.dedup_verts = {} # {original_id: (new ids)}
         # some faces might reference the same vert multiple times:
         # for this (somewhat dumb and corner-case) occasion,
@@ -98,7 +98,7 @@ class ModelRepresentation:
     def getLoop(self, faceidx, i):
         assert 0 <= i <= 2
         return self.loops[self.faces[faceidx].loop_start + i]
-    
+
     def getLoops(self, faceidx):
         return (self.loops[self.faces[faceidx].loop_start],
                 self.loops[self.faces[faceidx].loop_start+1],
@@ -201,6 +201,7 @@ class BModel:
         self.tverts = [[], [], [], [], [], [], [], []]  # texture vertices
         self._bones = []
         self._bckPaths = []
+        self._btpPaths = []
         self.faceIndex = 0
         self._materialIDS = []
         self.vertexMultiMatrixEntry = []
@@ -212,7 +213,7 @@ class BModel:
         self._bmdViewPathExe = value
 
     def TryHiddenDOSCommand(self, exefile, args, startpath):
-                
+
         # --print "###################"
         # --print cmd
         # --print startpath
@@ -416,7 +417,7 @@ class BModel:
         modelMesh.update()
 
         return modelObject
-        
+
     def LoadModel(self, filePath):
         """loads mesh data from file"""
 
@@ -563,7 +564,7 @@ class BModel:
                     posIndex0 = p0.posIndex
                     posIndex1 = p1.posIndex
                     posIndex2 = p2.posIndex
-                    
+
                     # vertex deduplication: if two of the `posIndex`es
                     # are the same, vertex clones must be introduced for stability
                     # (a polygon mustn't refer to the same vertex more than once)
@@ -574,7 +575,7 @@ class BModel:
                             self.model.dedup_verts[posIndex0] = (posIndex1,)
                         else:
                             posIndex1 = self.model.dedup_verts[posIndex0][0]
-                    
+
                     if posIndex0==posIndex2:
                         if self.model.dedup_verts.get(posIndex0, None) is None:
                             self.model.vertices.append(self.model.vertices[posIndex0])
@@ -582,7 +583,7 @@ class BModel:
                             self.model.dedup_verts[posIndex0] = (posIndex2,)
                         else:
                             posIndex2 = self.model.dedup_verts[posIndex0][0]
-                    
+
                     # third vert deduplication might sound trickier because duplication
                     # might come from the original file but might also come from here,
                     # but in truth, the second case just means that
@@ -594,7 +595,7 @@ class BModel:
                             self.model.dedup_verts[posIndex1] = (posIndex2,)
                         else:
                             posIndex2 = self.model.dedup_verts[posIndex1][0]
-                    
+
 
                     if self.params.DEBUGVG:
                         tempvg = self.DEBUGvgroups.get(str(batchid), None)
@@ -746,7 +747,7 @@ class BModel:
                                                                         self._mat1, self.tex,
                                                                         self._texturePath, '.' + self.params.imtype.lower())
                         except Exception as err:
-                            
+
                             if self.params.PARANOID:
                                 log.error('couldn\'t build material %d', matIndex)
                                 raise
@@ -833,13 +834,13 @@ class BModel:
             self.DrawScenegraph(sg, i)
         except Exception as err:
             log.critical('Mesh description in scene graph is nonsensical. (error is %s)', err)
-            return
-        
+            raise
+
         try:
             modelObj = self.BuildSingleMesh()
         except Exception as err:
             log.critical('mesh couldn\'t be built (error is %s)', err)
-            return
+            raise
 
         if self.params.createBones and self.params.loadAnimations:
             self.LoadAnimations()
@@ -859,7 +860,12 @@ class BModel:
 
         bckFiles = []
         for bckPath in self._bckPaths:
-            bckFiles += common.getFiles(self._bmdDir + bckPath)
+            bckFiles += common.getFiles(bckPath)
+        #btpFiles = []
+        #for btpPath in self._btpPaths:
+        #    btpFiles += common.getFiles(btpPath)
+        #btpFileNames = [common.getFilenameFile(f) for f in btpFiles]
+
         for f in bckFiles:
             bckFileName = common.getFilenameFile(f)
             b = Bck.Bck_in()
@@ -868,6 +874,17 @@ class BModel:
             except Exception as err:
                 log.warning('an animation file was corrupted. (error is %s)', err)
                 continue
+
+            # load the possibly existing btp file accompanying the bck one
+            #try:
+            #    btpIndex = btpFileNames.index('bckFiles')
+            #except ValueError:  # no btp file to go with this bck file
+            #    btp = None
+            #else:
+            #    btp = Btp.Btp()
+            #    btp.LoadBtp(btpFiles[btpIndex])
+            #    del btpFiles[btpIndex]
+            #    del btpFileNames[btpIndex]
 
             if not len(b.anims):
                 # file loader already knows that it won't fit
@@ -926,7 +943,7 @@ class BModel:
             self.arm_obj.animation_data.action = None
 
     def ExtractImages(self, force=False):
-                
+
         imageExt = '.' + self.params.imtype.lower()
 
         try:
@@ -956,7 +973,7 @@ class BModel:
         return True
 
     def CreateBTPDataFile(self):
-        btpFiles = common.getFiles(self._bmdDir + "..\\..\\btp\\*.btp".replace('\\', common.SEP))
+        btpFiles = common.getFiles(self._bmdDir + "..\\btp\\*.btp".replace('\\', common.SEP))
         # --messageBox (bckFiles as string)
 
         fBTP = open(self._bmdDir + "TextureAnimations.xml", 'w')
@@ -976,31 +993,25 @@ class BModel:
         print("\t<Materials>", file=fBTP)
         firstLoop = True
         for matName in self._mat1.stringtable:
-            if firstLoop:
-                firstLoop = False
-            else:
-                print("#", file=fBTP)
-                print("%", matName, file=fBTP)
+            print("#", file=fBTP)
+            print("%", matName, file=fBTP)
         print("</Materials>\n", file=fBTP)
         print("\t<Animations>\n", file=fBTP)
-        for bckFile in btpFiles:
+        for btpFile in btpFiles:
             self.textureAnim = Btp.Btp()
-            self.textureAnim.LoadBTP(bckFile)
+            self.textureAnim.LoadBTP(btpFile)
             print("\t\t<Animation>\n", file=fBTP)
-            print("\t\t\t<Name>%</Name>\n", common.getFilenameFile(bckFile), file=fBTP)
+            print("\t\t\t<Name>%s</Name>\n" % common.getFilenameFile(btpFile), file=fBTP)
             firstLoop = True
             for anim in self.textureAnim.anims:
                 print("\t\t\t<Material>\n", file=fBTP)
-                print("\t\t\t\t<MaterialIndex>%</MaterialIndex>\n", anim.materialIndex, file=fBTP)
+                print("\t\t\t\t<MaterialIndex>%d</MaterialIndex>\n" %anim.materialIndex, file=fBTP)
                 # -- print("\t\t\t\t<Name>%</Name>\n", anim.materialName, file=fBTP)
                 animaitonKeys = ""
-                for key in anim.keyFrameIndexTable:
-                    if firstLoop:
-                        firstLoop = False
-                    else:
-                        animaitonKeys = animaitonKeys + "#"
-                        animaitonKeys = animaitonKeys + str(key)
-                print("\t\t\t\t<KeyFrames>%</KeyFrames>\n", animaitonKeys, file=fBTP)
+                for key in anim.indices:
+                    animaitonKeys = animaitonKeys + "#"
+                    animaitonKeys = animaitonKeys + str(key)
+                print("\t\t\t\t<KeyFrames>%s</KeyFrames>\n" %animaitonKeys, file=fBTP)
                 print("\t\t\t</Material>\n", file=fBTP)
                 # --messageBox (anim.animationName + ":" + animaitonKeys)
             print("\t\t</Animation>\n", file=fBTP)
@@ -1022,10 +1033,6 @@ class BModel:
         else:
             bpy.context.scene.render.engine = 'BLENDER_RENDER'
 
-        self._bckPaths.append("..{0}..{0}bck{0}*.bck".format(common.SEP))
-        self._bckPaths.append("..{0}..{0}bcks{0}*.bck".format(common.SEP))
-        self._bckPaths.append("..{0}..{0}scrn{0}*.bck".format(common.SEP))
-
         TexH.MODE = self.params.packTextures
         TexH.textures_reset()  # avoid use of potentially deleted data
 
@@ -1041,17 +1048,24 @@ class BModel:
         self._bmdFileName = common.getFilenameFile(filename)
         # P:\ath\to\file_bmd\Textures
         self._texturePath = self._bmdDir + "Textures"
-        
+
+
+        self._bckPaths.append("{1}{0}..{0}bck{0}*.bck".format(common.SEP, self._bmdPath))
+        self._bckPaths.append("{1}{0}..{0}bcks{0}*.bck".format(common.SEP, self._bmdPath))
+        self._bckPaths.append("{1}{0}..{0}scrn{0}*.bck".format(common.SEP, self._bmdPath))
+
+        self._btpPaths.append("{1}{0}..{0}btp{0}*.btp".format(common.SEP, self._bmdPath))
+
         try:
             os.mkdir(self._bmdDir)
         except FileExistsError:
             pass
-        
+
         try:
             self.LoadModel(filename)
         except Exception as err:
             log.critical('Could not load bmd file: looks corrupted (error is %s)', err)
-            return
+            raise
 
         #  XCX this should not be needed vvv
         # if (not exportTextures) or (exportTextures and self.ExtractImages()):
@@ -1066,12 +1080,12 @@ class BModel:
         try:
             self.CreateBTPDataFile()
         except Exception as err:
-            log.warning('couldn\'t  BTP animations into xml files. Model should beave normally nevertheless')
+            log.warning('couldn\'t transform BTP animations into xml files. Model should beave normally nevertheless')
 
     def __del__(self):
         if self._bones:
             self._bones[0].pre_delete()  # fixes momory leak
-            
+
         MatH.MPL.MIX_GROUP_MTX = {}
         common.GLOBALS = None
         # object.__del__(self)

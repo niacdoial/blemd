@@ -109,7 +109,7 @@ class ShpPacket:
                             curPoint.texCoordIndex[(attribs[k].attrib - 0xd)] = val  # fixed
                         else:
                             log.error("impossible SHP attribute %d", attribs[k].attrib)
-                            if common.GLOBALS.PARANOID:
+                            if common.GLOBALS.PARANOID and False:
                                 raise ValueError('~the dev was an idiot~')
                             #-- messageBox "WARNING shp1: got invalid attrib in packet. should never happen because dumpBatch() should check this before calling dumpPacket()"
                             #--print curPrimative

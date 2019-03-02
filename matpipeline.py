@@ -139,7 +139,7 @@ def get_mtxmix(id, mtx):
 
         for compindex in (0, 1, 2):
             # this operation must be done for each matrix row
-            
+
             gnt.links.new(in_n.outputs[0], mtx_lines[compindex].inputs[1])
             mtx_lines[compindex].operation = 'DOT_PRODUCT'
             gnt.links.new(mtx_lines[compindex].outputs[1], recombine.inputs[compindex])
@@ -169,11 +169,11 @@ def makeOpNode(placer, in1, in2, type='value', op='ADD', **placerkw):
     else:
         log.warning('makeOpNode: unknown node type %s', type)
         raise ValueError('blame the dev')
-    
+
     makelink(placer.nt, in1, node.inputs[in1_id])
     makelink(placer.nt, in2, node.inputs[in2_id])
     return node, node.outputs[0]
-        
+
 def getTexture(placer, image_header, coords, is_alpha=False):
     """returns a node to get a texture acces
     (coords is the nodesocket giving the texture coordinates)"""
@@ -184,21 +184,21 @@ def getTexture(placer, image_header, coords, is_alpha=False):
     if image_header.mirrorS or image_header.mirrorT:
         local_frame = placer.add('NodeFrame', 'mirroring', int(is_alpha))
         local_placer = NodePlacer(placer.nt, local_frame, 10, False, 2)
-        
+
         sep = local_placer.add('ShaderNodeSeparateXYZ')
         cmb = local_placer.add('ShaderNodeCombineXYZ')
-        
+
         # inversion code: if *coord* in [odd, even] then coord *= -1
         # coord *= (-1 + 2(coord%2 < 1))
         # (this is going to be coded in nodes, but it looks like a black box)
-        
+
         if image_header.mirrorS:
             nodes = [local_placer.add('ShaderNodeMath', row=0) for _ in range(5)]
             for i in range(4):
                 placer.nt.links.new(nodes[i].outputs[0], nodes[i+1].inputs[0])
             placer.nt.links.new(sep.outputs[0], nodes[0].inputs[0])
             placer.nt.links.new(nodes[4].outputs[0], cmb.inputs[0])
-            
+
             nodes[0].operation = 'MODULO'
             nodes[0].inputs[1].default_value = 2
             nodes[1].operation = 'LESS_THAN'
@@ -217,7 +217,7 @@ def getTexture(placer, image_header, coords, is_alpha=False):
                 placer.nt.links.new(nodes[i].outputs[0], nodes[i+1].inputs[0])
             placer.nt.links.new(sep.outputs[1], nodes[0].inputs[0])
             placer.nt.links.new(nodes[4].outputs[0], cmb.inputs[1])
-            
+
             nodes[0].operation = 'MODULO'
             nodes[0].inputs[1].default_value = 2
             nodes[1].operation = 'LESS_THAN'
@@ -283,7 +283,7 @@ class NodePlacer:
         self.spacing = spacing
         self.is_vert = vertical
         self.rows = [[] for _ in range(nrows)]
-        
+
     def add(self, nodetype, name=None, row=None):
         """adds a new node to the placer (and to the nodetree)"""
         node = self.nt.nodes.new(nodetype)
@@ -292,14 +292,14 @@ class NodePlacer:
             node.label = name
         if self.frame:
             node.parent = self.frame
-                
+
         if row is not None:
             self.rows[row].append(node)
         else:  # all rows
             for r in self.rows:
                 r.append(node)
         return node
-    
+
     def update(self):
         """updates the placing for all registered nodes"""
         # first, update "vertical" row size (and store max ro length)
@@ -311,7 +311,7 @@ class NodePlacer:
                 max_y = min(max_y, self.getend_c2(node))  # use minimum for y!
             for node in self.rows[i]:
                 node.location[int(not self.is_vert)] = max_y - self.spacing
-        
+
         # update "horizontal" position
         # that means column per columns, but all rows might not
         # have the same size
@@ -324,16 +324,16 @@ class NodePlacer:
                     new_position = max(new_position, self.getend_c1(r[i]))
             prev_position = new_position + self.spacing
         # TODO: slight problem if a multi_row node is large and at different positions in rows
-        
+
         # update frame dimentions
         if self.frame is None:
             return  # next part is useless if there is no frame
-        
+
         max_y = 0
         for node in self.rows[-1]:
             if len(r):
                 max_y = max(max_y, self.getend_c2(node))
-        max_x = 0 
+        max_x = 0
         for r in self.rows:
             if len(r):
                 max_x = max(max_x, self.getend_c1(r[-1]))
@@ -343,16 +343,16 @@ class NodePlacer:
         else:
             self.frame.width = max_x + 60
             self.frame.height = max_y + 60  # this is native frame padding
-            
+
     def reappend(self, node):
         for r in self.rows:
             if node in r:
                 r.remove(node)
                 r.append(node)
-    
+
     def __del__(self):
         self.update()  # make a last layout change before closing
-            
+
     def getend_c1(self, node):
         """returns 'end' of a node, with its first coordinate (usually x)"""
         if self.is_vert:
@@ -380,7 +380,7 @@ def getAlphaCompare(ac):
         b=True
     else:
         return 'default'
-    
+
     if ac.alphaOp == 0:
         return not (a and b)
     elif ac.alphaOp==1:
@@ -394,7 +394,7 @@ class MaterialSpace:
     """holds reused variables for code->node system conversion"""
     def __init__(self, nodetree):
         self.nt = nodetree
-        
+
         self.finalcolorc = Holder()
         self.finalcolora = Holder()
         self.vertexcolorc = Holder()
@@ -413,7 +413,7 @@ class MaterialSpace:
         self.textures = [None]*8
 
         self.konsts = [None]*8
-        
+
         self.placer = NodePlacer(self.nt)
 
 
@@ -623,7 +623,7 @@ class MaterialSpace:
             #    node = nodetree.nodes.new('ShaderNodeVectorMath')
             #    node.operation = op_str
             #    self.nt.links.new(mix_out, node.inputs[0])
-            #    
+            #
             #    if self.inputs[1].type != 'val':  # vector values DO exist here
             #    in_b = self.inputs[1].export(self.nt)
             #        self.nt.links.new(in_b, node.inputs[1])
@@ -636,8 +636,25 @@ class MaterialSpace:
             return
 
         elif op >= 8 and op <= 0xd:
-            log.warning('as_int color comparaison is not supported yet.')
-            dest.data = None
+            log.warning('as_int color comparaison is not supported yet. Using bland mixing instead')
+            if type==0:  # color
+                nodegroup = get_mixgroup('C')
+                node = placer.add('ShaderNodeGroup', row=0)
+                node.node_tree = nodegroup
+
+                makelink(self.nt, Color((0.5,0.5,0.5)), node.inputs[0])
+                makelink(self.nt, ins[2], node.inputs[1])
+                makelink(self.nt, ins[3], node.inputs[2])
+            else:  # alpha
+                nodegroup = get_mixgroup('A')
+                node = placer.add('ShaderNodeGroup', row=1)
+                node.node_tree = nodegroup
+
+                makelink(self.nt, 0.5, node.inputs[0])
+                makelink(self.nt, ins[2], node.inputs[1])
+                makelink(self.nt, ins[3], node.inputs[2])   
+            dest.data = node.outputs[0]
+            mix_out = node.outputs[0]
             return
             if type == 0:
                 pass
@@ -645,9 +662,9 @@ class MaterialSpace:
 
                 # if op >= 0xa:
                 #     out << "dot(";
-        
+
                 # out << ins[0]
-                
+
                 # switch(op)
                 # {
                 # case 8:
@@ -670,7 +687,7 @@ class MaterialSpace:
                 #     out << "dot(";
 
                 # out << ins[1];
-                
+
                 # switch(op)
                 # {
                 # case 8:
@@ -737,10 +754,10 @@ class MaterialSpace:
 
         # create color and link
         makelink(self.nt, self.finalcolorc.data, mat_node.inputs[0])
-        
+
         # create alpha and link
         # alpha testing!!
-        
+
         if self.ac_const == 'default' or True:
             makelink(self.nt, self.finalcolora.data, mix_node.inputs[0])  # amount of alpha
         elif self.ac_const == True:  # discard
@@ -792,7 +809,7 @@ def makeTexCoords(material, texGen, i, matbase, mat3, data_placer):
             local_placer.reappend(combine)
             mul_u.operation = mul_v.operation = 'MULTIPLY'
             add_u.operation = add_v.operation = 'ADD'
-            
+
             mul_u.inputs[1].default_value = tmi.scaleU
             mul_v.inputs[1].default_value = tmi.scaleV
             add_u.inputs[1].default_value = (tmi.scaleCenterX*(1 - tmi.scaleU))
@@ -804,7 +821,7 @@ def makeTexCoords(material, texGen, i, matbase, mat3, data_placer):
             material.nt.links.new(mul_v.outputs[0], add_v.inputs[0])
             material.nt.links.new(add_u.outputs[0], combine.inputs[0])
             material.nt.links.new(add_v.outputs[0], combine.inputs[1])
-            
+
             makelink(material.nt, dst, sep.inputs[0])
             dst = combine.outputs[0]
 
@@ -837,11 +854,11 @@ def makeTexCoords(material, texGen, i, matbase, mat3, data_placer):
 def createMaterialSystem(matBase, mat3, tex1, texpath, extension, nt):
     """converts the data from a materialBase object to a blender node tree"""
     # ### vertex shader part:
-    
+
     # ## first, delete existing nodes from tree
     while len(nt.nodes):
         nt.nodes.remove(nt.nodes[0])
-    
+
     # ## then start preparing the material 'namespace'
     material = MaterialSpace(nt)
     if matBase.chanControls[0] < len(mat3.colorChanInfos):
@@ -851,7 +868,7 @@ def createMaterialSystem(matBase, mat3, tex1, texpath, extension, nt):
 
     data_placer = NodePlacer(nt, material.placer.add('NodeFrame', 'data'), 30, False,
                              3 + mat3.texGenCounts[matBase.texGenCountIndex])
-    
+
     # missing light enabeling, seems so.
     if mat3.colorChanInfos[matBase.chanControls[0]].matColorSource == 1:
         node = data_placer.add('ShaderNodeAttribute', row=0)
@@ -872,7 +889,7 @@ def createMaterialSystem(matBase, mat3, tex1, texpath, extension, nt):
         # XCX manage light better
         pass
         # material.vertexcolorc.data = material.vertexcolorc.data * Color((0.5, 0.5, 0.5))
-        
+
         # # material.vertexcolora.data = material.vertexcolora.data * 0.5
         # # if matBase.color2[0] != 0xffff and matBase.color2[0] < len(mat3.color2):
         # #     amb = mat3.color2[matBase.color2[0]]
@@ -945,7 +962,7 @@ def createMaterialSystem(matBase, mat3, tex1, texpath, extension, nt):
     for i in range(mat3.tevCounts[matBase.tevCountIndex]):
         order = mat3.tevOrderInfos[matBase.tevOrderInfo[i]]
         stage = mat3.tevStageInfos[matBase.tevStageInfo[i]]
-        
+
         local_frame = material.placer.add('NodeFrame', 'tevStage %d' % i)
         local_placer = NodePlacer(material.nt, local_frame, 60, False, 2)
 
@@ -963,7 +980,7 @@ def createMaterialSystem(matBase, mat3, tex1, texpath, extension, nt):
         print(end='')
         material.getOp(stage.alphaOp, stage.alphaBias, stage.alphaScale,
                        stage.alphaClamp, stage.alphaRegId, alphaIns, 1, local_placer)
-        
+
         local_placer.update()
 
     material.ac_const = getAlphaCompare(mat3.alphaCompares[matBase.alphaCompIndex])
