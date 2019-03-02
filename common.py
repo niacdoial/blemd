@@ -100,7 +100,7 @@ def SubProcCall(exefile, args, startpath=os.getcwd()):
 
     if sys.platform[:3].lower() == "win":  # windows: use EXE
         exefile += '.exe'
-        
+
     elif sys.platform == 'linux':
         exefile += '.lin'
     else:
@@ -161,6 +161,18 @@ def getFiles(wc_name):
             returnable.append(os.path.join(path, com))
     return returnable
 
+def dedup_lines(string):
+    lines = {}  # dict: {line: count}
+
+    for line in string.split('\n'):
+        line = line + ' (x{:d})\n'
+        lines[line] = dict_get_set(lines, line, 0) + 1
+
+    dest=""
+    for line in lines.keys():
+        dest += line.format(lines[line])
+
+    return dest
 
 
 class Prog_params:
@@ -181,5 +193,5 @@ class Prog_params:
         self.validate_mesh = validate_mesh
         # secondary parameters (computed later on)
         self.createBones = True
-        
+
 GLOBALS = None  # will hold a Prog_params instance

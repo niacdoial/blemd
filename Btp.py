@@ -1,6 +1,7 @@
 #! /usr/bin/python3
 from .BinaryReader import BinaryReader
 import logging
+from . import common
 log = logging.getLogger('bpy.ops.import_mesh.bmd.btp')
 
 
@@ -24,6 +25,9 @@ class MatAnim:
         self.count = br.ReadWORD()
         self.firstIndex = br.ReadWORD()
         self.unknown = br.ReadDWORD()
+        self.materialIndex = 0
+        self.materialName = ""
+        self.indices=[0] * self.count
 
 
 class BtpAnim:
@@ -35,10 +39,6 @@ class BtpAnim:
 
 
 class Btp:
-    # <variable anims>
-    # <function>
-
-    # <function>
 
     def __init__(self):  # GENERATED!
         self.anims = []
@@ -55,60 +55,57 @@ class Btp:
         stringtable = br.ReadStringTable(tpt1Offset + header.offsetToStringTable)
 
         if len(stringtable) != header.numMaterialAnims:
-            raise ValueError("Btp:LoadTPT1: number of strings (" +
-                             str(len(stringtable))+") doesn't match number" \
-                              "of animated materials (" +str(header.numMaterialAnims) + ")")
+            if common.GLOBALS.PARANOID:
+                raise ValueError("Btp:LoadTPT1: number of strings (" +
+                                str(len(stringtable))+") doesn't match number" \
+                                "of animated materials (" +str(header.numMaterialAnims) + ")")
+            else:
+                log.warning('number of strings doesn\'t match number of animated materials')
+                for i in range(header.numMaterialAnims - len(stringtable)):
+                    stringtable.append('unnamed %d' %i)
 
         # --read matAnimIndexToMat3Index table
-        matAnimIndexToMat3Index = []
+
         # -- (h.numMaterialAnims);
         br.SeekSet(tpt1Offset + header.offsetToIndexTable)
-
-        for _ in range(header.numMaterialAnims):
-            matAnimIndexToMat3Index.append(br.ReadWORD())
-        
-        # -- messagebox (matAnimIndexToMat3Index as string)
-        # --read shorts table
-        shorts = []
+        matAnimIndexToMat3Index = [br.ReadWORD() for _ in range(header.numMaterialAnims)]
         # -- (h.numShorts);
         br.SeekSet(tpt1Offset + header.offsetToShorts)
-
-        for _ in range(header.numShorts):
-            shorts.append(br.ReadWORD())
+        shorts = [br.ReadWORD() for _ in range(header.numShorts)]
 
         # --read animations
         # -- btp.self.anims.resize(h.numMaterialAnims);
         br.SeekSet(tpt1Offset + header.offsetToMatAnims)
 
+        self.anims = [None] * header.numMaterialAnims
         for i in range(header.numMaterialAnims):
             # --messageBox stringtable
             mAnim = MatAnim()
             mAnim.LoadData(br)
             # --anims[i] = anim
 
-            if mAnim.unknown != 0x00ffffff:
+            if mAnim.unknown != 0x00ffffff and common.GLOBALS.PARANOID:
                 raise ValueError(("btp: "+str(mAnim.unknown) +
                                  " instead of 0x00ffffff for mat anim nr "+str(i)))
 
-            # --anims[i].indexToMat3Table = matAnimIndexToMat3Index[i]
-            # --btp.anims[i].indices.resize(anim.count)
-            # --messageBox (matAnimIndexToMat3Index as string)
-            animaiton = ""
-            for c in shorts:
-                animaiton = animaiton + str(c) + " "
+            mAnim.materialIndex = matAnimIndexToMat3Index[i]
+            mAnim.materialName = stringtable[i]
+            mAnim.keyFrameIndexTable = shorts[mAnim.firstIndex:
+                                   mAnim.firstIndex + mAnim.count]
 
-            anim = BtpAnim()
-            anim.materialIndex = i
-            anim.materialName = stringtable[i]
-            anim.keyFrameIndexTable = shorts
-            while len(self.anims) <= i:
-                self.anims.append(None)
-            self.anims[i] = anim
+            keyframes = [(0, mAnim.keyFrameIndexTable[0] )]
+            for i, value in enumerate(mAnim.keyFrameIndexTable):
+                if value != keyframes[-1]:
+                    keyframes.append( (i, value) )
+            mAnim.keyframes = keyframes
+            mAnim.length = len(mAnim.keyFrameIndexTable)
+
+            self.anims[i] = mAnim
             # print(animaiton)
             # copy(shorts.begin() + anim.firstIndex, shorts.begin() + anim.firstIndex + anim.count,
             # btp.anims[i].indices.begin());
 
-    def LoadBTP(self, filePath):
+    def LoadBtp(self, filePath):
         br = BinaryReader()
         br.Open(filePath)
         br.SeekSet(0x20)
@@ -134,4 +131,21 @@ class Btp:
         # ) while not EOF br._f
         br.Close()
 
+def animate(btp, mat3, frame):
+    for btp_anim in btp.anims:
 
+        #for i in range(len(mat3.indexToMatIndex)):
+        #    if curr.materialName == mat3.stringtable[i]:
+        #        break
+        #else:
+        #    if common.GLOBALS.PARANOID:
+        #        raise ValueError('material to animate not found')
+        #    else:
+        #        log.warning('material to animate not found. skipping...')
+        #        continue
+        #        mat = mat3.materialbases[mat3.indexToMatIndex[i]]
+        mat = mat3.materialbases[btm_anim.materialIndex]
+        mat.texStages[0] = curr.indices[frame]
+
+# XCX: how in the world are the times known?
+# texture matrix animation?
