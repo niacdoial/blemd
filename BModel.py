@@ -441,30 +441,32 @@ class BModel:
         self.tex = Tex1.Tex1()
         self.mdl = Mdl3.Mdl3()
 
-        while strTag != "TEX1":  # "TEX1 tag is the last one every time"
+        while strTag != "TEX" and not br.is_eof():  # "TEX1 tag is the last one every time"
             br.SeekCur(iSize)
             streamPos = br.Position()
-            strTag = br.ReadFixedLengthString(4)
+            strTag = br.ReadFixedLengthString(3)
+            _ = br.GetByte()
             iSize = br.ReadDWORD()
 
+            print(strTag, chr(_))
             br.SeekSet(streamPos)
-            if strTag == "INF1":
+            if strTag == "INF":  #usually INF1
                 self.inf.LoadData(br)
-            elif strTag == "VTX1":
+            elif strTag == "VTX":  # VTX1
                 self.vtx.LoadData(br)
-            elif strTag == "SHP1":
+            elif strTag == "SHP":  # SHP1
                 self.shp.LoadData(br)
-            elif strTag == "JNT1":
+            elif strTag == "JNT":  # JNT1
                 self.jnt.LoadData(br)
-            elif strTag == "EVP1":
+            elif strTag == "EVP":  # EVP1
                 self.evp.LoadData(br)
-            elif strTag == "DRW1":
+            elif strTag == "DRW":  # DRW1
                 self.drw.LoadData(br)
-            elif strTag == "MAT3":
+            elif strTag == "MAT":  # MAT2, MAT3
                 self._mat1.LoadData(br)
-            elif strTag == "TEX1":
+            elif strTag == "TEX":  # TEX1
                 self.tex.LoadData(br)
-            elif strTag == "MDL3":
+            elif strTag == "MDL":  # MDL3
                 self.mdl.LoadData(br)
             else:
                 log.warning('Tag (%s) not recognized. Resulting mesh could be weird', strTag)
@@ -954,7 +956,7 @@ class BModel:
         self._images = common.getFiles(self._texturePath + common.SEP+"*" + imageExt)
 
         if len(self._images) == 0 or force:
-            self.TryHiddenDOSCommand("bmdview",  # DO NOT capitalize: unix-like use case-sensitive paths.
+            self.TryHiddenDOSCommand("bmdview",  # DO NOT capitalize: unix-like OSes use case-sensitive paths.
                                      [self._bmdFilePath, self._texturePath, self.params.imtype],
                                      self._bmdViewPathExe)
 
