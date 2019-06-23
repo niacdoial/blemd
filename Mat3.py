@@ -2,7 +2,7 @@ import sys
 import bpy
 import logging
 log = logging.getLogger('bpy.ops.import_mesh.bmd.matv2')
-
+from . import common
 
 def arrayresize(L, s):
     if len(L) >= s:
@@ -10,6 +10,8 @@ def arrayresize(L, s):
     else:
         if type(s) is float and int(s) == s:
             s=int(s)
+        elif type(s) is float and not common.GLOBALS.PARANOID:
+            s=int(s)+1
         L += [None]*(s-len(L))
 
 
@@ -38,9 +40,9 @@ class Mat3Header:
         # *9 - light
         # 10 - texgen counts (-> vr_back_cloud.bdl)   (indexed by MatEntry.unk[3])
         # 11 - TexGen
-        # 12 - TexGen2
+        # **12 - TexGen2
         # 13 - TexMtxInfo
-        # 14 - TexMtxInfo2
+        # **?14 - TexMtxInfo2
         # 15 - index to texture table
         # 16 - TevOrderInfo array
         # 17 - colorS10 (rgba16) (prev, c0-c2)
@@ -69,11 +71,14 @@ class Mat3Header:
         for i in range(30):
             self.offsets[i] = f.ReadDWORD()
 
-        if self.tag == "MAT2":
+        if self.tag[3] =="2":
             # //check if this is a MAT3 section (most of the time) or a MAT2 section
             # //(TODO: probably there's also a MAT1 section - find one...)
 
             # //if this is a mat2 section, convert header to a mat3 header
+            # MAT2 misses 3 sections, MAT1 misses 8 of them... find the 5 extras
+            # at least one fo them is before the corrected 14th offset (off[13]), aka the original off[10]
+            # none of them are before the string table
             for j in range(29, 0, -1):
                 t = 0
                 if j < 3:
@@ -86,6 +91,28 @@ class Mat3Header:
                     t = self.offsets[j - 3]
                 self.offsets[j] = t
 
+        if self.tag[3] =="1":
+            # //check if this is a MAT3 section (most of the time) or a MAT2 section
+            # //(TODO: probably there's also a MAT1 section - find one...)
+
+            # //if this is a mat2 section, convert header to a mat3 header
+            # MAT2 misses 3 sections, MAT1 misses 8 of them... find the 5 extras
+            # at least one fo them is before the corrected 14th offset (off[13]), aka the original off[10]
+            # none of them are before the string table
+            for j in range(29, 0, -1):
+                t = 0
+                if j < 3:
+                    t = self.offsets[j]
+                elif (j == 3 or j == 8 or j == 9 or j == 12):
+                    t = 0
+                elif j < 8:
+                    t = self.offsets[j - 1]
+                elif j < 12:
+                    t = self.offsets[j - 3]
+                else:
+                    t = self.offsets[j - 4]
+                self.offsets[j] = t
+
 
 class MColor:
     def __init__(self, rr=0, gg=0, bb=0, aa=1):
@@ -93,13 +120,13 @@ class MColor:
         self.g = gg
         self.b = bb
         self.a = aa
-    
+
     def LoadData(self, br):
         self.r = br.GetByte()
         self.g = br.GetByte()
         self.b = br.GetByte()
         self.a = br.GetByte()
-        
+
     def LoadDataS(self, br):
         self.r = br.GetSHORT()
         self.g = br.GetSHORT()
@@ -146,7 +173,7 @@ class ColorChanInfo:
         self.litMask = 0
         self.attenuationFracFunc = 0
         self.diffuseAttenuationFunc = 0
-    
+
     def LoadData(self, br):
         self.ambColorSource = br.GetByte()
         self.matColorSource = br.GetByte()
@@ -163,7 +190,7 @@ class TexGenInfo:
         self.texGenSrc = 0
         self.matrix = 0
         self.pad = 0
-    
+
     def LoadData(self, br):
         self.texGenType = br.GetByte()
         self.texGenSrc = br.GetByte()
@@ -196,7 +223,7 @@ class TexMtxInfo:
         for j in range(16):  # //nearly always an 4x4 identity matrix
             self.f3[j] = br.GetFloat()
 
-            
+
 class TevStageInfo:
     def __init__(self):
         # //GX_SetTevColorIn() arguments
@@ -239,14 +266,14 @@ class TevStageInfo:
 
         self.unk2 = br.GetByte()
 
-      
+
 class TevOrderInfo:
     def __init__(self):
         self.texCoordId = 0  # U8s
         self.texMap = 0
         self.chanId = 0
         self.pad = 0
-    
+
     def LoadData(self, br):
         self.texCoordId = br.GetByte()
         self.texMap = br.GetByte()
@@ -322,7 +349,7 @@ class MatIndirectTexturingEntry:
             for m in range(6):
                 self.unk4[k].unk[m] = br.ReadWORD()
 
-                
+
 class AlphaCompare:
     def __init__(self):
         self.comp0 = 0  # U8s
@@ -331,7 +358,7 @@ class AlphaCompare:
         self.comp1 = 0
         self.ref1 = 0
         self.pad = [0] * 3  # //??
-    
+
     def LoadData(self, br):
         self.comp0 = br.GetByte()
         self.ref0 = br.GetByte()
@@ -341,7 +368,7 @@ class AlphaCompare:
         self.pad = [br.GetByte(),
                      br.GetByte(),
                      br.GetByte()]
-        
+
 
 class BlendInfo:
     def __init__(self):
@@ -349,7 +376,7 @@ class BlendInfo:
         self.srcFactor = 0
         self.dstFactor = 0
         self.logicOp = 0
-        
+
 
 class ZMode:
     def __init__(self):
@@ -359,7 +386,7 @@ class ZMode:
         self.enable_raw = 0  # U8s
         self.enableUpdate_raw = 0
         self.pad = 0  # //(ref val?)
-    
+
     def LoadData(self, br):
         self.enable_raw = br.GetByte()
         self.enable = self.enable_raw != 0
@@ -368,7 +395,7 @@ class ZMode:
         self.enableUpdate = self.enableUpdate_raw != 0
         self.pad = br.GetByte()
 
-        
+
 class FogInfo:
     def __init__(self):
         self.fogType = 0  # U8s
@@ -383,7 +410,7 @@ class FogInfo:
         self.color = None  # //Mcolor
         self.adjTable = [0] * 10  # //U16s ????
 
-        
+
 class MaterialBase:
     def __init__(self):
         self.flag = 0  # U8s
@@ -423,7 +450,7 @@ class MaterialBase:
 
         self.unknown6 = [0] * 12
         self.indices2 = [0] * 4
-        
+
         self.material = None  # cached result to avoid unnecessary calculations
 
     def LoadData(self, br, isMat2):
@@ -437,7 +464,7 @@ class MaterialBase:
         self.unk1 = br.GetByte()  # index into matData6 (?)
         self.zModeIndex = br.GetByte()
         self.unk2 = br.GetByte()  # index into matData7 (?)
-        
+
         # (still missing stuff: isDirect, zCompLoc,
         # enable/disable blend alphatest depthtest, ...)
 
@@ -466,7 +493,7 @@ class MaterialBase:
             self.dttMtxInfos[j] = br.ReadWORD()  # 'dttMatrices'
         for j in range(8):  # indices into textureTable
             self.texStages[j] = br.ReadWORD()
-            
+
         # constColor (GX_TEV_KCSEL_K0-3)
         for j in range(4):  # direct index
             self.color3[j] = br.ReadWORD()
@@ -500,7 +527,7 @@ class MaterialBase:
         self.blendIndex = self.indices2[2]
         # 3 - nbt scale?
 
-        
+
 g_defaultIndirectEntry = MatIndirectTexturingEntry()
 
 
@@ -538,6 +565,7 @@ class Mat3:
 
         self.texGenCounts = []  # u8
         self.texGenInfos = []  # TexGenInfo
+        self.texGenInfos2 = []
         self.texMtxInfos = []  # TexMtxInfo
 
         self.texStageIndexToTextureIndex = []  # int
@@ -563,6 +591,7 @@ class Mat3:
         h = Mat3Header()
         h.LoadData(f)
 
+        isMat1 = (h.tag == 'MAT1')
         isMat2 = (h.tag == 'MAT2')
         if isMat2:
             log.info("Model contains MAT2 block instead of MAT3")
@@ -585,6 +614,7 @@ class Mat3:
         f.SeekSet(mat3Offset + h.offsets[1])
         maxIndex = 0
         arrayresize(dst.indexToMatIndex, h.count)
+        print("off[1](raw):", lengths[1], 'vs', h.count)
         for i in range(h.count):
             bla = f.ReadWORD()
             maxIndex = max(maxIndex, bla)
@@ -593,6 +623,7 @@ class Mat3:
         # //offset[4] (cull mode)
         f.SeekSet(mat3Offset + h.offsets[4])
         arrayresize(dst.cullModes, lengths[4] / 4)
+        print("off[4]:", lengths[4]/4)
         for i in range(len(dst.cullModes)):
             tmp = f.ReadDWORD()
             dst.cullModes[i] = tmp
@@ -600,6 +631,7 @@ class Mat3:
         # //offset[5] (color1)
         f.SeekSet(mat3Offset + h.offsets[5])
         arrayresize(dst.color1, lengths[5] / 4)
+        print("off[5]:", lengths[5]/4, '(4)')
         for i in range(len(dst.color1)):
             dst.color1[i] = MColor()
             dst.color1[i].LoadData(f)
@@ -607,6 +639,7 @@ class Mat3:
         # //offset[6] (numChans)
         f.SeekSet(mat3Offset + h.offsets[6])
         arrayresize(dst.numChans, lengths[6])
+        print("off[6]:", lengths[6], '(1)')
         for i in range(lengths[6]):
             dst.numChans[i] = f.GetByte()
         # fread(&dst.numChans[0], 1, lengths[6], f);
@@ -614,14 +647,16 @@ class Mat3:
         # //offset[7] (colorChanInfo)
         f.SeekSet(mat3Offset + h.offsets[7])
         arrayresize(dst.colorChanInfos, lengths[7] / 8)
+        print("off[7]:", lengths[7]/8, '(8)')
         for i in range(len(dst.colorChanInfos)):
             dstInfo = ColorChanInfo()
             dstInfo.LoadData(f)
             dst.colorChanInfos[i] = dstInfo
-            
+
         # //offset[8] (color2)
         f.SeekSet(mat3Offset + h.offsets[8])
         arrayresize(dst.color2, lengths[8] / 4)
+        print("off[8]:", lengths[8]/4, '(4)')
         for i in range(len(dst.color2)):
             dst.color2[i] = MColor()
             dst.color2[i].LoadData(f)
@@ -629,6 +664,7 @@ class Mat3:
         # //offset[0] (MatEntries)
         f.SeekSet(mat3Offset + h.offsets[0])
         arrayresize(dst.materialbases, maxIndex + 1)
+        print("off[0](raw):", lengths[0], 'vs', maxIndex + 1)
         for i in range(maxIndex + 1):
             # //(this assumes that init has already been endian-fixed [?!])
             dstMat = dst.materialbases[i]
@@ -636,11 +672,12 @@ class Mat3:
                 dstMat = MaterialBase()
                 dst.materialbases[i] = dstMat
             dstMat.LoadData(f, isMat2)
-            
+
 
         # //offset[3] indirect texturing blocks (always as many as count)
         # assert (sizeof(bmd::MatIndirectTexturingEntry) == 312)
         f.SeekSet(mat3Offset + h.offsets[3])
+        print("off[3]:", lengths[3]/312, '(312)')
         if lengths[3] % 312 != 0:
             log.warning("indirect texturing block size no multiple of 312: %d", lengths[3])
         elif lengths[3] // 312  != h.count:
@@ -656,6 +693,7 @@ class Mat3:
 
         # //offsets[10] (read texGenCounts)
         f.SeekSet(mat3Offset + h.offsets[10])
+        print("off[10]:", lengths[10], '(1)')
         arrayresize(dst.texGenCounts, lengths[10])
         for i in range(len(dst.texGenCounts)):
             dst.texGenCounts[i] = f.GetByte()
@@ -663,9 +701,18 @@ class Mat3:
         # //offsets[11] (texGens)
         f.SeekSet(mat3Offset + h.offsets[11])
         arrayresize(dst.texGenInfos, lengths[11] / 4)
+        print("off[11]:", lengths[11]/4, '(4)')
         for i in range(len(dst.texGenInfos)):
             dst.texGenInfos[i] = TexGenInfo()
             dst.texGenInfos[i].LoadData(f)
+
+        # //offsets[12] (texGens2)
+        f.SeekSet(mat3Offset + h.offsets[12])
+        arrayresize(dst.texGenInfos2, lengths[12] / 4)
+        print("off[12]:", lengths[12]/4, '(4)')
+        for i in range(len(dst.texGenInfos2)):
+            dst.texGenInfos2[i] = TexGenInfo()
+            dst.texGenInfos2[i].LoadData(f)
 
         # //offset[13] (texmtxinfo debug)
         if (lengths[13] % (100) != 0):
@@ -673,6 +720,7 @@ class Mat3:
 
         # //offsets[13] (read texMtxInfo)
         f.SeekSet(mat3Offset + h.offsets[13])
+        print("off[13]:", lengths[13]/100, '(100)')
         arrayresize(dst.texMtxInfos, lengths[13] / 100)
         for i in range(len(dst.texMtxInfos)):
             dstInfo = TexMtxInfo()
@@ -691,6 +739,7 @@ class Mat3:
         # //offsets[15] (read texTable)
         f.SeekSet(mat3Offset + h.offsets[15])
         texLength = lengths[15]
+        print("off[15]:", lengths[15]/2, '(2)')
         arrayresize(dst.texStageIndexToTextureIndex, texLength / 2)
         for i in range(texLength // 2):
             index = f.ReadWORD()

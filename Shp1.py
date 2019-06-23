@@ -6,9 +6,9 @@ log = logging.getLogger('bpy.ops.import_mesh.bmd.shp1')
 """
 Okay.
 Mesh structure:
-Batches define the attributes that can be contained in them (see ShpAttributes)
+Batches list the attributes that are defined for every loop contained in them (see ShpAttributes)
 Packets define the relative weights
-Primitives contain loops (`ShpIndex`es)
+Primitives contain `ShpIndex`es, aka blender loops
 """
 
 
@@ -194,7 +194,7 @@ class ShpAttributes:
 
 class ShpBatch:
     def __init__(self):  # GENERATED!
-        self.attribs = None  # ShpAttributes
+        self.attribs = ShpAttributes()
         self.packets = None
 
 
@@ -496,9 +496,7 @@ class Shp1:
             packetLoc = Shp1PacketLocation()
             # created here, will be completed at primitive write time
 
-
             # packetLoc.offset = bw.Position() - baseOffset - header.offsetData
-
             # bw.SeekSet(baseOffset + header.offsetData + packetLoc.offset)
             # packetLoc.packetSize = packet.DumpPacketPrimitives(attribs, bw)
 
@@ -544,7 +542,6 @@ class Shp1:
 
             # -- TODO: check code
             dstBatch = ShpBatch()
-            dstBatch.attribs = ShpAttributes()
             self.batches.append(dstBatch)
 
             # --Batch& dstBatch = dst.batches[i]; dst = this

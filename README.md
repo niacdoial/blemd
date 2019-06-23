@@ -3,12 +3,11 @@ this project was for goal to import nintendo GC/Wii ".bmd" 3D models,
 using blender (blender.org)
 
 
-<h4>
-HOW TO USE: *this section was too long, and moved to MANUAL.md*
-</h4>
+### HOW TO USE: *this section was too long, and moved to MANUAL.md*
 
+### project structure, and advice for anyone willing to tinker with the code: see dev_notes.md
 
-**HISTORY:**
+### HISTORY:
 His history is long, and incredibly hard to trace.
 
 It started with BMD Viewer and BMDview2, from YAZ0 (just where is this person's home page?), in C++
@@ -32,13 +31,13 @@ http://emutalk.net/showthread.php?t=26919 (part 2).
 ```
 Oh, and it is here (http://www.vg-resource.com/thread-21121.html) too.
 
-then, because the exportation war really lossy, there was MaxBMD, a MaxScript variation that used 3dsMax from Autodesk.
+then, because the exportation was really lossy, there was MaxBMD, a MaxScript variation that used 3dsMax from Autodesk.
 It was based on bmdview2pre3 by thakis (homepage at http://amnoid.de/gc/ download source at http://www.emutalk.net/showthread.php?t=26919&page=39)
-it still had a lot of bugs, and a HELL lot of different branches. Plus this software is expensive. And it was really uneasy to debug.
+it still had a lot of bugs, and a HELL lot of different branches. Plus 3dsMax is expensive, And (from my perspective) maxscript is hard to debug due to the need to reboot 3dsMax after each modification.
 the discussion is here: http://www.emutalk.net/threads/44490
 
 It was then adapted by Niacdoial (me) from Avatarus-One's version on Github(https://github.com/Avatarus-one/MaxBMD/)
 and a bit of the latest BMDView2 program (and planning to use more of it for better materials)
-to use blender instead (plus, it is a python plug-in, so that language is far easier to debug)
+to use blender instead (plus, it is a python plug-in, so that language is far easier to debug, and robust IDEs exist)
 
-Finally, the current verion (BleMD) is part of a no-admin-needed pipeline (if you have the right C++ libraries (most PCs do)?)
+Finally, the current verion (BleMD) is part of a no-admin-needed pipeline (if you have the right C++ libraries (most PCs do))
