@@ -8,7 +8,7 @@ using blender (blender.org)
 ### project structure, and advice for anyone willing to tinker with the code: see dev_notes.md
 
 ### HISTORY:
-His history is long, and incredibly hard to trace.
+The history of this plugin is long, and incredibly hard to trace.
 
 It started with BMD Viewer and BMDview2, from YAZ0 (just where is this person's home page?), in C++
 
@@ -31,10 +31,10 @@ http://emutalk.net/showthread.php?t=26919 (part 2).
 ```
 Oh, and it is here (http://www.vg-resource.com/thread-21121.html) too.
 
-then, because the exportation was really lossy, there was MaxBMD, a MaxScript variation that used 3dsMax from Autodesk.
+then, because the exportation was really lossy, MaxBMD, a MaxScript variation that used 3dsMax from Autodesk, was created.
 It was based on bmdview2pre3 by thakis (homepage at http://amnoid.de/gc/ download source at http://www.emutalk.net/showthread.php?t=26919&page=39)
-it still had a lot of bugs, and a HELL lot of different branches. Plus 3dsMax is expensive, And (from my perspective) maxscript is hard to debug due to the need to reboot 3dsMax after each modification.
-the discussion is here: http://www.emutalk.net/threads/44490
+it still had a lot of bugs, and a LOT of different branches. Plus 3dsMax is expensive, And (from my perspective) maxscript is hard to debug due to the need to reboot 3dsMax (a several-minutes process) after each modification.
+the discussion where it originaly(?) appeared is here: http://www.emutalk.net/threads/44490
 
 It was then adapted by Niacdoial (me) from Avatarus-One's version on Github(https://github.com/Avatarus-one/MaxBMD/)
 and a bit of the latest BMDView2 program (and planning to use more of it for better materials)
