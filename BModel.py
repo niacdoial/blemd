@@ -348,8 +348,11 @@ class BModel:
                         if isinstance(bone.parent.fget(), PBones.Pseudobone):
                             realbone.parent = arm.edit_bones[bone.parent.fget().name.fget()]
                         realbone.head.xyz = bone.position.xzy
-                        realbone.tail.xyz = bone.endpoint.xzy
                         realbone.head.y *= -1
+                        if common.GLOBALS.naturalBones and len(bone.children)==1:
+                            realbone.tail.xyz = bone.children[0].position.xzy
+                        else:
+                            realbone.tail.xyz = bone.endpoint.xzy
                         realbone.tail.y *= -1
                         realbone.align_roll(bone.get_z())  # get_z translates into blender coodrinates by itself
                         modelObject.vertex_groups.new(bone.name.fget())
@@ -357,7 +360,7 @@ class BModel:
                     if len(self.vertexMultiMatrixEntry) != len(self.model.vertices):
                         log.error("Faulty multimatrix skin interpolation")
                         raise ValueError("E")  # for now, this cannot be avoided
-                    if self.params.createBones:
+                    if common.GLOBALS.createBones:
                         # XCX should not need this
                         for idx in range(len(self.vertexMultiMatrixEntry)):
                             if self.vertexMultiMatrixEntry[idx] is None:
@@ -1021,16 +1024,16 @@ class BModel:
         print("</TextureAnimation>", file=fBTP)
         fBTP.close()
 
-    def Import(self, filename, use_nodes, imtype, packTextures, allowTextureMirror, loadAnimations, includeScaling,
-               forceCreateBones, boneThickness, dvg, val_msh=False, prefer_crashes=False):
-        self.params = common.Prog_params(filename, boneThickness, allowTextureMirror, forceCreateBones,
-                                  loadAnimations != 'DONT', loadAnimations,
-                                  packTextures,  includeScaling, imtype, dvg,
-                                  use_nodes, val_msh, prefer_crashes)
+    def Import(self, filename, **kw):  # imtype, packTextures, allowTextureMirror, loadAnimations, naturalBones, includeScaling,
+               # forceCreateBones, boneThickness, dvg, val_msh=False, prefer_crashes=False):
+        self.params = common.Prog_params(filename, **kw)# boneThickness, allowTextureMirror, forceCreateBones,
+                                  #loadAnimations != 'DONT', loadAnimations, naturalBones,
+                                  #packTextures,  includeScaling, imtype, dvg,
+                                  #use_nodes, val_msh, prefer_crashes)
         common.GLOBALS = self.params
         # depending on the material settings, we might switch to cycles.
         # XCX make it better
-        if use_nodes:
+        if common.GLOBALS.use_nodes:
             bpy.context.scene.render.engine = 'CYCLES'
         else:
             bpy.context.scene.render.engine = 'BLENDER_RENDER'
