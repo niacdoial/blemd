@@ -176,21 +176,22 @@ def dedup_lines(string):
 
 
 class Prog_params:
-    def __init__(self, filename, boneThickness, allowTextureMirror, forceCreateBones, loadAnimations, animationType,
-                 packTextures, includeScaling, imtype, dvg, use_nodes=False, validate_mesh=False, prefer_crashes=False):
+    def __init__(self, filename, boneThickness, mir_tx, frc_cr_bn, sv_anim,
+                 tx_pck, ic_sc, imtype, dvg=False, nat_bn=False, use_nodes=False, val_msh=False, paranoia=False):
         self.filename = filename
         self.boneThickness = boneThickness
-        self.allowTextureMirror = allowTextureMirror
-        self.forceCreateBones = forceCreateBones
-        self.loadAnimations = loadAnimations
-        self.animationType = animationType
-        self.packTextures = packTextures
-        self.includeScaling = includeScaling
+        self.allowTextureMirror = mir_tx
+        self.forceCreateBones = frc_cr_bn
+        self.loadAnimations = sv_anim != 'DONT' and not nat_bn
+        self.animationType = sv_anim if self.loadAnimations else 'DONT'
+        self.naturalBones = nat_bn
+        self.packTextures = tx_pck
+        self.includeScaling = ic_sc
         self.imtype = imtype
         self.DEBUGVG = dvg
-        self.PARANOID = prefer_crashes
+        self.PARANOID = paranoia
         self.use_nodes = use_nodes
-        self.validate_mesh = validate_mesh
+        self.validate_mesh = val_msh
         # secondary parameters (computed later on)
         self.createBones = True
 

@@ -122,6 +122,12 @@ class ImportBmd(Operator, ImportHelper):
         default=False
     )
 
+    nat_bn = BoolProperty(
+        name="use natural bone placement",
+        description="make any animation bone with a single child animation bone point towards it.\n(WARNING: discards animations)",
+        default=False
+    )
+
     mir_tx = BoolProperty(
         name="Allow mirrored textures",
         description="",
@@ -181,6 +187,9 @@ class ImportBmd(Operator, ImportHelper):
         default=False
     )
 
+    ALL_PARAMS = ['use_nodes', 'imtype', 'tx_pck', 'mir_tx', 'sv_anim',
+                  'nat_bn', 'ic_sc', 'frc_cr_bn', 'boneThickness', 'dvg', 'val_msh', 'paranoia']
+
     def execute(self, context):
         global log_out
         retcode = 'FINISHED'
@@ -189,8 +198,7 @@ class ImportBmd(Operator, ImportHelper):
         print(__file__)
         try:
             temp.SetBmdViewExePath(path + common.SEP)  # add 'backslash' for good measure
-            temp.Import(self.filepath, self.use_nodes, self.imtype, self.tx_pck, self.mir_tx,
-                        self.sv_anim, self.ic_sc, self.frc_cr_bn, self.boneThickness, self.dvg, self.val_msh, self.paranoia)
+            temp.Import(filename=self.filepath, **{x: getattr(self, x) for x in self.ALL_PARAMS})
         except Exception as err:
             log.critical('An error happened. If it wasn\'t reported before, here it is: %s', err)
             retcode = 'ERROR'
