@@ -6,9 +6,7 @@ summary:
 - How are the imaged handled?
 - Settings and misc. troubleshooting
 
-
-
-### how to install?
+## how to install?
 
 To install BleMD, you first need to have blender itself installed (from blender.org).
 I recommend version 2.77 or better, but there is *no* support for version 2.80 for now.
@@ -32,9 +30,7 @@ then enable it using the checkbox to the right of the tile representing the addo
 
 Finally, click on `save user settings` for the addon to be loaded in future blender utilisations.
 
-
-
-### How to obtain a `.bmd` file from a game (with the use of other tools)?
+## How to obtain a `.bmd` file from a game (with the use of other tools)?
 
 First, you will need a file that contains the entire game
 (you can do it by using this method (http://wiibrew.org/wiki/CleanRip) if you have a Wii and bought a game:
@@ -55,9 +51,7 @@ Then, with blender on your PC, and BleMD 'installed', you have two methods:
 and, if you want to, change the options in the bottom-left corner.
 - Otherwise, you can use the automated-converter. More instructions are given in the corresponding subfolder.
 
-
-
-### How are the the animations handled?
+## How are the the animations handled?
 
 The first thing you need to know is that animations are *not stored in the* `.bmd` *file,
 and there might be multiple animation files.* (`.bck` usually).
@@ -79,9 +73,7 @@ Therefor, this program will only detect them if directory structure of the origi
 
 *animations can be excluded from import* if you move them from this spot or change the file extention.
 
-
-
-### How are the images handled?
+## How are the images handled?
 Unlike everything else in the `bmd` file, images first have to be written elsewhere to be used, and this is done by
 a small program, included with the BleMD "core". However, this small program is an exe file, meaning that it only works on windows.
 
@@ -95,7 +87,7 @@ switching from one to the other help fix some problems.
 
 
 
-### Misc. troubleshooting
+## Misc. troubleshooting
 
 There are two systems put in place to look at the program's logs:
 - one will only record warnings and errors, and will show up as a pop-up when the plugin finishes.
