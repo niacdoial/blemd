@@ -51,8 +51,8 @@ If you're not using Windows, use this instead: https://github.com/tpwrules/ARCTo
 to run it, you will need the Python 2.  (https://www.python.org/downloads/release/python-278/)
 ```bash
 # Extract .arc/.rarc
-python2 ARCTool.py <.arc/.rarc>
-# It will extract to <original.(r)arc>.extracted/
+python2 ARCTool.py <.arc/.rarc> [-o OutputDirectoryName]
+# If you didn't specify output name, it will extract to <original.(r)arc>.extracted/
 ```
 
 Then, with blender on your PC, and BleMD 'installed', you have two methods:
