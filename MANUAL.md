@@ -49,7 +49,11 @@ to run it, you will need the 32 bit Microsoft Visual C++ 2005 Redistributable Pa
 don't panic, quite a lot of PCs have it.
 If you're not using Windows, use this instead: https://github.com/tpwrules/ARCTool
 to run it, you will need the Python 2.  (https://www.python.org/downloads/release/python-278/)
-
+```bash
+# Extract .arc/.rarc
+python2 ARCTool.py <.arc/.rarc>
+# It will extract to <original.(r)arc>.extracted/
+```
 
 Then, with blender on your PC, and BleMD 'installed', you have two methods:
 - You can open blender, and use `file->import->nintendo BMD`. Then select the correct file with the file explorer
