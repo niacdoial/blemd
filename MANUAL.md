@@ -16,8 +16,10 @@ Once blender is installed (or at least unzipped), you will need to put the conte
 For this, download the contents of the repository in a zip file, and put the folder inside it into one of the following paths:
 - `"<path to blender>/2.XX/scripts/addons_contrib/"`
 - `"<path to blender>/2.XX/scripts/addons/"`
-- `"C:/Users/<name>/AppData/Roaming/Blender Foundation/blender/2.XX/scripts/addons_contrib/"`
-- `"C:/Users/<name>/AppData/Roaming/Blender Foundation/blender/2.XX/scripts/addons/"`
+- `~/.config/blender/2.XX/scripts/addons_contrib/"` (GNU/Linux)
+- `~/.config/blender/2.XX/scripts/addons/"` (GNU/Linux)
+- `"C:/Users/<name>/AppData/Roaming/Blender Foundation/blender/2.XX/scripts/addons_contrib/"` (Windows)
+- `"C:/Users/<name>/AppData/Roaming/Blender Foundation/blender/2.XX/scripts/addons/"` (Windows)
 
 (note : you might need to run blender to access those two last paths.)
 
@@ -33,18 +35,21 @@ Finally, click on `save user settings` for the addon to be loaded in future blen
 ## How to obtain a `.bmd` file from a game (with the use of other tools)?
 
 First, you will need a file that contains the entire game
-(you can do it by using this method (http://wiibrew.org/wiki/CleanRip) if you have a Wii and bought a game:
+(you can do it by using this method (http://wiibrew.org/wiki/CleanRip) if you have a Wii or GAMECUBE and bought a game:
 *to my knowledge, it is the only legal method, if/where it even is.*)
 
 Then, extract the contents of the game and put the result into a folder.
-Dolphin emulator (at dolphin-emu.org) does the job just fine, but you have to find the procedure to do it.
-note: If you are not your PC's admin, you will need to already have the 2015 64-bit version of
+Dolphin emulator (at https://dolphin-emu.org) does the job just fine, but you have to find the procedure to do it.
+note: If you are not your PC's admin and your PC's OS is Windows, you will need to already have the 2015 64-bit version of
 Visual c++ redistributable microsoft libraries (https://www.microsoft.com/en-us/download/details.aspx?id=48145)
 (most recent (2015+) PCs have it)
 
 Afterwards, extract the `.arc/.rarc` archives (at `/res/Object` in the game folder) with this: http://www.amnoid.de/gc/szstools.zip (a full program with docs there!)
 to run it, you will need the 32 bit Microsoft Visual C++ 2005 Redistributable Package (x86).  (http://go.microsoft.com/fwlink/?linkid=65127)
 don't panic, quite a lot of PCs have it.
+If you're not using Windows, use this instead: https://github.com/tpwrules/ARCTool
+to run it, you will need the Python 2.  (https://www.python.org/downloads/release/python-278/)
+
 
 Then, with blender on your PC, and BleMD 'installed', you have two methods:
 - You can open blender, and use `file->import->nintendo BMD`. Then select the correct file with the file explorer
@@ -79,7 +84,7 @@ a small program, included with the BleMD "core". However, this small program is 
 
 the `image importing subprocess` subfolder contains a couple versions of this file (V1 and V2 are older and might be broken),
 plus the source code, so the program can be recompiled for other platforms.
-To change the used executable, you will need to replace the one in the main folder (called `bmdview.exe`).
+To change the used executable, you will need to replace the one in the main folder (called `bmdview.exe` or `bmdview.lin`).
 
 Moreover, this small program is not aware of what exact image formats (such as `dds file/8-bit greyscale` or `tga file/256 color palette/32bit rgb+alpha`) blender can use,
 but offers you the possibility to use `.tga` or `.dds` as an image container:
