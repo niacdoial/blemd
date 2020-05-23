@@ -72,20 +72,32 @@ class ModelRepresentation:
     def toarray(self, type):
         if type == 'co':
             ret = array('f', [0.0]*3*len(self.vertices))
-            for num, com in enumerate(self.vertices):
-                ret[3*num] = com.x
-                ret[3*num+1] = -com.z
-                ret[3*num+2] = com.y
+            if common.GLOBALS.no_rot_conversion:
+                for num, com in enumerate(self.vertices):
+                    ret[3*num] = com.x
+                    ret[3*num+1] = com.y
+                    ret[3*num+2] = com.z
+            else:
+                for num, com in enumerate(self.vertices):
+                    ret[3*num] = com.x
+                    ret[3*num+1] = -com.z
+                    ret[3*num+2] = com.y
         elif type == 'loop_start':
             ret = array('i')
             for com in self.faces:
                 ret.append(com.loop_start)
         elif type == 'normal':
             ret = array('f', [0.0] * 3 * len(self.loops))
-            for num, com in enumerate(self.loops):
-                ret[3 * num] = com.normal.x
-                ret[3 * num + 1] = -com.normal.z
-                ret[3 * num + 2] = com.normal.y
+            if common.GLOBALS.no_rot_conversion:
+                for num, com in enumerate(self.loops):
+                    ret[3 * num] = com.normal.x
+                    ret[3 * num + 1] = com.normal.y
+                    ret[3 * num + 2] = com.normal.z
+            else:
+                for num, com in enumerate(self.loops):
+                    ret[3 * num] = com.normal.x
+                    ret[3 * num + 1] = -com.normal.z
+                    ret[3 * num + 2] = com.normal.y
         elif type == 'v_indexes':
             ret = array('i')
             for com in self.loops:
@@ -347,20 +359,27 @@ class BModel:
                         realbone = arm.edit_bones[bone.name.fget()]
                         if isinstance(bone.parent.fget(), PBones.Pseudobone):
                             realbone.parent = arm.edit_bones[bone.parent.fget().name.fget()]
-                        realbone.head.xyz = bone.position.xzy
-                        realbone.head.y *= -1
-                        if common.GLOBALS.naturalBones and len(bone.children)==1:
-                            realbone.tail.xyz = bone.children[0].position.xzy
+                        
+                        realbone.head.xyz = bone.position.xyz
+                        if self.params.naturalBones and len(bone.children)==1:
+                            realbone.tail.xyz = bone.children[0].position.xyz
                         else:
-                            realbone.tail.xyz = bone.endpoint.xzy
-                        realbone.tail.y *= -1
+                            realbone.tail.xyz = bone.endpoint.xyz
+                        # correct the bone rotation (or not)
+
+                        if not self.params.no_rot_conversion:
+                            realbone.head.xyz = realbone.head.xzy
+                            realbone.head.y *= -1
+                            realbone.tail.xyz = realbone.tail.xzy
+                            realbone.tail.y *= -1
+                        # TODO might need to fix this (vvv) for no_rot_conversion mode
                         realbone.align_roll(bone.get_z())  # get_z translates into blender coodrinates by itself
                         modelObject.vertex_groups.new(bone.name.fget())
 
                     if len(self.vertexMultiMatrixEntry) != len(self.model.vertices):
                         log.error("Faulty multimatrix skin interpolation")
                         raise ValueError("E")  # for now, this cannot be avoided
-                    if common.GLOBALS.createBones:
+                    if self.params.createBones:
                         # XCX should not need this
                         for idx in range(len(self.vertexMultiMatrixEntry)):
                             if self.vertexMultiMatrixEntry[idx] is None:
@@ -696,23 +715,22 @@ class BModel:
             fstartPoint = parentMatrix * f.t
 
             orientation = (Mat44.rotation_part(parentMatrix) *  # use rotation part of parent matrix
-                          Euler((f.rx, f.ry, f.rz), 'XYZ').to_matrix().to_4x4() *  # apply local rotation
-                          Vector((0, 0, -self.params.boneThickness)))
-            # computing correct bone orientation (first in BMD coords, then convert later)
+                            Euler((f.rx, f.ry, f.rz), 'XYZ').to_matrix().to_4x4())  # apply local rotation
+            
+            # the final blender bone orientation should be always "towards global Y"
+            # this position might be achieved after Y-up -> Z-up conversion, if it happens.
+            # define the pseudobone default orientation correctly (in Y-up space / BMD space)
+            if self.params.no_rot_conversion:
+                orientation = orientation *Vector((0, self.params.boneThickness, 0))
+            else:
+                orientation = orientation *Vector((0, 0, -self.params.boneThickness))
 
             bone = PBones.Pseudobone(parentBone, f, effP,
                                      fstartPoint,
                                      fstartPoint + orientation)
-
             bone.scale = (f.sx, f.sy, f.sz)
 
-            # mTransform = Euler((f.rx, f.ry, f.rz), 'XYZ').to_matrix().to_4x4() * parentMatrix
-            # (this was wrong anyway)
-
-            # bone.rotation_euler = mTransform.to_euler("XYZ")
             bone.width = bone.height = self.params.boneThickness
-
-            # bone.inverted_static_mtx = effP.inverted()
 
         for com in sg.children:
             self.CreateBones(com, effP, bone)
@@ -827,12 +845,13 @@ class BModel:
         if self.params.createBones:
             self._bones = rootBone.tree_to_array()
 
-            origWorldBonePos = self._bones[0].position  # fixed
+            origWorldBonePos = self._bones[0].position
 
             # -- easier than recalculating all bone transforms
             d = Vector()
-            self._bones[0].parent.fset(d)  # fixed
-            d.rotate(Euler((90, 0, 0), 'XZY'))
+            self._bones[0].parent.fset(d)
+            if not self.params.no_rot_conversion:
+                d.rotate(Euler((90, 0, 0), 'XZY'))
         i = Matrix.Identity(4)
 
         try:
@@ -1030,10 +1049,13 @@ class BModel:
                                   #loadAnimations != 'DONT', loadAnimations, naturalBones,
                                   #packTextures,  includeScaling, imtype, dvg,
                                   #use_nodes, val_msh, prefer_crashes)
+        
+        # provide access to parameters to other modules in this plugin. (kinda hacky solution)
         common.GLOBALS = self.params
+
         # depending on the material settings, we might switch to cycles.
         # XCX make it better
-        if common.GLOBALS.use_nodes:
+        if self.params.use_nodes:
             bpy.context.scene.render.engine = 'CYCLES'
         else:
             bpy.context.scene.render.engine = 'BLENDER_RENDER'

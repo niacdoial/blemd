@@ -128,6 +128,12 @@ class ImportBmd(Operator, ImportHelper):
         default=False
     )
 
+    no_rot_cv = BoolProperty(
+        name="disable axis conversion",
+        description="disable converting the Y-up BMD space into the Z-up blender space. (Reinforced compatibility with other BMD import tools)",
+        default=True
+    )
+
     mir_tx = BoolProperty(
         name="Allow mirrored textures",
         description="",
@@ -188,7 +194,7 @@ class ImportBmd(Operator, ImportHelper):
     )
 
     ALL_PARAMS = ['use_nodes', 'imtype', 'tx_pck', 'mir_tx', 'sv_anim',
-                  'nat_bn', 'ic_sc', 'frc_cr_bn', 'boneThickness', 'dvg', 'val_msh', 'paranoia']
+                  'nat_bn', 'ic_sc', 'frc_cr_bn', 'boneThickness', 'dvg', 'val_msh', 'paranoia', 'no_rot_cv']
 
     def execute(self, context):
         global log_out

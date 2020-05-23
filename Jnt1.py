@@ -158,7 +158,7 @@ class JntFrame:
         self.ry = (e.ry/32768. * pi)  # and we need to use radians
         self.rz = (e.rz/32768. * pi)
 
-        self.t = Vector((e.tx, e.ty, e.tz))  # translation
+        self.t = Vector((e.tx, e.ty, e.tz))  # displacement
 
         self._bbMin = e.bbMin  # is this even needed? (bounding box)
         self._bbMax = e.bbMax

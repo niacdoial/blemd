@@ -99,12 +99,12 @@ def updateMatrixTable(evp, drw, jnt, currPacket, multiMatrixTable, matrixTable, 
                     matrixTable.append(None)
                 while len(isMatrixWeighted) <= n:
                     isMatrixWeighted.append(None)
-                matrixTable[n] = jnt.frames[drw.data[index]].matrix  # corrected x2
+                matrixTable[n] = jnt.frames[drw.data[index]].matrix
                 isMatrixWeighted[n] = False
 
                 singleMultiMatrixEntry = MultiMatrix()
                 singleMultiMatrixEntry.weights = [1]
-                singleMultiMatrixEntry.indices = [drw.data[index]]  # corrected x2  # -- bone index
+                singleMultiMatrixEntry.indices = [drw.data[index]]
 
                 while len(multiMatrixTable) <= n:
                     multiMatrixTable.append(None)
