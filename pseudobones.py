@@ -343,7 +343,10 @@ class Pseudobone:
         self.computed_t_matrices = {}
 
     def get_z(self):
-        return NtoB*rotation_part(self.matrix)*BtoN * Vector((0,0,1))
+        if common.GLOBALS.no_rot_conversion:
+            return rotation_part(self.matrix) * Vector((0,0,1))
+        else:
+            return NtoB*rotation_part(self.matrix)*BtoN * Vector((0,0,1))
 
 
 
@@ -378,7 +381,10 @@ def apply_animation(bones, arm_obj, jntframes, name=None):
         name = com.name.fget()
         arm_obj.data.bones[name].use_inherit_scale = False  # scale can be applied
         posebone = arm_obj.pose.bones[name]
-        posebone.rotation_mode = "XZY"  # remember, coords are flipped
+        if common.GLOBALS.no_rot_conversion:
+            posebone.rotation_mode = "XYZ"
+        else:    
+            posebone.rotation_mode = "XZY"  # remember, coords are flipped
         bpy.context.scene.frame_current = 0
         # this keyframe is needed, overwritten anyways
         # also it is always at 1 because this function is called once per action
@@ -421,9 +427,13 @@ def apply_animation(bones, arm_obj, jntframes, name=None):
         cancel_ref_rot = tempmat.inverted()
         for frame in every_frame:
             bpy.context.scene.frame_current = frame
-            # flip y and z
+            # flip y and z when asked for
             if com.frames.times[frame][0]:
                 vct, tgL, tgR = get_pos_vct(com, frame)
+                if not common.GLOBALS.no_rot_conversion:
+                    tgL.z, tgL.y = tgL.y, -tgL.z
+                    tgR.z, tgR.y = tgR.y, -tgR.z
+                    vct.z, vct.y = vct.y, -vct.z
                 if not math.isnan(vct.x):
                     posebone.location[0] = vct.x
                     co = bonedict['location'][0].keyframe_points[-1].co
@@ -431,59 +441,67 @@ def apply_animation(bones, arm_obj, jntframes, name=None):
                     bonedict['location'][0].keyframe_points[-1].handle_right = co+Vector((1, tgR.x))
                     posebone.keyframe_insert('location', 0)
                     # fixed: add frame to keyframes AFTER setting the right value to it. so conter-intuitive.
-                if not math.isnan(vct.z):
-                    posebone.location[1] = -vct.z
-                    co = bonedict['location'][1].keyframe_points[-1].co
-                    bonedict['location'][1].keyframe_points[-1].handle_left = co + Vector((-1, tgL.z))
-                    bonedict['location'][1].keyframe_points[-1].handle_right = co + Vector((1, -tgR.z))
-                    posebone.keyframe_insert('location', 1)
                 if not math.isnan(vct.y):
-                    posebone.location[2] = vct.y
+                    posebone.location[1] = vct.y
+                    co = bonedict['location'][1].keyframe_points[-1].co
+                    bonedict['location'][1].keyframe_points[-1].handle_left = co + Vector((-1, -tgL.y))
+                    bonedict['location'][1].keyframe_points[-1].handle_right = co + Vector((1, tgR.y))
+                    posebone.keyframe_insert('location', 1)
+                if not math.isnan(vct.z):
+                    posebone.location[2] = vct.z
                     co = bonedict['location'][2].keyframe_points[-1].co
-                    bonedict['location'][2].keyframe_points[-1].handle_left = co + Vector((-1, -tgL.y))
-                    bonedict['location'][2].keyframe_points[-1].handle_right = co + Vector((1, tgR.y))
+                    bonedict['location'][2].keyframe_points[-1].handle_left = co + Vector((-1, -tgL.z))
+                    bonedict['location'][2].keyframe_points[-1].handle_right = co + Vector((1, tgR.z))
                     posebone.keyframe_insert('location', 2)
 
             if com.frames.times[frame][1]:
                 vct, tgL, tgR = get_rot_vct(com, frame)
+                if not common.GLOBALS.no_rot_conversion:
+                    tgL.z, tgL.y = tgL.y, -tgL.z
+                    tgR.z, tgR.y = tgR.y, -tgR.z
+                    vct.z, vct.y = vct.y, -vct.z
                 if not math.isnan(vct.x):
                     posebone.rotation_euler[0] = vct.x
                     co = bonedict['rotation_euler'][0].keyframe_points[-1].co
                     bonedict['rotation_euler'][0].keyframe_points[-1].handle_left = co + Vector((-1, -tgL.x))
                     bonedict['rotation_euler'][0].keyframe_points[-1].handle_right = co + Vector((1, tgR.x))
                     posebone.keyframe_insert('rotation_euler', 0)
-                if not math.isnan(vct.z):
-                    posebone.rotation_euler[1] = -vct.z
-                    co = bonedict['rotation_euler'][1].keyframe_points[-1].co
-                    bonedict['rotation_euler'][1].keyframe_points[-1].handle_left = co + Vector((-1, tgL.z))
-                    bonedict['rotation_euler'][1].keyframe_points[-1].handle_right = co + Vector((1, -tgR.z))
-                    posebone.keyframe_insert('rotation_euler', 1)
                 if not math.isnan(vct.y):
-                    posebone.rotation_euler[2] = vct.y
+                    posebone.rotation_euler[1] = vct.y
+                    co = bonedict['rotation_euler'][1].keyframe_points[-1].co
+                    bonedict['rotation_euler'][1].keyframe_points[-1].handle_left = co + Vector((-1, -tgL.y))
+                    bonedict['rotation_euler'][1].keyframe_points[-1].handle_right = co + Vector((1, tgR.y))
+                    posebone.keyframe_insert('rotation_euler', 1)
+                if not math.isnan(vct.z):
+                    posebone.rotation_euler[2] = vct.z
                     co = bonedict['rotation_euler'][2].keyframe_points[-1].co
-                    bonedict['rotation_euler'][2].keyframe_points[-1].handle_left = co + Vector((-1, -tgL.y))
-                    bonedict['rotation_euler'][2].keyframe_points[-1].handle_right = co + Vector((1, tgR.y))
+                    bonedict['rotation_euler'][2].keyframe_points[-1].handle_left = co + Vector((-1, -tgL.z))
+                    bonedict['rotation_euler'][2].keyframe_points[-1].handle_right = co + Vector((1, tgR.z))
                     posebone.keyframe_insert('rotation_euler', 2)
 
             if com.frames.times[frame][2]:
                 vct, tgL, tgR = get_sc_vct(com, frame)
+                if not common.GLOBALS.no_rot_conversion:
+                    tgL.z, tgL.y = tgL.y, tgL.z
+                    tgR.z, tgR.y = tgR.y, tgR.z
+                    vct.z, vct.y = vct.y, vct.z
                 if not math.isnan(vct.x):
                     posebone.scale[0] = vct.x
                     co = bonedict['scale'][0].keyframe_points[-1].co
                     bonedict['scale'][0].keyframe_points[-1].handle_left = co + Vector((-1, -tgL.x))
                     bonedict['scale'][0].keyframe_points[-1].handle_right = co + Vector((1, tgR.x))
                     posebone.keyframe_insert('scale', 0)
-                if not math.isnan(vct.z):
-                    posebone.scale[1] = vct.z
-                    co = bonedict['scale'][1].keyframe_points[-1].co
-                    bonedict['scale'][1].keyframe_points[-1].handle_left = co + Vector((-1, tgL.z))
-                    bonedict['scale'][1].keyframe_points[-1].handle_right = co + Vector((1, -tgR.z))
-                    posebone.keyframe_insert('scale', 1)
                 if not math.isnan(vct.y):
-                    posebone.scale[2] = vct.y
+                    posebone.scale[1] = vct.y
+                    co = bonedict['scale'][1].keyframe_points[-1].co
+                    bonedict['scale'][1].keyframe_points[-1].handle_left = co + Vector((-1, -tgL.y))
+                    bonedict['scale'][1].keyframe_points[-1].handle_right = co + Vector((1, tgR.y))
+                    posebone.keyframe_insert('scale', 1)
+                if not math.isnan(vct.z):
+                    posebone.scale[2] = vct.z
                     co = bonedict['scale'][2].keyframe_points[-1].co
-                    bonedict['scale'][2].keyframe_points[-1].handle_left = co + Vector((-1, -tgL.y))
-                    bonedict['scale'][2].keyframe_points[-1].handle_right = co + Vector((1, tgR.y))
+                    bonedict['scale'][2].keyframe_points[-1].handle_left = co + Vector((-1, -tgL.z))
+                    bonedict['scale'][2].keyframe_points[-1].handle_right = co + Vector((1, tgR.z))
                     posebone.keyframe_insert('scale', 2)
 
     return arm_obj.animation_data.action

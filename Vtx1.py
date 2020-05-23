@@ -394,7 +394,10 @@ class Vtx1:
 
 # small iter-generators to iterate triangles from GL_strips and GL_fans.
 def StripIterator(lst):
-    flip = False  # odd faces are in reversed index
+    if False and common.GLOBALS.no_rot_conversion:
+        flip = True
+    else:
+        flip = False  # odd faces are in reversed index
     for com in range(len(lst)-2):
         if flip:
             yield (lst[com], lst[com+1], lst[com+2])  # correct order to have correct normals
@@ -405,8 +408,12 @@ def StripIterator(lst):
 
 def FanIterator(lst):
     log.warning('This is a fan!')
-    for com in range(1, len(lst)-1):
-        yield (lst[0], lst[com+1], lst[com])  # faces need to be described like this in order to have correct normals
+    if False and common.GLOBALS.no_rot_conversion:
+        for com in range(1, len(lst)-1):
+            yield (lst[0], lst[com], lst[com+1])  # faces need to be described like this in order to have correct normals
+    else:
+        for com in range(1, len(lst)-1):
+            yield (lst[0], lst[com+1], lst[com])  # faces need to be described like this in order to have correct normals
 
 
 def findFace(model, facelist, v0, v1, v2, exclude):

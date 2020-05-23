@@ -177,7 +177,7 @@ def dedup_lines(string):
 
 class Prog_params:
     def __init__(self, filename, boneThickness, mir_tx, frc_cr_bn, sv_anim,
-                 tx_pck, ic_sc, imtype, dvg=False, nat_bn=False, use_nodes=False, val_msh=False, paranoia=False):
+                 tx_pck, ic_sc, imtype, dvg=False, nat_bn=False, use_nodes=False, val_msh=False, paranoia=False, no_rot_cv=False):
         self.filename = filename
         self.boneThickness = boneThickness
         self.allowTextureMirror = mir_tx
@@ -192,6 +192,7 @@ class Prog_params:
         self.PARANOID = paranoia
         self.use_nodes = use_nodes
         self.validate_mesh = val_msh
+        self.no_rot_conversion = no_rot_cv
         # secondary parameters (computed later on)
         self.createBones = True
 
