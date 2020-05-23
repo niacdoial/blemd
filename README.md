@@ -10,11 +10,11 @@ using blender (blender.org)
 ### HISTORY:
 The history of this plugin is long, and incredibly hard to trace.
 
-It started with BMD Viewer and BMDview2, from YAZ0 (just where is this person's home page?), in C++
+It started with BMD Viewer from YAZ0 (just where is this person's home page?), in C++, then BMDview2 by thakis (https://github.com/nico)
 
 it has a copy on the google code server (http://code.google.com/p/bmdview2/)
 
-Originally it came from this discussion thread:
+Originally I saw it from this discussion thread:
 http://www.emutalk.net/threads/54262-BMDView2-Linux?p=447701
 
 And that had this download link:
@@ -32,7 +32,7 @@ http://emutalk.net/showthread.php?t=26919 (part 2).
 Oh, and it is here (http://www.vg-resource.com/thread-21121.html) too.
 
 then, because the exportation was really lossy, MaxBMD, a MaxScript variation that used 3dsMax from Autodesk, was created.
-It was based on bmdview2pre3 by thakis (homepage at http://amnoid.de/gc/ download source at http://www.emutalk.net/showthread.php?t=26919&page=39)
+It was based on bmdview2pre3 (homepage at http://amnoid.de/gc/ download source at http://www.emutalk.net/showthread.php?t=26919&page=39) by thakis.
 it still had a lot of bugs, and a LOT of different branches. Plus 3dsMax is expensive, And (from my perspective) maxscript is hard to debug due to the need to reboot 3dsMax (a several-minutes process) after each modification.
 the discussion where it originaly(?) appeared is here: http://www.emutalk.net/threads/44490
 
