@@ -1,6 +1,6 @@
 # Welcome to BleMD.
 this project was for goal to import nintendo GC/Wii ".bmd" 3D models,
-using blender (blender.org)
+using blender (https://blender.org)
 
 ## HOW TO USE: *this section was too long, and moved to MANUAL.md*
 
