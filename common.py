@@ -107,7 +107,7 @@ def SubProcCall(exefile, args, startpath=os.getcwd()):
         raise RuntimeError('For now, image extraction does not support your platform')
 
     if not os.path.isabs(exefile):
-        exefile = os.path.abspath(startpath + exefile)
+        exefile = os.path.abspath(os.path.join(startpath, exefile))
 
     # if ' ' in exefile:  # whitespace: quotes needed
     #    exefile = '"' + exefile + '"'
