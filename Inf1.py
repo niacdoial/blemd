@@ -15,7 +15,7 @@ class Inf1Header:
         self.sizeOfSection = br.ReadDWORD()
         self.unknown1 = br.ReadWORD()
         self.pad = br.ReadWORD()  # 0xffff
-        self.unknown2 = br.ReadDWORD()
+        self.packetCount = br.ReadDWORD()
         self.vertexCount = br.ReadDWORD()
         # number of coords in VTX1 section
         self.offsetToEntries = br.ReadDWORD()
@@ -28,7 +28,7 @@ class Inf1Header:
         bw.writeDword(self.sizeOfSection)
         bw.writeWord(self.unknown1)
         bw.writeWord(self.pad)  # 0xffff
-        bw.writeDword(self.unknown2)
+        bw.writeDword(self.packetCount)
         bw.writeDword(self.vertexCount)
         # number of coords in VTX1 section
         bw.writeDword(self.offsetToEntries)
@@ -150,7 +150,7 @@ class Inf1:
         header.sizeOfSection = 0
         header.unknown1 = 0
         header.pad = 0xffff
-        header.unknown2 = 0
+        header.packetCount = 0
         header.vertexCount = self.numVertices
         header.offsetToEntries = bw.addPadding(Inf1Header.size)
 
