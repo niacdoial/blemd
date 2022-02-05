@@ -93,9 +93,9 @@ def get_dynamic_mtx(p_bone, frame):
     if frame not in p_bone.computed_d_matrices.keys():
         local_mtx_y, local_mtx_ydL, local_mtx_ydR = p_bone.frames.get_mtx(frame)
         inv_static_mtx = p_bone.jnt_frame.getFrameMatrix().inverted()
-        p_bone.computed_d_matrices[frame] = (inv_static_mtx * local_mtx_y,
-                                             inv_static_mtx * local_mtx_ydL,
-                                             inv_static_mtx * local_mtx_ydR)
+        p_bone.computed_d_matrices[frame] = (inv_static_mtx @ local_mtx_y,
+                                             inv_static_mtx @ local_mtx_ydL,
+                                             inv_static_mtx @ local_mtx_ydR)
     return p_bone.computed_d_matrices[frame]
 
 
@@ -246,9 +246,9 @@ class KeyFrames:
         rot_ydL = sum2(rot_y, product(EPSILON, rot_dL))
         vct_ydR = sum2(vct_y, product(EPSILON, vct_dR))
         rot_ydR = sum2(rot_y, product(EPSILON, rot_dR))
-        return ( (Matrix.Translation(vct_y) * rot_y.to_matrix().to_4x4()),
-                 (Matrix.Translation(vct_ydL) * rot_ydL.to_matrix().to_4x4()),
-                 (Matrix.Translation(vct_ydR) * rot_ydR.to_matrix().to_4x4()) )
+        return ( (Matrix.Translation(vct_y) @ rot_y.to_matrix().to_4x4()),
+                 (Matrix.Translation(vct_ydL) @ rot_ydL.to_matrix().to_4x4()),
+                 (Matrix.Translation(vct_ydR) @ rot_ydR.to_matrix().to_4x4()) )
 
 
 class Pseudobone:
@@ -344,9 +344,9 @@ class Pseudobone:
 
     def get_z(self):
         if common.GLOBALS.no_rot_conversion:
-            return rotation_part(self.matrix) * Vector((0,0,1))
+            return rotation_part(self.matrix) @ Vector((0,0,1))
         else:
-            return NtoB*rotation_part(self.matrix)*BtoN * Vector((0,0,1))
+            return NtoB@rotation_part(self.matrix)@BtoN @ Vector((0,0,1))
 
 
 
@@ -423,7 +423,7 @@ def apply_animation(bones, arm_obj, jntframes, name=None):
             com.rotmatrix = com.parent.fget().rotmatrix
             com.parentrot = com.parent.fget().rotmatrix
         tempmat = Euler((refpos.rx, refpos.ry, refpos.rz), 'XYZ').to_matrix().to_4x4()
-        com.rotmatrix *= tempmat
+        com.rotmatrix @= tempmat
         cancel_ref_rot = tempmat.inverted()
         for frame in every_frame:
             bpy.context.scene.frame_current = frame

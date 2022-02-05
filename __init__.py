@@ -1,3 +1,23 @@
+#!/usr/bin/env python3
+
+bl_info = {
+    "name": "Import gc/wii bmd format (.bmd, .bdl)",
+    "author": "people from the internet. adapted for blender by Niacdoial, from Avatarus-One's version (see github) full explanation in README",
+    "version": (1, 0, 0),
+    "blender": (2, 77, 0),
+    "location": "File > Import > Nintendo BMD",
+    "description": "Import files in the gc/wii BMD format (.bmd, .bdl)",
+    "wiki_url": "https://github.com/niacdoial/blemd",
+    "warning": "still in devlopement",
+    "tracker_url": "???",
+    "category": "Import-Export",
+}
+__version__ = '.'.join([str(s) for s in bl_info['version']])
+
+
+# ##################################
+# base imports and beginning of file
+
 if "bpy" in locals():  # trick to reload module on f8-press in blender
     LOADED = True
 else:
@@ -5,8 +25,16 @@ else:
     log_out = None
 import bpy
 
+IDE_DEBUG = False
+
+
 import logging.config
-import io
+import io, os
+# ImportHelper is a helper class, defines filename and
+# invoke() function which calls the file selector.
+from bpy_extras.io_utils import ImportHelper
+from bpy.props import StringProperty, BoolProperty, EnumProperty, IntProperty
+from bpy.types import Operator
 
 
 def config_logging():
@@ -38,43 +66,16 @@ if LOADED:
     from importlib import reload
     reload(BModel)
     reload(common)
-    log = logging.getLogger('bpy.ops.import_mesh.bmd')
     #log_out = log.handlers[1].stream  # kinda hacky, but it works (?)
-
 else:
     if not logging.root.handlers:
         # if this list is not empty, logging is configured.
         # here, it isn't
         config_logging()
-    from . import (
-        common,
-        BModel )
-    log = logging.getLogger('bpy.ops.import_mesh.bmd')
+    from . import common, BModel
 del LOADED
 
-IDE_DEBUG = False
-
-bl_info = {
-    "name": "Import gc/wii bmd format (.bmd, .bdl)",
-    "author": "people from the internet. adapted for blender by Niacdoial, from Avatarus-One's version (see github) full explanation in README",
-    "version": (1, 0, 0),
-    "blender": (2, 77, 0),
-    "location": "File > Import > Nintendo BMD",
-    "description": "Import files in the gc/wii BMD format (.bmd, .bdl)",
-    "wiki_url": "https://github.com/niacdoial/blemd",
-    "warning": "still in devlopement",
-    "tracker_url": "???",
-    "category": "Import-Export",
-}
-__version__ = '.'.join([str(s) for s in bl_info['version']])
-
-
-# ImportHelper is a helper class, defines filename and
-# invoke() function which calls the file selector.
-import os.path as OSPath
-from bpy_extras.io_utils import ImportHelper
-from bpy.props import StringProperty, BoolProperty, EnumProperty, IntProperty
-from bpy.types import Operator
+log = logging.getLogger('bpy.ops.import_mesh.bmd')
 
 
 class ImportBmd(Operator, ImportHelper):
@@ -99,7 +100,7 @@ class ImportBmd(Operator, ImportHelper):
     #    description="",
     #    default=True
     #    )
-    sv_anim = EnumProperty(
+    sv_anim: EnumProperty(
         name="Import animations(WIP)",
         description="if yes, choice to chain them or put them in individual actions",
         items=(('DONT', "do not import animations", ""),
@@ -109,45 +110,45 @@ class ImportBmd(Operator, ImportHelper):
         default='CHAINED'
     )
 
-    use_nodes = BoolProperty(
+    use_nodes: BoolProperty(
         name="use complete materials",
         description="use complete (glsl) materials (converted into nodes)."
                     "More precise, but impossible to export for now.",
         default=False
     )
 
-    frc_cr_bn = BoolProperty(
+    frc_cr_bn: BoolProperty(
         name="Force create bones",
         description="",
         default=False
     )
 
-    nat_bn = BoolProperty(
+    nat_bn: BoolProperty(
         name="use natural bone placement",
         description="make any animation bone with a single child animation bone point towards it.\n(WARNING: discards animations)",
         default=False
     )
 
-    no_rot_cv = BoolProperty(
+    no_rot_cv: BoolProperty(
         name="disable axis conversion",
         description="disable converting the Y-up BMD space into the Z-up blender space. (Reinforced compatibility with other BMD import tools)",
         default=True
     )
 
-    mir_tx = BoolProperty(
+    mir_tx: BoolProperty(
         name="Allow mirrored textures",
         description="",
         default=True
     )
 
-    val_msh = BoolProperty(
+    val_msh: BoolProperty(
         name="validate mesh [!]",
         description="ONLY use if blender crashes otherwise.\nMesh WILL be very inaccurate for material mapping.\n"
         "If you are forced to use this option, start an issue on github and please include the console log.",
         default=False
     )
 
-    tx_pck = EnumProperty(
+    tx_pck: EnumProperty(
         name="Pack textures",
         description="choose if textures should be inside the blender file or referenced by it",
         items=(('DONT', 'reference external files', ''),
@@ -156,7 +157,7 @@ class ImportBmd(Operator, ImportHelper):
         default='DO'
     )
 
-    imtype = EnumProperty(
+    imtype: EnumProperty(
         name="Image format",
         description="Choose packed images, native format image, or targa converted ones."
                     "If an image is missing, try changing this setting",
@@ -171,7 +172,7 @@ class ImportBmd(Operator, ImportHelper):
         default=True
     )
 
-    boneThickness = IntProperty(
+    boneThickness: IntProperty(
         name="bone length",
         description="the length of what represents bones in blender Only affects visibility. usually from 5 to 100.",
         min=1,
@@ -181,13 +182,13 @@ class ImportBmd(Operator, ImportHelper):
         default=10
     )
 
-    dvg = BoolProperty(
+    dvg: BoolProperty(
         name="DEBUG vertex groups",
         description="DEBUG option. create Vgroups to show the original BMD structure (ram-intensive)",
         default=False
     )
 
-    paranoia = BoolProperty(
+    paranoia: BoolProperty(
         name="DEBUG crashes",
         description="option for debug purposes: will prefer a clean crash over a weird result",
         default=False
@@ -200,7 +201,7 @@ class ImportBmd(Operator, ImportHelper):
         global log_out
         retcode = 'FINISHED'
         temp = BModel.BModel()
-        path = OSPath.abspath(OSPath.split(__file__)[0])  # automatically find where we are
+        path = os.path.abspath(os.path.split(__file__)[0])  # automatically find where we are
         print(__file__)
         try:
             temp.SetBmdViewExePath(path + common.SEP)  # add 'backslash' for good measure
@@ -231,15 +232,15 @@ def menu_func(self, context):
 
 def register():
     print(__name__)
-    bpy.utils.register_module(__name__)
+    bpy.utils.register_class(ImportBmd)
     #bpy.utils.register_class(ImportSomeData)
-    bpy.types.INFO_MT_file_import.append(menu_func)
+    bpy.types.TOPBAR_MT_file_import.append(menu_func)
 
 
 def unregister():
-    bpy.utils.unregister_module(__name__)
+    bpy.utils.unregister_class(ImportBmd)
     #bpy.utils.unregister_class(ImportBmd)
-    bpy.types.INFO_MT_file_import.remove(menu_func)
+    bpy.types.TOPBAR_MT_file_import.remove(menu_func)
 
 if __name__ == "__main__":
     register()

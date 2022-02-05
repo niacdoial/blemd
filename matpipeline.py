@@ -871,16 +871,11 @@ def createMaterialSystem(matBase, mat3, tex1, texpath, extension, nt):
 
     # missing light enabeling, seems so.
     if mat3.colorChanInfos[matBase.chanControls[0]].matColorSource == 1:
-        node = data_placer.add('ShaderNodeAttribute', row=0)
-        node.attribute_name = 'v_color_0'  # XCX what about layer 2 (this is more complicated than expected)?
+        node = data_placer.add('ShaderNodeVertexColor', row=0)
+        node.layer_name = 'v_color_0'  # XCX what about layer 2 (this is more complicated than expected)?
         material.vertexcolorc.data = node.outputs[0]
-
-        node = data_placer.add('ShaderNodeAttribute', row=1)
-        node.attribute_name = 'v_color_alpha_0'
-        temp = node.outputs[0]
-        node = data_placer.add('ShaderNodeSeparateRGB', row=1)
-        nt.links.new(temp, node.inputs[0])
-        material.vertexcolora.data = node.outputs[0]
+        material.vertexcolora.data = node.outputs[1]
+                
     else:
         c = mat3.color1[matBase.color1[0]]
         material.vertexcolorc.data = Color((c.r/255, c.g/255, c.b/255))

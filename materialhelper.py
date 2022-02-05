@@ -28,9 +28,9 @@ def add_material(obj, mat):
 
 def add_err_material(obj):
     mat = bpy.data.materials.new("ERROR MATERIAL")
-    mat.diffuse_color = mathutils.Color((0,0,1))
+    mat.diffuse_color = (0,0,1,1)  # WHY are those different types of objects?
     mat.specular_color = mathutils.Color((1,1,1))
-    mat.diffuse_intensity = 1
+    #mat.diffuse_intensity = 1
     add_material(obj, mat)
     return mat
 
@@ -70,7 +70,7 @@ def build_material(bmodel, mat1, material, tex):
                     # hasAlpha = (p == len(img.pixels)-1)
         else:
             # -- make it easier to see invalid textures
-            currMaterial.diffuse_color = Color((1, 0, 0))
+            currMaterial.diffuse_color = (1,0,0,1)
 
         if hasAlpha:
             # self._currMaterial.twoSided = True # -- anything with alpha is always two sided?
@@ -224,7 +224,7 @@ def add_vcolor_old(mesh, color_layer, cv_to_f_v, Faces, uvlayer, layerID):
 def add_vcolor(mesh, representation, layerID):
     """copies vertex colors (layer `layerID`) from the representation to the blender mesh"""
 
-    vx_layer = mesh.vertex_colors.new("v_color_"+str(layerID))
+    vx_layer = mesh.vertex_colors.new(name="v_color_"+str(layerID))
     # some really recent, unstable versions of blender 2.79 have alpha support in vertex colors.
     # detect this and react accordingly (or an exception will be raised)
     try:
@@ -232,7 +232,7 @@ def add_vcolor(mesh, representation, layerID):
         alpha_support = True
     except:
         alpha_support = False
-        vx_layer_a = mesh.vertex_colors.new("v_color_alpha_"+str(layerID))
+        vx_layer_a = mesh.vertex_colors.new(name="v_color_alpha_"+str(layerID))
     # alpimg = bpy.data.images.new(mesh.name+'_vcol_alpha_'+str(layerID), 256, 256)
     # XCX image method buggy -> disabled
 
