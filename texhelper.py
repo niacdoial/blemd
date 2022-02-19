@@ -94,8 +94,7 @@ def newtex_tslot(fname, type, mat):
         matslot = mat.texture_slots.add()
         matslot.texture = tex
         matslot.texture_coords = 'UV'
-        if mat not in imported_tslots.keys():
-            imported_tslots[mat] = {}
+        imported_tslots.setdefault(mat, {})
         imported_tslots[mat][fname] = tex
     if type == DIFFUSE:
         matslot.diffuse_color_factor = 1

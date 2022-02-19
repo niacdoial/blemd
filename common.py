@@ -176,11 +176,10 @@ def dedup_lines(string):
 
 
 class Prog_params:
-    def __init__(self, filename, boneThickness, mir_tx, frc_cr_bn, sv_anim,
+    def __init__(self, filename, boneThickness, frc_cr_bn, sv_anim,
                  tx_pck, ic_sc, imtype, dvg=False, nat_bn=False, use_nodes=False, val_msh=False, paranoia=False, no_rot_cv=False):
         self.filename = filename
         self.boneThickness = boneThickness
-        self.allowTextureMirror = mir_tx
         self.forceCreateBones = frc_cr_bn
         self.loadAnimations = sv_anim != 'DONT' and not nat_bn
         self.animationType = sv_anim if self.loadAnimations else 'DONT'

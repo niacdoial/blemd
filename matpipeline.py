@@ -5,13 +5,8 @@ import logging
 log = logging.getLogger('bpy.ops.import_mesh.bmd.matpipeline')
 import bpy
 
-# ### a few storage variables
-MIX_GROUP_NODETREE_C = None
-MIX_GROUP_NODETREE_A = None
-MIX_GROUP_MTX = {}
-
-
 # ### helper functions (some use those storage variables)
+
 def makelink(nt, a, b):
     """automatically links a and b,
     `b` being a node socket and `a` being either another node socker or a value"""
@@ -28,6 +23,9 @@ def makelink(nt, a, b):
             value = (a.r, a.g, a.b, 1.0)
             b.default_value = value
 
+# function-local storage
+MIX_GROUP_NODETREE_C = None
+MIX_GROUP_NODETREE_A = None
 def get_mixgroup(type):
     """returns a GLSL-style mix() as a node group (for colors or floats)"""
     global MIX_GROUP_NODETREE_C
@@ -116,6 +114,8 @@ def get_mixgroup(type):
             gnt.links.new(node.outputs[0], out_n.inputs[0])
         return MIX_GROUP_NODETREE_A
 
+# function-local storage
+MIX_GROUP_MTX = {}
 def get_mtxmix(id, mtx):
     """returns a node group which multiplies a vector by a matrix (M*v)"""
     if id not in MIX_GROUP_MTX.keys():
@@ -163,9 +163,9 @@ def makeOpNode(placer, in1, in2, type='value', op='ADD', **placerkw):
         node.blend_type=op
         node.inputs[0].default_value = 1.0
     elif type=='vector':
-        # XCX implement this
-        log.error('ya done goofed')
-        raise ValueError('YA DONE GOOFED')
+        # TODO implement this
+        log.error('the dev goofed')
+        raise ValueError('THE DEV GOOFED')
     else:
         log.warning('makeOpNode: unknown node type %s', type)
         raise ValueError('blame the dev')
@@ -173,71 +173,6 @@ def makeOpNode(placer, in1, in2, type='value', op='ADD', **placerkw):
     makelink(placer.nt, in1, node.inputs[in1_id])
     makelink(placer.nt, in2, node.inputs[in2_id])
     return node, node.outputs[0]
-
-def getTexture(placer, image_header, coords, is_alpha=False):
-    """returns a node to get a texture acces
-    (coords is the nodesocket giving the texture coordinates)"""
-    image = newtex_image(image_header.name)
-    texnode = placer.add('ShaderNodeTexImage', row=int(is_alpha))
-    texnode.image = image
-    # XCX image mapping (clamp, mirror)
-    if image_header.mirrorS or image_header.mirrorT:
-        local_frame = placer.add('NodeFrame', 'mirroring', int(is_alpha))
-        local_placer = NodePlacer(placer.nt, local_frame, 10, False, 2)
-
-        sep = local_placer.add('ShaderNodeSeparateXYZ')
-        cmb = local_placer.add('ShaderNodeCombineXYZ')
-
-        # inversion code: if *coord* in [odd, even] then coord *= -1
-        # coord *= (-1 + 2(coord%2 < 1))
-        # (this is going to be coded in nodes, but it looks like a black box)
-
-        if image_header.mirrorS:
-            nodes = [local_placer.add('ShaderNodeMath', row=0) for _ in range(5)]
-            for i in range(4):
-                placer.nt.links.new(nodes[i].outputs[0], nodes[i+1].inputs[0])
-            placer.nt.links.new(sep.outputs[0], nodes[0].inputs[0])
-            placer.nt.links.new(nodes[4].outputs[0], cmb.inputs[0])
-
-            nodes[0].operation = 'MODULO'
-            nodes[0].inputs[1].default_value = 2
-            nodes[1].operation = 'LESS_THAN'
-            nodes[1].inputs[1].default_value = 1
-            nodes[2].operation = 'MULTIPLY'
-            nodes[2].inputs[1].default_value = 2
-            nodes[3].operation = 'SUBTRACT'
-            nodes[3].inputs[1].default_value = -1
-            nodes[4].operation = 'MULTIPLY'
-            placer.nt.links.new(sep.outputs[0], nodes[4].inputs[1])
-        else:
-            placer.nt.links.new(sep.outputs[0], cmb.inputs[0])
-        if image_header.mirrorT:
-            nodes = [local_placer.add('ShaderNodeMath', row=1) for _ in range(5)]
-            for i in range(4):
-                placer.nt.links.new(nodes[i].outputs[0], nodes[i+1].inputs[0])
-            placer.nt.links.new(sep.outputs[1], nodes[0].inputs[0])
-            placer.nt.links.new(nodes[4].outputs[0], cmb.inputs[1])
-
-            nodes[0].operation = 'MODULO'
-            nodes[0].inputs[1].default_value = 2
-            nodes[1].operation = 'LESS_THAN'
-            nodes[1].inputs[1].default_value = 1
-            nodes[2].operation = 'MULTIPLY'
-            nodes[2].inputs[1].default_value = 2
-            nodes[3].operation = 'SUBTRACT'
-            nodes[3].inputs[1].default_value = -1
-            nodes[4].operation = 'MULTIPLY'
-            placer.nt.links.new(sep.outputs[1], nodes[4].inputs[1])
-        else:
-            placer.nt.links.new(sep.outputs[1], cmb.inputs[1])
-
-        placer.nt.links.new(coords, sep.inputs[0])
-        placer.nt.links.new(cmb.outputs[0], texnode.inputs[0])
-        local_placer.reappend(cmb)
-        local_placer.update()
-    else:
-        placer.nt.links.new(coords, texnode.inputs[0])
-    return texnode.outputs[int(is_alpha)]
 
 
 class Holder:
@@ -273,9 +208,85 @@ class Sampler:
         else:
             raise ValueError('invalid WrapMode')
 
+    def export(self, placer, coords, is_alpha=False):
+        """returns a node to get a texture acces
+        (coords is the nodesocket giving the texture coordinates)"""
+
+        if is_alpha == 'both':
+            is_alpha_row = 0
+        else:  # assume is_alpha is a bool
+            is_alpha_row = int(is_alpha)
+        
+        image = newtex_image(self.name)
+        texnode = placer.add('ShaderNodeTexImage', row=is_alpha_row)
+        texnode.image = image
+        # XCX image mapping (clamp, mirror)
+        if self.mirrorS or self.mirrorT:
+            local_frame = placer.add('NodeFrame', 'mirroring', row=is_alpha_row)
+            local_placer = NodePlacer(placer.nt, local_frame, 10, False, 2)
+
+            sep = local_placer.add('ShaderNodeSeparateXYZ')
+            cmb = local_placer.add('ShaderNodeCombineXYZ')
+
+            # inversion code: if *coord* in [odd, even] then coord *= -1
+            # coord *= (-1 + 2(coord%2 < 1))
+            # (this is going to be coded in nodes, but it looks like a black box)
+
+            if self.mirrorS:
+                nodes = [local_placer.add('ShaderNodeMath', row=0) for _ in range(5)]
+                for i in range(4):
+                    placer.nt.links.new(nodes[i].outputs[0], nodes[i+1].inputs[0])
+                placer.nt.links.new(sep.outputs[0], nodes[0].inputs[0])
+                placer.nt.links.new(nodes[4].outputs[0], cmb.inputs[0])
+
+                nodes[0].operation = 'MODULO'
+                nodes[0].inputs[1].default_value = 2
+                nodes[1].operation = 'LESS_THAN'
+                nodes[1].inputs[1].default_value = 1
+                nodes[2].operation = 'MULTIPLY'
+                nodes[2].inputs[1].default_value = 2
+                nodes[3].operation = 'SUBTRACT'
+                nodes[3].inputs[1].default_value = -1
+                nodes[4].operation = 'MULTIPLY'
+                placer.nt.links.new(sep.outputs[0], nodes[4].inputs[1])
+            else:
+                placer.nt.links.new(sep.outputs[0], cmb.inputs[0])
+            if self.mirrorT:
+                nodes = [local_placer.add('ShaderNodeMath', row=1) for _ in range(5)]
+                for i in range(4):
+                    placer.nt.links.new(nodes[i].outputs[0], nodes[i+1].inputs[0])
+                placer.nt.links.new(sep.outputs[1], nodes[0].inputs[0])
+                placer.nt.links.new(nodes[4].outputs[0], cmb.inputs[1])
+
+                nodes[0].operation = 'MODULO'
+                nodes[0].inputs[1].default_value = 2
+                nodes[1].operation = 'LESS_THAN'
+                nodes[1].inputs[1].default_value = 1
+                nodes[2].operation = 'MULTIPLY'
+                nodes[2].inputs[1].default_value = 2
+                nodes[3].operation = 'SUBTRACT'
+                nodes[3].inputs[1].default_value = -1
+                nodes[4].operation = 'MULTIPLY'
+                placer.nt.links.new(sep.outputs[1], nodes[4].inputs[1])
+            else:
+                placer.nt.links.new(sep.outputs[1], cmb.inputs[1])
+
+            placer.nt.links.new(coords, sep.inputs[0])
+            placer.nt.links.new(cmb.outputs[0], texnode.inputs[0])
+            local_placer.reappend(cmb)
+            local_placer.update()
+        else:
+            placer.nt.links.new(coords, texnode.inputs[0])
+
+        if is_alpha == 'both':
+            return (texnode.outputs[0], texnode.outputs[1])
+        else:  # assume is_alpha is a bool.
+            return texnode.outputs[is_alpha_row]
+
 
 class NodePlacer:
     """a class to automatically place nodes on a 2D space, in a logical way."""
+    
     def __init__(self, nt, frame=None, spacing=60, vertical=False, nrows=1):
         self.nt = nt
         self.frame = frame
@@ -386,9 +397,9 @@ def getAlphaCompare(ac):
     elif ac.alphaOp==1:
         return not (a or b)
     elif ac.alphaOp==2:
-        return not ( (a or b) and not (a and b) )  # not xor
+        return not a^b  # not xor
     else:
-        return ( (a or b) and not (a and b) )
+        return a^b
 
 class MaterialSpace:
     """holds reused variables for code->node system conversion"""
@@ -408,7 +419,7 @@ class MaterialSpace:
         self.ac_const = 'default'  # for alpha compare. can force transparent or opaque
 
         self.texcoords = []
-        self.vcolorindex = 0
+        self.vcolorindex = 0  # somehow never used ??
 
         self.textures = [None]*8
 
@@ -429,7 +440,8 @@ class MaterialSpace:
             return self.reg3c, self.reg3a
 
     def getTexAccess(self, info, type, placer):
-        return getTexture(placer, self.textures[info.texMap], self.texcoords[info.texCoordId], type)
+        return self.textures[info.texMap].export(placer, self.texcoords[info.texCoordId], type)
+        #getTexture(placer, self.textures[info.texMap], self.texcoords[info.texCoordId], type)
 
     def getRasColor(self, info):
         return self.vertexcolorc.data, self.vertexcolora.data
@@ -978,6 +990,58 @@ def createMaterialSystem(matBase, mat3, tex1, texpath, extension, nt):
 
         local_placer.update()
 
+    material.ac_const = getAlphaCompare(mat3.alphaCompares[matBase.alphaCompIndex])
+    material.export()
+
+
+def create_simple_material_system(matBase, mat3, tex1, texpath, extension, nt):
+    """converts the data from a materialBase object to a blender node tree"""
+    # ### vertex shader part:
+
+    # ## first, delete existing nodes from tree
+    while len(nt.nodes):
+        nt.nodes.remove(nt.nodes[0])
+
+    # ## then start preparing the material 'namespace'
+    material = MaterialSpace(nt)
+    data_placer = NodePlacer(
+        nt,
+        material.placer.add('NodeFrame', 'data'),
+        30, False,
+        mat3.texGenCounts[matBase.texGenCountIndex]+2
+    )
+    
+    material.texcoords = [None] * mat3.texGenCounts[matBase.texGenCountIndex]
+    for i in range(mat3.texGenCounts[matBase.texGenCountIndex]):  # num TexGens == num Textures
+        makeTexCoords(material, mat3.texGenInfos[matBase.texGenInfos[i]], i, matBase, mat3, data_placer)
+
+    sampler = None
+    has_texture=True
+    for i in range(8):
+        if matBase.texStages[i] != 0xffff:
+            texId = mat3.texStageIndexToTextureIndex[matBase.texStages[i]]
+            currTex =tex1.texHeaders[texId]
+            sampler = Sampler(OSPath.join(texpath, tex1.stringtable[texId] + extension))
+            sampler.setTexWrapMode(currTex.wrapS, currTex.wrapT)
+            break
+    else:
+        has_texture = False
+
+    if has_texture:
+        node_uv = data_placer.add('ShaderNodeUVMap', row=0)
+        node_uv.uv_map = 'UV 0'
+        material.finalcolorc.data, material.finalcolora.data = \
+            sampler.export(data_placer, node_uv.outputs[0], is_alpha='both')
+    else:
+        colornode = data_placer.add('ShaderNodeRGB', 'ERROR')
+        alphanode = data_placer.add('ShaderNodeValue', 'ERROR')
+        colornode.outputs[0].default_value = [1,0,0,1]
+        alphanode.outputs[0].default_value = 1
+        
+        material.finalcolorc.data = colornode.outputs[0]
+        material.finalcolora.data = alphanode.outputs[0]
+
+    data_placer.update()
     material.ac_const = getAlphaCompare(mat3.alphaCompares[matBase.alphaCompIndex])
     material.export()
 

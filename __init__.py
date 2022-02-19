@@ -135,12 +135,6 @@ class ImportBmd(Operator, ImportHelper):
         default=True
     )
 
-    mir_tx: BoolProperty(
-        name="Allow mirrored textures",
-        description="",
-        default=True
-    )
-
     val_msh: BoolProperty(
         name="validate mesh [!]",
         description="ONLY use if blender crashes otherwise.\nMesh WILL be very inaccurate for material mapping.\n"
@@ -152,8 +146,7 @@ class ImportBmd(Operator, ImportHelper):
         name="Pack textures",
         description="choose if textures should be inside the blender file or referenced by it",
         items=(('DONT', 'reference external files', ''),
-               ('DO', 'pack images in blender file', ''),
-               ('PNG', 'pack images IN PNG FORMAT', 'conversion is made by blender')),
+               ('DO', 'pack images in blender file', '')),
         default='DO'
     )
 
@@ -194,7 +187,7 @@ class ImportBmd(Operator, ImportHelper):
         default=False
     )
 
-    ALL_PARAMS = ['use_nodes', 'imtype', 'tx_pck', 'mir_tx', 'sv_anim',
+    ALL_PARAMS = ['use_nodes', 'imtype', 'tx_pck', 'sv_anim',
                   'nat_bn', 'ic_sc', 'frc_cr_bn', 'boneThickness', 'dvg', 'val_msh', 'paranoia', 'no_rot_cv']
 
     def execute(self, context):

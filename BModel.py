@@ -157,7 +157,6 @@ class BModel:
     # <variable _materialIDS>
     # <variable _subMaterials>
     # <variable _parentBoneIndexs>
-    # <variable _allowTextureMirror>
     # -- doesn't work on characters? required for stages?
     # <variable _forceCreateBones>
     # <variable _exportType>
@@ -217,7 +216,6 @@ class BModel:
         self.faceIndex = 0
         self._materialIDS = []
         self.vertexMultiMatrixEntry = []
-        self._allowTextureMirror = False
         self.normals = []
         self._subMaterials = []
 
@@ -762,15 +760,22 @@ class BModel:
                 # materials can be reused in a single file: cache them
                 if mat.material:
                     self._currMaterial = mat.material[0].copy()
+                    log.debug("material was cached")
                     # matIndex = mat.material[1]
                 else:
                     if not self.params.use_nodes:
-                        self._currMaterial = MatH.build_material(self, self._mat1, mat, self.tex)
+                        self._currMaterial = MatH.build_material_simple(
+                            self._mat1.indexToMatIndex[n.index],
+                            self._mat1, self.tex,
+                            self._texturePath, '.' + self.params.imtype.lower(),
+                        )
                     else:
                         try:
-                            self._currMaterial = MatH.build_material_v3(self._mat1.indexToMatIndex[n.index],
-                                                                        self._mat1, self.tex,
-                                                                        self._texturePath, '.' + self.params.imtype.lower())
+                            self._currMaterial = MatH.build_material_v3(
+                                self._mat1.indexToMatIndex[n.index],
+                                self._mat1, self.tex,
+                                self._texturePath, '.' + self.params.imtype.lower()
+                            )
                         except Exception as err:
 
                             if self.params.PARANOID:
@@ -780,7 +785,11 @@ class BModel:
                                 log.error('node (GLSL) materials went wrong.'+
                                     'Falling back to incomplete materials.'+
                                     '(error is %s)', err)
-                                self._currMaterial = MatH.build_material(self, self._mat1, mat, self.tex)
+                                self._currMaterial = MatH.build_material(
+                                    self._mat1.indexToMatIndex[n.index],
+                                    self._mat1, self.tex,
+                                    self._texturePath, '.' + self.params.imtype.lower(),
+                                )
 
             except Exception as err:
                 log.error('Material not built correctly (error is %s)', err)
@@ -962,8 +971,11 @@ class BModel:
             try:
                 PBones.apply_animation(self._bones, self.arm_obj, self.jnt.frames)
             except Exception as err:
-                log.error('Animation doesn\'t apply as expected. Change animation importation parameters'
-                            'to isolate faulty file (error is %s)', err)
+                if self.params.PARANOID:
+                    raise
+                else:
+                    log.error('Animation doesn\'t apply as expected. Change animation importation parameters'
+                              'to isolate faulty file (error is %s)', err)
 
         elif self.params.animationType == 'SEPARATE':
             self.arm_obj.animation_data.action = None
@@ -1045,12 +1057,14 @@ class BModel:
         print("</TextureAnimation>", file=fBTP)
         fBTP.close()
 
-    def Import(self, filename, **kw):  # imtype, packTextures, allowTextureMirror, loadAnimations, naturalBones, includeScaling,
-               # forceCreateBones, boneThickness, dvg, val_msh=False, prefer_crashes=False):
-        self.params = common.Prog_params(filename, **kw)# boneThickness, allowTextureMirror, forceCreateBones,
-                                  #loadAnimations != 'DONT', loadAnimations, naturalBones,
-                                  #packTextures,  includeScaling, imtype, dvg,
-                                  #use_nodes, val_msh, prefer_crashes)
+    def Import(self, filename, **kw):
+        # contents of kw:
+        # imtype, tx_pck (packTextures), sv_anim (loadAnimations, animationType),
+        # nat_bn (naturalBones, disables loadAnimations and animationType),
+        # ic_sc (includeScaling), frc_cr_bn (forceCreateBones),
+        # boneThickness, dvg (DEBUGBG), val_msh (valudate_mesh), paranoia (PARANOID)
+        # use_nodes, no_rot_cv (no_rot_conversion)
+        self.params = common.Prog_params(filename, **kw)
         
         # provide access to parameters to other modules in this plugin. (kinda hacky solution)
         common.GLOBALS = self.params
@@ -1076,7 +1090,7 @@ class BModel:
         self._bckPaths.append("{1}{0}..{0}bck{0}*.bck".format(common.SEP, self._bmdPath))
         self._bckPaths.append("{1}{0}..{0}bcks{0}*.bck".format(common.SEP, self._bmdPath))
         self._bckPaths.append("{1}{0}..{0}scrn{0}*.bck".format(common.SEP, self._bmdPath))
-
+        
         self._btpPaths.append("{1}{0}..{0}btp{0}*.btp".format(common.SEP, self._bmdPath))
 
         try:
@@ -1104,6 +1118,7 @@ class BModel:
             self.CreateBTPDataFile()
         except Exception as err:
             log.warning('couldn\'t transform BTP animations into xml files. Model should beave normally nevertheless')
+        log.debug('end!')
 
     def __del__(self):
         if self._bones:

@@ -21,10 +21,9 @@ except AttributeError:  # module not loaded: do it manually
     temp.SetBmdViewExePath(OSPath.split(blemd.__file__)[0]+os.path.sep)  # add backslash for good measure
     temp.Import(path,
         boneThickness=5,
-        mir_tx=True,
         frc_cr_bn=False,
         sv_anim='DO',
-        tx_pck='PNG',
+        tx_pck='DO',
         ic_sc=True,
         imtype='TGA'
     )
