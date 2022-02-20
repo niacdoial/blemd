@@ -3,13 +3,13 @@
 bl_info = {
     "name": "Import gc/wii bmd format (.bmd, .bdl)",
     "author": "people from the internet. adapted for blender by Niacdoial, from Avatarus-One's version (see github) full explanation in README",
-    "version": (1, 0, 0),
-    "blender": (2, 77, 0),
+    "version": (1, 1, 0),
+    "blender": (2, 83, 0),
     "location": "File > Import > Nintendo BMD",
     "description": "Import files in the gc/wii BMD format (.bmd, .bdl)",
     "wiki_url": "https://github.com/niacdoial/blemd",
     "warning": "still in devlopement",
-    "tracker_url": "???",
+    "tracker_url": "https://github.com/niacdoial/blemd/issues",
     "category": "Import-Export",
 }
 __version__ = '.'.join([str(s) for s in bl_info['version']])
