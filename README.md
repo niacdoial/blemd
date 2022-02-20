@@ -9,7 +9,8 @@ using blender (https://blender.org)
 ## HISTORY:
 The history of this plugin is long, and incredibly hard to trace.
 
-It started with BMD Viewer from YAZ0 (just where is this person's home page?), in C++, then BMDview2 by thakis (https://github.com/nico)
+It started(?) with BMD Viewer, in C++, then BMDview2 (http://amnoid.de/gc) by thakis (https://github.com/nico)
+The name YAZ0 (https://twitter.com/yaz0r ?) is also linked to even earlier history of this whole thing?
 
 it has a copy on the google code server (http://code.google.com/p/bmdview2/)
 

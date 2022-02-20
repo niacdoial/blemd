@@ -285,11 +285,9 @@ class BModel:
             bm_to_pm = {}  # index shifter: material, get mat index
             for i in range(len(self._subMaterials)):
                 MatH.add_material(modelObject, self._subMaterials[i])
-            print('to')
             errmat = MatH.add_err_material(modelObject)
             for num, com in enumerate(modelObject.material_slots):
                 bm_to_pm[com.material] = num
-            print('be')
             for num, com in enumerate(self._materialIDS):  # assign materials to faces
                 # DEBUG reversed index
                 if com is not None:
@@ -785,7 +783,7 @@ class BModel:
                                 log.error('node (GLSL) materials went wrong.'+
                                     'Falling back to incomplete materials.'+
                                     '(error is %s)', err)
-                                self._currMaterial = MatH.build_material(
+                                self._currMaterial = MatH.build_material_simple(
                                     self._mat1.indexToMatIndex[n.index],
                                     self._mat1, self.tex,
                                     self._texturePath, '.' + self.params.imtype.lower(),

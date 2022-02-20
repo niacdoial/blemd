@@ -9,17 +9,17 @@ summary:
 ## how to install?
 
 To install BleMD, you first need to have blender itself installed (from blender.org).
-I recommend version 2.77 or better, but there is *no* support for version 2.80 for now.
+The version of BleMD distributed with this manual works for blender >=2.8, and was tested with 2.83 and 3.0.1
 
 Once blender is installed (or at least unzipped), you will need to put the contents of BleMD in the correct place yourself.
 
 For this, download the contents of the repository in a zip file, and put the folder inside it into one of the following paths:
-- `"<path to blender>/2.XX/scripts/addons_contrib/"`
-- `"<path to blender>/2.XX/scripts/addons/"`
-- `~/.config/blender/2.XX/scripts/addons_contrib/"` (GNU/Linux)
-- `~/.config/blender/2.XX/scripts/addons/"` (GNU/Linux)
-- `"C:/Users/<name>/AppData/Roaming/Blender Foundation/blender/2.XX/scripts/addons_contrib/"` (Windows)
-- `"C:/Users/<name>/AppData/Roaming/Blender Foundation/blender/2.XX/scripts/addons/"` (Windows)
+- `"<path to blender>/X.XX/scripts/addons_contrib/"`
+- `"<path to blender>/X.XX/scripts/addons/"`
+- `~/.config/blender/X.XX/scripts/addons_contrib/"` (GNU/Linux)
+- `~/.config/blender/X.XX/scripts/addons/"` (GNU/Linux)
+- `"C:/Users/<name>/AppData/Roaming/Blender Foundation/blender/X.XX/scripts/addons_contrib/"` (Windows)
+- `"C:/Users/<name>/AppData/Roaming/Blender Foundation/blender/X.XX/scripts/addons/"` (Windows)
 
 (note : you might need to run blender to access those two last paths.)
 
