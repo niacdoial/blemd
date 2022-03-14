@@ -102,7 +102,7 @@ class ImportBmd(Operator, ImportHelper):
     #    )
     sv_anim: EnumProperty(
         name="Import animations(WIP)",
-        description="if yes, choice to chain them or put them in individual actions",
+        description="if so, choice to chain them or put them in individual actions",
         items=(('DONT', "do not import animations", ""),
                ('CHAINED', "Single Action", 'will concatenate all the detected .bck files into a single animation (messy, but simple to use)'),
                ('SEPARATE', "One Action per animation file", 'animations will be displayed one after the other on a "NLA strip"'
