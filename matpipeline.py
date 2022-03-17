@@ -228,46 +228,22 @@ class Sampler:
             sep = local_placer.add('ShaderNodeSeparateXYZ')
             cmb = local_placer.add('ShaderNodeCombineXYZ')
 
-            # inversion code: if *coord* in [odd, even] then coord *= -1
-            # coord *= (-1 + 2(coord%2 < 1))
-            # (this is going to be coded in nodes, but it looks like a black box)
+            # use ping-pong nodes for mirroring
 
             if self.mirrorS:
-                nodes = [local_placer.add('ShaderNodeMath', row=0) for _ in range(5)]
-                for i in range(4):
-                    placer.nt.links.new(nodes[i].outputs[0], nodes[i+1].inputs[0])
-                placer.nt.links.new(sep.outputs[0], nodes[0].inputs[0])
-                placer.nt.links.new(nodes[4].outputs[0], cmb.inputs[0])
-
-                nodes[0].operation = 'MODULO'
-                nodes[0].inputs[1].default_value = 2
-                nodes[1].operation = 'LESS_THAN'
-                nodes[1].inputs[1].default_value = 1
-                nodes[2].operation = 'MULTIPLY'
-                nodes[2].inputs[1].default_value = 2
-                nodes[3].operation = 'SUBTRACT'
-                nodes[3].inputs[1].default_value = -1
-                nodes[4].operation = 'MULTIPLY'
-                placer.nt.links.new(sep.outputs[0], nodes[4].inputs[1])
+                node = local_placer.add('ShaderNodeMath', row=0)
+                placer.nt.links.new(sep.outputs[0], node.inputs[0])
+                placer.nt.links.new(node.outputs[0], cmb.inputs[0])
+                node.operation = 'PINGPONG'
+                node.inputs[1].default_value = 1
             else:
                 placer.nt.links.new(sep.outputs[0], cmb.inputs[0])
             if self.mirrorT:
-                nodes = [local_placer.add('ShaderNodeMath', row=1) for _ in range(5)]
-                for i in range(4):
-                    placer.nt.links.new(nodes[i].outputs[0], nodes[i+1].inputs[0])
-                placer.nt.links.new(sep.outputs[1], nodes[0].inputs[0])
-                placer.nt.links.new(nodes[4].outputs[0], cmb.inputs[1])
-
-                nodes[0].operation = 'MODULO'
-                nodes[0].inputs[1].default_value = 2
-                nodes[1].operation = 'LESS_THAN'
-                nodes[1].inputs[1].default_value = 1
-                nodes[2].operation = 'MULTIPLY'
-                nodes[2].inputs[1].default_value = 2
-                nodes[3].operation = 'SUBTRACT'
-                nodes[3].inputs[1].default_value = -1
-                nodes[4].operation = 'MULTIPLY'
-                placer.nt.links.new(sep.outputs[1], nodes[4].inputs[1])
+                node = local_placer.add('ShaderNodeMath', row=1)
+                placer.nt.links.new(sep.outputs[1], node.inputs[0])
+                placer.nt.links.new(node.outputs[0], cmb.inputs[1])
+                node.operation = 'PINGPONG'
+                node.inputs[1].default_value = 1
             else:
                 placer.nt.links.new(sep.outputs[1], cmb.inputs[1])
 
