@@ -436,6 +436,11 @@ class BModel:
             log.error('Normals weren\'t set (error is %s)', err)
         modelMesh.update()
 
+        with common.active_object(modelObject):
+            bpy.ops.object.mode_set(mode='EDIT')
+            bpy.ops.mesh.separate(type='MATERIAL')
+            bpy.ops.object.mode_set(mode='OBJECT')
+            
         return modelObject
 
     def LoadModel(self, filePath):
