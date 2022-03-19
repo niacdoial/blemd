@@ -102,8 +102,8 @@ class ImportBmd(Operator, ImportHelper):
     #    )
     sv_anim: EnumProperty(
         name="Import animations(WIP)",
-        description="if so, choice to chain them or put them in individual actions",
-        items=(('DONT', "do not import animations", ""),
+        description="If you choose to import animations, you can choose to chain them or put them in individual actions",
+        items=(('DONT', "Do not import animations", ""),
                ('CHAINED', "Single Action", 'will concatenate all the detected .bck files into a single animation (messy, but simple to use)'),
                ('SEPARATE', "One Action per animation file", 'animations will be displayed one after the other on a "NLA strip"'
                                                              ' (for more advanced blender users)')),
@@ -111,48 +111,48 @@ class ImportBmd(Operator, ImportHelper):
     )
 
     use_nodes: BoolProperty(
-        name="use complete materials",
-        description="use complete (glsl) materials (converted into nodes)."
+        name="Use complete materials",
+        description="Use complete GLSL materials converted into nodes."
                     "More precise, but impossible to export for now.",
         default=False
     )
 
     frc_cr_bn: BoolProperty(
-        name="Force create bones",
+        name="Force bone creation",
         description="",
         default=False
     )
 
     nat_bn: BoolProperty(
-        name="use natural bone placement",
-        description="make any animation bone with a single child animation bone point towards it.\n(WARNING: discards animations)",
+        name="Use natural bone placement",
+        description="Make any animation bone with a single child animation bone point towards it.\n(WARNING: discards animations)",
         default=False
     )
 
     no_rot_cv: BoolProperty(
-        name="disable axis conversion",
-        description="disable converting the Y-up BMD space into the Z-up blender space. (Reinforced compatibility with other BMD import tools)",
+        name="Disable axis conversion",
+        description="Disable converting the Y-up BMD space into the Z-up blender space. (Reinforced compatibility with other BMD import tools)",
         default=True
     )
 
     val_msh: BoolProperty(
-        name="validate mesh [!]",
-        description="ONLY use if blender crashes otherwise.\nMesh WILL be very inaccurate for material mapping.\n"
+        name="Validate mesh [!]",
+        description="Use this ONLY if blender crashes otherwise.\nMesh WILL be very inaccurate for material mapping.\n"
         "If you are forced to use this option, start an issue on github and please include the console log.",
         default=False
     )
 
     tx_pck: EnumProperty(
         name="Pack textures",
-        description="choose if textures should be inside the blender file or referenced by it",
-        items=(('DONT', 'reference external files', ''),
-               ('DO', 'pack images in blender file', '')),
+        description="Choose if textures should be inside the blender file or referenced by it",
+        items=(('DONT', 'Reference external files', ''),
+               ('DO', 'Pack images in blender file', '')),
         default='DO'
     )
 
     imtype: EnumProperty(
         name="Image format",
-        description="Choose packed images, native format image, or targa converted ones."
+        description="The Format at which to store the image.\n"
                     "If an image is missing, try changing this setting",
         items=(('TGA', "targa files", ""),
                ('DDS', "dds files", '(this format has less support from Blender)')),
@@ -160,13 +160,13 @@ class ImportBmd(Operator, ImportHelper):
     )
 
     ic_sc = BoolProperty(
-        name="include scaling",
-        description="Will help make some models look right, has opposite effect on others.",
+        name="Include scaling",
+        description="This will help make some models look right, bur has the opposite effect on others.",
         default=True
     )
 
     boneThickness: IntProperty(
-        name="bone length",
+        name="Bone length",
         description="the length of what represents bones in blender Only affects visibility. usually from 5 to 100.",
         min=1,
         max=1000,
@@ -177,13 +177,15 @@ class ImportBmd(Operator, ImportHelper):
 
     dvg: BoolProperty(
         name="DEBUG vertex groups",
-        description="DEBUG option. create Vgroups to show the original BMD structure (ram-intensive)",
+        description="This is a debugging option.\n"
+                    "Creates Vgroups to show the original BMD structure (warning: ram-intensive)",
         default=False
     )
 
     paranoia: BoolProperty(
         name="DEBUG crashes",
-        description="option for debug purposes: will prefer a clean crash over a weird result",
+        description="This is a dubugging option.\n"
+                    "Produces cleaner crashes",
         default=False
     )
 
