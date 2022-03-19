@@ -436,6 +436,11 @@ class BModel:
             log.error('Normals weren\'t set (error is %s)', err)
         modelMesh.update()
 
+        with common.active_object(modelObject):
+            bpy.ops.object.mode_set(mode='EDIT')
+            bpy.ops.mesh.separate(type='MATERIAL')
+            bpy.ops.object.mode_set(mode='OBJECT')
+            
         return modelObject
 
     def LoadModel(self, filePath):
@@ -1088,7 +1093,7 @@ class BModel:
         self._bckPaths.append("{1}{0}..{0}bck{0}*.bck".format(common.SEP, self._bmdPath))
         self._bckPaths.append("{1}{0}..{0}bcks{0}*.bck".format(common.SEP, self._bmdPath))
         self._bckPaths.append("{1}{0}..{0}scrn{0}*.bck".format(common.SEP, self._bmdPath))
-        
+        self._bckPaths.append("{1}{0}*.bck".format(common.SEP, self._bmdPath))
         self._btpPaths.append("{1}{0}..{0}btp{0}*.btp".format(common.SEP, self._bmdPath))
 
         try:

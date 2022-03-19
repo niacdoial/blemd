@@ -228,46 +228,22 @@ class Sampler:
             sep = local_placer.add('ShaderNodeSeparateXYZ')
             cmb = local_placer.add('ShaderNodeCombineXYZ')
 
-            # inversion code: if *coord* in [odd, even] then coord *= -1
-            # coord *= (-1 + 2(coord%2 < 1))
-            # (this is going to be coded in nodes, but it looks like a black box)
+            # use ping-pong nodes for mirroring
 
             if self.mirrorS:
-                nodes = [local_placer.add('ShaderNodeMath', row=0) for _ in range(5)]
-                for i in range(4):
-                    placer.nt.links.new(nodes[i].outputs[0], nodes[i+1].inputs[0])
-                placer.nt.links.new(sep.outputs[0], nodes[0].inputs[0])
-                placer.nt.links.new(nodes[4].outputs[0], cmb.inputs[0])
-
-                nodes[0].operation = 'MODULO'
-                nodes[0].inputs[1].default_value = 2
-                nodes[1].operation = 'LESS_THAN'
-                nodes[1].inputs[1].default_value = 1
-                nodes[2].operation = 'MULTIPLY'
-                nodes[2].inputs[1].default_value = 2
-                nodes[3].operation = 'SUBTRACT'
-                nodes[3].inputs[1].default_value = -1
-                nodes[4].operation = 'MULTIPLY'
-                placer.nt.links.new(sep.outputs[0], nodes[4].inputs[1])
+                node = local_placer.add('ShaderNodeMath', row=0)
+                placer.nt.links.new(sep.outputs[0], node.inputs[0])
+                placer.nt.links.new(node.outputs[0], cmb.inputs[0])
+                node.operation = 'PINGPONG'
+                node.inputs[1].default_value = 1
             else:
                 placer.nt.links.new(sep.outputs[0], cmb.inputs[0])
             if self.mirrorT:
-                nodes = [local_placer.add('ShaderNodeMath', row=1) for _ in range(5)]
-                for i in range(4):
-                    placer.nt.links.new(nodes[i].outputs[0], nodes[i+1].inputs[0])
-                placer.nt.links.new(sep.outputs[1], nodes[0].inputs[0])
-                placer.nt.links.new(nodes[4].outputs[0], cmb.inputs[1])
-
-                nodes[0].operation = 'MODULO'
-                nodes[0].inputs[1].default_value = 2
-                nodes[1].operation = 'LESS_THAN'
-                nodes[1].inputs[1].default_value = 1
-                nodes[2].operation = 'MULTIPLY'
-                nodes[2].inputs[1].default_value = 2
-                nodes[3].operation = 'SUBTRACT'
-                nodes[3].inputs[1].default_value = -1
-                nodes[4].operation = 'MULTIPLY'
-                placer.nt.links.new(sep.outputs[1], nodes[4].inputs[1])
+                node = local_placer.add('ShaderNodeMath', row=1)
+                placer.nt.links.new(sep.outputs[1], node.inputs[0])
+                placer.nt.links.new(node.outputs[0], cmb.inputs[1])
+                node.operation = 'PINGPONG'
+                node.inputs[1].default_value = 1
             else:
                 placer.nt.links.new(sep.outputs[1], cmb.inputs[1])
 
@@ -810,33 +786,13 @@ def makeTexCoords(material, texGen, i, matbase, mat3, data_placer):
         # try if texcoord scaling is where i think it is
         if matbase.texMtxInfos[i] != 0xffff:
             tmi = mat3.texMtxInfos[matbase.texMtxInfos[i]]
-            local_placer = NodePlacer(material.nt, data_placer.add('NodeFrame', 'TexCoordMatrix %d'%i, i+2),
-                                      20, False, 2)
-            combine = local_placer.add('ShaderNodeCombineXYZ')
-            sep = local_placer.add('ShaderNodeSeparateXYZ')
-            mul_u = local_placer.add('ShaderNodeMath', row=0)
-            mul_v = local_placer.add('ShaderNodeMath', row=1)
-            add_u = local_placer.add('ShaderNodeMath', row=0)
-            add_v = local_placer.add('ShaderNodeMath', row=1)
-            local_placer.reappend(combine)
-            mul_u.operation = mul_v.operation = 'MULTIPLY'
-            add_u.operation = add_v.operation = 'ADD'
-
-            mul_u.inputs[1].default_value = tmi.scaleU
-            mul_v.inputs[1].default_value = tmi.scaleV
-            add_u.inputs[1].default_value = (tmi.scaleCenterX*(1 - tmi.scaleU))
-            add_v.inputs[1].default_value = (1 - tmi.scaleCenterY) * (1 - tmi.scaleV)
-
-            material.nt.links.new(sep.outputs[0], mul_u.inputs[0])
-            material.nt.links.new(sep.outputs[1], mul_v.inputs[0])
-            material.nt.links.new(mul_u.outputs[0], add_u.inputs[0])
-            material.nt.links.new(mul_v.outputs[0], add_v.inputs[0])
-            material.nt.links.new(add_u.outputs[0], combine.inputs[0])
-            material.nt.links.new(add_v.outputs[0], combine.inputs[1])
-
-            makelink(material.nt, dst, sep.inputs[0])
-            dst = combine.outputs[0]
-
+            mapping = data_placer.add('ShaderNodeMapping', row=0)
+            mapping.label=('TexCoordMatrix %d'%i)
+            data_placer.nt.links.new(dst, mapping.inputs[0])
+            mapping.inputs[3].default_value[0] = tmi.scaleU
+            mapping.inputs[3].default_value[1] = tmi.scaleV
+            mapping.inputs[1].default_value[0] = (tmi.scaleCenterX*(1 - tmi.scaleU))
+            mapping.inputs[1].default_value[1] = (1 - tmi.scaleCenterY) * (1 - tmi.scaleV)
     elif texGen.texGenType == 0xa:
         if (texGen.matrix != 0x3c):
             log.warning("writeTexGen() type 0xa: unexpected matrix %x", texGen.matrix)
