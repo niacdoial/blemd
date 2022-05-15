@@ -17,13 +17,8 @@ log = logging.getLogger('bpy.ops.import_mesh.bmd.maxH')
 
 IDE = False  # is changed by test launcher
 
-if sys.platform[:3].lower()=='win':
-    SEP = '\\'
-elif sys.platform=='linux':
-    SEP = '/'
-else:
+if not sys.platform[:3].lower()=='win' or sys.platform[:3].lower()=='lin':
     log.error('Your platform (%s) is not supported. images will not be imported')
-    SEP = '/'  # a decent default
 
 @contextmanager
 def stdout_redirected(to=os.devnull):
