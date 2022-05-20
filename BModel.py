@@ -992,7 +992,7 @@ class BModel:
         except FileExistsError:
             pass
 
-        self._images = common.getFiles(self._texturePath + common.SEP+"*" + imageExt)
+        self._images = common.getFiles(self._texturePath + os.sep+"*" + imageExt)
 
         if len(self._images) == 0 or force:
             self.TryHiddenDOSCommand("bmdview",  # DO NOT capitalize: unix-like OSes use case-sensitive paths.
@@ -1003,7 +1003,7 @@ class BModel:
         errorMessage = "Error generating dds / tga image file(s).\
                        Use BmdView2 to export the missing tga file(s)\
                        then delete the *.ERROR file(s) and run the importer again"
-        errorFiles = common.getFiles(self._texturePath + common.SEP+"*.ERROR")
+        errorFiles = common.getFiles(self._texturePath + os.sep +"*.ERROR")
         for f in errorFiles:
             errorMessage += f + "\n"  # report file
             common.newfile(f[:-6] + imageExt)  # and avoid crashes in the future
@@ -1014,7 +1014,7 @@ class BModel:
         return True
 
     def CreateBTPDataFile(self):
-        btpFiles = common.getFiles(self._bmdDir + "..\\btp\\*.btp".replace('\\', common.SEP))
+        btpFiles = common.getFiles(self._bmdDir + "..\\btp\\*.btp".replace('\\', os.sep))
         # --messageBox (bckFiles as string)
 
         fBTP = open(self._bmdDir + "TextureAnimations.xml", 'w')
@@ -1081,7 +1081,7 @@ class BModel:
         # this is 'P:\ath\to\file' and '.bmd' (the second string is useful because it can also be 'bdl'
         temp_path, temp_ext = OSPath.splitext(filename)
         # this is 'P:\ath\to\file_bmd\'
-        self._bmdDir = temp_path+ '_' + temp_ext[1:] + common.SEP  # generates dir name from file name?
+        self._bmdDir = temp_path+ '_' + temp_ext[1:] + os.sep  # generates dir name from file name?
         # P:\ath\to'
         self._bmdPath = OSPath.split(temp_path)[0]
         # file(.bmd?)
@@ -1090,11 +1090,11 @@ class BModel:
         self._texturePath = self._bmdDir + "Textures"
 
 
-        self._bckPaths.append("{1}{0}..{0}bck{0}*.bck".format(common.SEP, self._bmdPath))
-        self._bckPaths.append("{1}{0}..{0}bcks{0}*.bck".format(common.SEP, self._bmdPath))
-        self._bckPaths.append("{1}{0}..{0}scrn{0}*.bck".format(common.SEP, self._bmdPath))
-        self._bckPaths.append("{1}{0}*.bck".format(common.SEP, self._bmdPath))
-        self._btpPaths.append("{1}{0}..{0}btp{0}*.btp".format(common.SEP, self._bmdPath))
+        self._bckPaths.append("{1}{0}..{0}bck{0}*.bck".format(os.sep, self._bmdPath))
+        self._bckPaths.append("{1}{0}..{0}bcks{0}*.bck".format(os.sep, self._bmdPath))
+        self._bckPaths.append("{1}{0}..{0}scrn{0}*.bck".format(os.sep, self._bmdPath))
+        self._bckPaths.append("{1}{0}*.bck".format(os.sep, self._bmdPath))
+        self._btpPaths.append("{1}{0}..{0}btp{0}*.btp".format(os.sep, self._bmdPath))
 
         try:
             os.mkdir(self._bmdDir)

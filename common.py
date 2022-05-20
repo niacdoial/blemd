@@ -17,8 +17,8 @@ log = logging.getLogger('bpy.ops.import_mesh.bmd.maxH')
 
 IDE = False  # is changed by test launcher
 
-if not sys.platform[:3].lower()=='win' or sys.platform[:3].lower()=='lin':
-    log.error('Your platform (%s) is not supported. images will not be imported')
+if not (sys.platform[:3].lower()=='win' or sys.platform[:3].lower()=='lin'):
+    log.error('Your platform (%s) is not supported. images will not be imported', sys.platform[:3].lower())
 
 @contextmanager
 def stdout_redirected(to=os.devnull):
@@ -117,7 +117,7 @@ def SubProcCall(exefile, args, startpath=os.getcwd()):
 
 
 def getFilenamePath(path):
-    return os.path.split(path)[0] + os.path.sep
+    return os.path.split(path)[0] + os.sep
 
 
 def newfile(name):
@@ -143,7 +143,7 @@ def getFiles(wc_name):
     except StopIteration:
         return returnable
     for com in files:
-        if os.path.sep == '/':
+        if os.sep == '/':
             wc_name = wc_name.replace('\\', '/')
         else:
             wc_name = wc_name.replace('/', '\\').replace('\\', r'\\')
@@ -152,7 +152,7 @@ def getFiles(wc_name):
                             replace('*', '.*').\
                             replace('(', r'\(').\
                             replace(')', r'\)')
-        if re.fullmatch(rematcher, path+ os.path.sep + com):
+        if re.fullmatch(rematcher, path+ os.sep + com):
             returnable.append(os.path.join(path, com))
     return returnable
 
