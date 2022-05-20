@@ -86,7 +86,7 @@ class ImportBmd(Operator, ImportHelper):
     # ImportHelper mixin class uses this
     filename_ext = ".bmd"
 
-    filter_glob = StringProperty(
+    filter_glob: StringProperty(
         default="*.bmd;*.bdl",
         options={'HIDDEN'},
         maxlen=255,  # Max internal buffer length, longer would be clamped.
