@@ -86,7 +86,7 @@ class ImportBmd(Operator, ImportHelper):
     # ImportHelper mixin class uses this
     filename_ext = ".bmd"
 
-    filter_glob = StringProperty(
+    filter_glob: StringProperty(
         default="*.bmd;*.bdl",
         options={'HIDDEN'},
         maxlen=255,  # Max internal buffer length, longer would be clamped.
@@ -199,7 +199,7 @@ class ImportBmd(Operator, ImportHelper):
         path = os.path.abspath(os.path.split(__file__)[0])  # automatically find where we are
         print(__file__)
         try:
-            temp.SetBmdViewExePath(path + common.SEP)  # add 'backslash' for good measure
+            temp.SetBmdViewExePath(path + os.sep)  # add 'backslash' for good measure
             temp.Import(filename=self.filepath, **{x: getattr(self, x) for x in self.ALL_PARAMS})
         except Exception as err:
             log.critical('An error happened. If it wasn\'t reported before, here it is: %s', err)
