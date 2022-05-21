@@ -100,19 +100,19 @@ def build_material_legacy(mIndex, mat1, tex, texpath, ext):
 
     return currMaterial
 
-def build_material_v3(mIndex, mat1, tex1, texpath, ext):
+def build_material_v3(mIndex, mat1, tex1, texpath, ext, params):
     mbase = mat1.materialbases[mIndex]
     material = bpy.data.materials.new('dummy_temp_name-function_v3')
     material.use_nodes = True
-    MPL.createMaterialSystem(mbase, mat1, tex1, texpath, ext, material.node_tree)
+    MPL.createMaterialSystem(mbase, mat1, tex1, texpath, ext, material.node_tree, params)
     return material
     # mat1.materials[mIndex] = msys
 
-def build_material_simple(mIndex, mat1, tex1, texpath, ext):
+def build_material_simple(mIndex, mat1, tex1, texpath, ext, params):
     mbase = mat1.materialbases[mIndex]
     material = bpy.data.materials.new('dummy_temp_name-function_simple')
     material.use_nodes = True
-    MPL.create_simple_material_system(mbase, mat1, tex1, texpath, ext, material.node_tree)
+    MPL.create_simple_material_system(mbase, mat1, tex1, texpath, ext, material.node_tree, params)
     return material
     # mat1.materials[mIndex] = msys
 

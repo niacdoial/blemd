@@ -469,6 +469,8 @@ class BModel:
         while strTag != "TEX" and not br.is_eof():  # "TEX1 tag is the last one every time"
             br.SeekCur(iSize)
             streamPos = br.Position()
+            if br.is_eof():
+                break
             strTag = br.ReadFixedLengthString(3)
             _ = br.GetByte()
             iSize = br.ReadDWORD()
@@ -771,13 +773,15 @@ class BModel:
                             self._mat1.indexToMatIndex[n.index],
                             self._mat1, self.tex,
                             self._texturePath, '.' + self.params.imtype.lower(),
+                            self.params,
                         )
                     else:
                         try:
                             self._currMaterial = MatH.build_material_v3(
                                 self._mat1.indexToMatIndex[n.index],
                                 self._mat1, self.tex,
-                                self._texturePath, '.' + self.params.imtype.lower()
+                                self._texturePath, '.' + self.params.imtype.lower(),
+                                self.params,
                             )
                         except Exception as err:
 
@@ -792,6 +796,7 @@ class BModel:
                                     self._mat1.indexToMatIndex[n.index],
                                     self._mat1, self.tex,
                                     self._texturePath, '.' + self.params.imtype.lower(),
+                                    self.params
                                 )
 
             except Exception as err:

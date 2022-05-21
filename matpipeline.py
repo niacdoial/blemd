@@ -1,6 +1,6 @@
 from mathutils import Color, Vector
 import os.path as OSPath
-from .texhelper import newtex_image
+from .texhelper import newtex_image, newtex_missing
 import logging
 log = logging.getLogger('bpy.ops.import_mesh.bmd.matpipeline')
 import bpy
@@ -182,7 +182,7 @@ class Holder:
 
 class Sampler:
     """a class to hold texture access information"""
-    def __init__(self, name):
+    def __init__(self, name=None):
         self.name = name
         self.wrapS = True
         self.wrapT = True
@@ -216,8 +216,10 @@ class Sampler:
             is_alpha_row = 0
         else:  # assume is_alpha is a bool
             is_alpha_row = int(is_alpha)
-        
-        image = newtex_image(self.name)
+        if self.name is None:
+            image = newtex_missing()
+        else:
+            image = newtex_image(self.name)
         texnode = placer.add('ShaderNodeTexImage', row=is_alpha_row)
         texnode.image = image
         # XCX image mapping (clamp, mirror)
@@ -819,7 +821,7 @@ def makeTexCoords(material, texGen, i, matbase, mat3, data_placer):
     material.texcoords[i] = dst
 
 
-def createMaterialSystem(matBase, mat3, tex1, texpath, extension, nt):
+def createMaterialSystem(matBase, mat3, tex1, texpath, extension, nt, params):
     """converts the data from a materialBase object to a blender node tree"""
     # ### vertex shader part:
 
@@ -865,9 +867,18 @@ def createMaterialSystem(matBase, mat3, tex1, texpath, extension, nt):
     for i in range(8):
         if matBase.texStages[i] != 0xffff:
             texId = mat3.texStageIndexToTextureIndex[matBase.texStages[i]]
-            currTex =tex1.texHeaders[texId]
-            material.textures[i] = Sampler(OSPath.join(texpath, tex1.stringtable[texId] + extension))
-            material.textures[i].setTexWrapMode(currTex.wrapS, currTex.wrapT)  # XCX set min/mag filters ?
+            if len(tex1.texHeaders) <= texId:
+                if params.PARANOID:
+                    raise ValueError(f"Bad TEX/MAT section: texture {texId:d} does not exist")
+                else:
+                    material.textures[i] = Sampler()  # "missing" texture
+                    log.warning("no known texture with  ID %d", texId)
+            else:
+                currTex = tex1.texHeaders[texId]
+                material.textures[i] = Sampler(OSPath.join(texpath, tex1.stringtable[texId] + extension))
+                material.textures[i].setTexWrapMode(currTex.wrapS, currTex.wrapT)  # XCX set min/mag filters ?
+                
+                    
 
     # konst colors
     # first determine if they are needed or not, then actually create the associated nodes.
@@ -950,7 +961,7 @@ def createMaterialSystem(matBase, mat3, tex1, texpath, extension, nt):
     material.export()
 
 
-def create_simple_material_system(matBase, mat3, tex1, texpath, extension, nt):
+def create_simple_material_system(matBase, mat3, tex1, texpath, extension, nt, params):
     """converts the data from a materialBase object to a blender node tree"""
     # ### vertex shader part:
 

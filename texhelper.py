@@ -83,6 +83,14 @@ def newtex_image(fname):
     imported_textures[fname] = img
     return img
 
+MISSING_TEXTURE = None
+def newtex_missing():
+    global MISSING_TEXTURE
+    if MISSING_TEXTURE is None:
+        MISSING_TEXTURE = bpy.data.images.new("MISSING",1,1)
+        MISSING_TEXTURE.pixels[0] = 1  # set the red channel of the image's only pixel
+    return MISSING_TEXTURE
+
 def newtex_tslot(fname, type, mat):
     global imported_tslots
     if mat in imported_tslots.keys() and fname in imported_tslots[mat].keys():

@@ -1356,6 +1356,9 @@ void readBmd(std::istream& f)
 		cout << "Read " << string(tag, 4) << endl;
 		if (size == 0)
 			throw runtime_error("corrupted .bmd file: sizeless sections don't exist");
+		if (f.eof())
+			// no tex section, no images to extract. peace out.
+			exit(EXIT_SUCCESS);
 	} while (strncmp(tag, "TEX1", 4) != 0);
 	f.seekg(t);
 
