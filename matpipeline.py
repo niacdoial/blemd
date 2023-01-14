@@ -222,6 +222,14 @@ class Sampler:
             image = newtex_image(self.name)
         texnode = placer.add('ShaderNodeTexImage', row=is_alpha_row)
         texnode.image = image
+
+        if isinstance(coords, Vector):
+            vectnode = placer.add('ShaderNodeCombineXYZ', row=is_alpha_row)
+            vectnode.inputs[0].default_value = coords.x
+            vectnode.inputs[1].default_value = coords.y
+            vectnode.inputs[2].default_value = coords.z
+            coords = vectnode.outputs[0]
+        
         # XCX image mapping (clamp, mirror)
         if self.mirrorS or self.mirrorT:
             local_frame = placer.add('NodeFrame', 'mirroring', row=is_alpha_row)
@@ -802,6 +810,7 @@ def makeTexCoords(material, texGen, i, matbase, mat3, data_placer):
             log.warning("writeTexGen() type 0xa: unexpected src %x", texGen.texGenSrc)
 
         log.warning("writeTexGen(): Found type 0xa (SRTG), doesn't work right yet")
+        dst = Vector((0,0,0))  # "null" vector
 
         #// t << "sphereMap*vec4(gl_NormalMatrix*gl_Normal, 1.0)";
 
@@ -816,6 +825,7 @@ def makeTexCoords(material, texGen, i, matbase, mat3, data_placer):
         #out << "  " << dest << " = color; //(not sure...)\n";
     else:
         log.warning("writeTexGen: unsupported type %x", hex(texGen.texGenType))
+        dst = Vector((0,0,0))  # "null" vector
         #out << "  " << dest << " = vec4(0.0, 0.0, 0.0, 0.0); //(unsupported texgentype)\n"
 
     material.texcoords[i] = dst

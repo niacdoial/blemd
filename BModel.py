@@ -90,14 +90,20 @@ class ModelRepresentation:
             ret = array('f', [0.0] * 3 * len(self.loops))
             if common.GLOBALS.no_rot_conversion:
                 for num, com in enumerate(self.loops):
-                    ret[3 * num] = com.normal.x
-                    ret[3 * num + 1] = com.normal.y
-                    ret[3 * num + 2] = com.normal.z
+                    if com.normal is None:
+                        ret[3*num] = ret[3*num+1] = ret[3*num+2] = 0
+                    else:
+                        ret[3 * num] = com.normal.x
+                        ret[3 * num + 1] = com.normal.y
+                        ret[3 * num + 2] = com.normal.z
             else:
                 for num, com in enumerate(self.loops):
-                    ret[3 * num] = com.normal.x
-                    ret[3 * num + 1] = -com.normal.z
-                    ret[3 * num + 2] = com.normal.y
+                    if com.normal is None:
+                        ret[3*num] = ret[3*num+1] = ret[3*num+2] = 0
+                    else:
+                        ret[3 * num] = com.normal.x
+                        ret[3 * num + 1] = -com.normal.z
+                        ret[3 * num + 2] = com.normal.y
         elif type == 'v_indexes':
             ret = array('i')
             for com in self.loops:
