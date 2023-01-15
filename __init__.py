@@ -32,7 +32,7 @@ import logging.config
 import io, os
 # ImportHelper is a helper class, defines filename and
 # invoke() function which calls the file selector.
-from bpy_extras.io_utils import ImportHelper
+from bpy_extras.io_utils import ImportHelper, ExportHelper
 from bpy.props import StringProperty, BoolProperty, EnumProperty, IntProperty
 from bpy.types import Operator
 
@@ -95,26 +95,26 @@ class ImportBmd(Operator, ImportHelper):
     # List of operator properties, the attributes will be assigned
     # to the class instance from the operator settings before calling.
 
-    #sv_anim = BoolProperty(
-    #    name="Import animations (WIP)",
-    #    description="",
-    #    default=True
-    #    )
-    sv_anim: EnumProperty(
-        name="Import animations(WIP)",
+    import_anims : BoolProperty(
+        name="Import animations",
+        description="",
+        default=True
+    )
+    
+    import_anims_type : EnumProperty(
+        name="Animation Mode",
         description="If you choose to import animations, you can choose to chain them or put them in individual actions",
-        items=(('DONT', "Do not import animations", ""),
-               ('CHAINED', "Single Action", 'will concatenate all the detected .bck files into a single animation (messy, but simple to use)'),
-               ('SEPARATE', "One Action per animation file", 'animations will be displayed one after the other on a "NLA strip"'
-                                                             ' (for more advanced blender users)')),
-        default='CHAINED'
+        items=(('SEPARATE', "Separate", 'Animations will be imported into individual actions inside an NLA Track'),
+               ('CHAINED', "Chained", 'Animations will be imported one after another into a single action'),
+               ),
+        default='SEPARATE'
     )
 
-    use_nodes: BoolProperty(
+    use_nodes : BoolProperty(
         name="Use complete materials",
         description="Use complete GLSL materials converted into nodes."
                     "More precise, but impossible to export for now.",
-        default=False
+        default=True
     )
 
     frc_cr_bn: BoolProperty(
@@ -132,7 +132,7 @@ class ImportBmd(Operator, ImportHelper):
     no_rot_cv: BoolProperty(
         name="Disable axis conversion",
         description="Disable converting the Y-up BMD space into the Z-up blender space. (Reinforced compatibility with other BMD import tools)",
-        default=True
+        default=False
     )
 
     val_msh: BoolProperty(
@@ -189,15 +189,18 @@ class ImportBmd(Operator, ImportHelper):
         default=False
     )
 
-    ALL_PARAMS = ['use_nodes', 'imtype', 'tx_pck', 'sv_anim',
+    ALL_PARAMS = ['use_nodes', 'imtype', 'tx_pck', 'import_anims', 'import_anims_type',
                   'nat_bn', 'ic_sc', 'frc_cr_bn', 'boneThickness', 'dvg', 'val_msh', 'paranoia', 'no_rot_cv']
 
     def execute(self, context):
         global log_out
         retcode = 'FINISHED'
+        
         temp = BModel.BModel()
         path = os.path.abspath(os.path.split(__file__)[0])  # automatically find where we are
+        
         print(__file__)
+        
         try:
             temp.SetBmdViewExePath(path + os.sep)  # add 'backslash' for good measure
             temp.Import(filename=self.filepath, **{x: getattr(self, x) for x in self.ALL_PARAMS})
@@ -209,29 +212,181 @@ class ImportBmd(Operator, ImportHelper):
             try:
                 message = log_out.getvalue()
                 message = common.dedup_lines(message)
+                
                 log_out.truncate(0)
             except:
                 message = "warning: logging glitched out. see system console for a more complete result"
+                
             if message:
                 if retcode == 'ERROR':
                     self.report({'ERROR'}, message)
                 else:
                     self.report({'WARNING'}, message)
+                    
         return {retcode}
+        
+    def draw(self, context):
+        pass
 
+
+class BMD_PT_import_options(bpy.types.Panel):
+    bl_space_type = 'FILE_BROWSER'
+    bl_region_type = 'TOOL_PROPS'
+    bl_label = "Options"
+    bl_parent_id = "FILE_PT_operator"
+
+    @classmethod
+    def poll(cls, context):
+        sfile = context.space_data
+        operator = sfile.active_operator
+        
+        return operator.bl_idname == "IMPORT_MESH_OT_bmd"
+        
+    def draw(self, context):
+        layout = self.layout
+        layout.use_property_split = True
+        layout.use_property_decorate = False  # No animation.
+
+        sfile = context.space_data
+        operator = sfile.active_operator
+        
+        layout.prop(operator, 'no_rot_cv')
+        layout.prop(operator, 'use_nodes')
+
+
+class BMD_PT_import_animation(bpy.types.Panel):
+    bl_space_type = 'FILE_BROWSER'
+    bl_region_type = 'TOOL_PROPS'
+    bl_label = "Animation"
+    bl_parent_id = "BMD_PT_import_options"
+
+    @classmethod
+    def poll(cls, context):
+        sfile = context.space_data
+        operator = sfile.active_operator
+        
+        return operator.bl_idname == "IMPORT_MESH_OT_bmd"
+        
+    def draw_header(self, context):
+        sfile = context.space_data
+        operator = sfile.active_operator
+
+        self.layout.prop(operator, "import_anims", text="")
+        
+    def draw(self, context):
+        layout = self.layout
+        layout.use_property_split = True
+        layout.use_property_decorate = False  # No animation.
+
+        sfile = context.space_data
+        operator = sfile.active_operator
+        
+        layout.enabled = operator.import_anims
+        layout.prop(operator, 'import_anims_type')
+
+
+class BMD_PT_import_armature(bpy.types.Panel):
+    bl_space_type = 'FILE_BROWSER'
+    bl_region_type = 'TOOL_PROPS'
+    bl_label = "Armature"
+    bl_parent_id = "BMD_PT_import_options"
+
+    @classmethod
+    def poll(cls, context):
+        sfile = context.space_data
+        operator = sfile.active_operator
+        
+        return operator.bl_idname == "IMPORT_MESH_OT_bmd"
+        
+    def draw(self, context):
+        layout = self.layout
+        layout.use_property_split = True
+        layout.use_property_decorate = False  # No animation.
+
+        sfile = context.space_data
+        operator = sfile.active_operator
+        
+        layout.prop(operator, 'frc_cr_bn')
+        layout.prop(operator, 'nat_bn')
+        layout.prop(operator, 'boneThickness')
+
+
+class BMD_PT_import_texture(bpy.types.Panel):
+    bl_space_type = 'FILE_BROWSER'
+    bl_region_type = 'TOOL_PROPS'
+    bl_label = "Texture"
+    bl_parent_id = "BMD_PT_import_options"
+
+    @classmethod
+    def poll(cls, context):
+        sfile = context.space_data
+        operator = sfile.active_operator
+        
+        return operator.bl_idname == "IMPORT_MESH_OT_bmd"
+        
+    def draw(self, context):
+        layout = self.layout
+        layout.use_property_split = True
+        layout.use_property_decorate = False  # No animation.
+
+        sfile = context.space_data
+        operator = sfile.active_operator
+        
+        layout.prop(operator, 'tx_pck')
+        layout.prop(operator, 'imtype')
+        
+
+class BMD_PT_import_debug(bpy.types.Panel):
+    bl_space_type = 'FILE_BROWSER'
+    bl_region_type = 'TOOL_PROPS'
+    bl_label = "DEBUG"
+    bl_parent_id = "BMD_PT_import_options"
+    bl_options = {'DEFAULT_CLOSED'}
+
+    @classmethod
+    def poll(cls, context):
+        sfile = context.space_data
+        operator = sfile.active_operator
+        
+        return operator.bl_idname == "IMPORT_MESH_OT_bmd"
+        
+    def draw(self, context):
+        layout = self.layout
+        layout.use_property_split = True
+        layout.use_property_decorate = False  # No animation.
+
+        sfile = context.space_data
+        operator = sfile.active_operator
+        
+        layout.prop(operator, 'dvg')
+        layout.prop(operator, 'paranoia')
+        layout.prop(operator, 'val_msh')
+    
 
 # Only needed if you want to add into a dynamic menu
-def menu_func(self, context):
+def import_menu_func(self, context):
     self.layout.operator(ImportBmd.bl_idname, text="Nintendo BMD/BDL")
-
+    
 
 def register():
     bpy.utils.register_class(ImportBmd)
-    bpy.types.TOPBAR_MT_file_import.append(menu_func)
+    bpy.utils.register_class(BMD_PT_import_options)
+    bpy.utils.register_class(BMD_PT_import_armature)
+    bpy.utils.register_class(BMD_PT_import_animation)
+    bpy.utils.register_class(BMD_PT_import_texture)
+    bpy.utils.register_class(BMD_PT_import_debug)
+    
+    bpy.types.TOPBAR_MT_file_import.append(import_menu_func)
 
 
 def unregister():
-    bpy.types.TOPBAR_MT_file_import.remove(menu_func)
+    bpy.types.TOPBAR_MT_file_import.remove(import_menu_func)
+    
+    bpy.utils.unregister_class(BMD_PT_import_debug)
+    bpy.utils.unregister_class(BMD_PT_import_texture)
+    bpy.utils.unregister_class(BMD_PT_import_animation)
+    bpy.utils.unregister_class(BMD_PT_import_armature)
+    bpy.utils.unregister_class(BMD_PT_import_options)
     bpy.utils.unregister_class(ImportBmd)
 
 
