@@ -95,13 +95,13 @@ class ImportBmd(Operator, ImportHelper):
     # List of operator properties, the attributes will be assigned
     # to the class instance from the operator settings before calling.
 
-    import_anims : BoolProperty(
+    import_anims: BoolProperty(
         name="Import animations",
         description="",
         default=True
     )
     
-    import_anims_type : EnumProperty(
+    import_anims_type: EnumProperty(
         name="Animation Mode",
         description="If you choose to import animations, you can choose to chain them or put them in individual actions",
         items=(('SEPARATE', "Separate", 'Animations will be imported into individual actions inside an NLA Track'),
@@ -110,7 +110,7 @@ class ImportBmd(Operator, ImportHelper):
         default='SEPARATE'
     )
 
-    use_nodes : BoolProperty(
+    use_nodes: BoolProperty(
         name="Use complete materials",
         description="Use complete GLSL materials converted into nodes."
                     "More precise, but impossible to export for now.",
@@ -270,7 +270,8 @@ class BMD_PT_import_animation(bpy.types.Panel):
     def draw_header(self, context):
         sfile = context.space_data
         operator = sfile.active_operator
-
+        
+        self.layout.enabled = getattr(operator, 'nat_bn') != True
         self.layout.prop(operator, "import_anims", text="")
         
     def draw(self, context):
@@ -281,7 +282,7 @@ class BMD_PT_import_animation(bpy.types.Panel):
         sfile = context.space_data
         operator = sfile.active_operator
         
-        layout.enabled = operator.import_anims
+        layout.enabled = operator.import_anims and not operator.nat_bn
         layout.prop(operator, 'import_anims_type')
 
 
