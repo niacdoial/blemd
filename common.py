@@ -136,24 +136,29 @@ def getFiles(wc_name):
     # assume wild card is in the last part
     path, file = os.path.split(wc_name)
     returnable = []
+    
     if '*' in path:
         raise ValueError('must implement getFiles better')
     try:
         a, dirs, files = next(os.walk(os.path.normpath(path)))
     except StopIteration:
         return returnable
+        
+    if os.sep == '/':
+      wc_name = wc_name.replace('\\', '/')
+    else:
+      wc_name = wc_name.replace('/', '\\').replace('\\', r'\\')
+      path = path.replace('/', '\\')
+    
+    rematcher = wc_name.replace('.', r'\.').\
+                    replace('*', '.*').\
+                    replace('(', r'\(').\
+                    replace(')', r'\)')
+    
     for com in files:
-        if os.sep == '/':
-            wc_name = wc_name.replace('\\', '/')
-        else:
-            wc_name = wc_name.replace('/', '\\').replace('\\', r'\\')
-            path = path.replace('/', '\\')
-        rematcher = wc_name.replace('.', r'\.').\
-                            replace('*', '.*').\
-                            replace('(', r'\(').\
-                            replace(')', r'\)')
-        if re.fullmatch(rematcher, path+ os.sep + com):
+        if re.fullmatch(rematcher, path + os.sep + com):
             returnable.append(os.path.join(path, com))
+            
     return returnable
 
 def dedup_lines(string):
