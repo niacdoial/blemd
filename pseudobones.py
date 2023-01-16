@@ -2,6 +2,8 @@ from mathutils import Vector, Euler, Matrix
 import bpy
 import math
 import re
+from collections import OrderedDict as ODict
+
 from .common import dict_get_set
 from . import common
 from .Matrix44 import rotation_part
@@ -18,6 +20,7 @@ BtoN = Matrix([[1,0,0,0],
                [0,-1,0,0],
                [0,0,0,1]])
 
+EPSILON = 1E-4
 
 def product(lamb, vct):
     ret = vct.copy()
@@ -100,7 +103,7 @@ def get_dynamic_mtx(p_bone, frame):
 
 
 def get_pos_vct(p_bone, frame):
-    EPSILON = 1E-4
+    global EPSILON
     y, ydL, ydR = get_dynamic_mtx(p_bone, frame)
     y = y.to_translation()
     ydL = ydL.to_translation()
@@ -112,7 +115,7 @@ def get_pos_vct(p_bone, frame):
 
 
 def get_rot_vct(p_bone, frame):
-    EPSILON = 1E-4
+    global EPSILON
     y, ydL, ydR = get_dynamic_mtx(p_bone, frame)
     y = y.to_euler('XYZ')
     ydL = ydL.to_euler('XYZ')
@@ -148,66 +151,60 @@ instances = {}
 class KeyFrames:
     def __init__(self):
         self.times = {}
-        self.positions = [{}, {}, {}]
-        self.rotations = [{}, {}, {}]
-        self.scales = [{}, {}, {}]
+        self.positions = [ODict(), ODict(), ODict()]
+        self.rotations = [ODict(), ODict(), ODict()]
+        self.scales = [ODict(), ODict(), ODict()]
 
     def feed_anim(self, anim, include_sc=True, fr_sc=1, fr_of=0):
-        for key in anim.translationsX:
-            frame_time = int(fr_sc*key.time+fr_of)
-            self.positions[0][frame_time] = (key.value, key.tangentL, key.tangentR)
-            dict_get_set(self.times, frame_time, [False, False, False])[0] = True
-        for key in anim.translationsY:
-            frame_time = int(fr_sc*key.time+fr_of)
-            self.positions[1][frame_time] = (key.value, key.tangentL, key.tangentR)
-            dict_get_set(self.times, frame_time, [False, False, False])[0] = True
-        for key in anim.translationsZ:
-            frame_time = int(fr_sc*key.time+fr_of)
-            self.positions[2][frame_time] = (key.value, key.tangentL, key.tangentR)
-            dict_get_set(self.times, frame_time, [False, False, False])[0] = True
 
-        for key in anim.rotationsX:
-            frame_time = int(fr_sc*key.time+fr_of)
-            self.rotations[0][frame_time] = (key.value, key.tangentL, key.tangentR)
-            dict_get_set(self.times, frame_time, [False, False, False])[1] = True
-        for key in anim.rotationsY:
-            frame_time = int(fr_sc*key.time+fr_of)
-            self.rotations[1][frame_time] = (key.value, key.tangentL, key.tangentR)
-            dict_get_set(self.times, frame_time, [False, False, False])[1] = True
-        for key in anim.rotationsZ:
-            frame_time = int(fr_sc*key.time+fr_of)
-            self.rotations[2][frame_time] = (key.value, key.tangentL, key.tangentR)
-            dict_get_set(self.times, frame_time, [False, False, False])[1] = True
+        all_collections = [  # all collections of keyframes, each animating a single value
+                (self.positions[0], anim.translationsX, 0),
+                (self.positions[1], anim.translationsY, 0),
+                (self.positions[2],anim.translationsZ, 0),
+                (self.rotations[0],anim.rotationsX, 1),
+                (self.rotations[1],anim.rotationsY, 1),
+                (self.rotations[2],anim.rotationsZ, 1),
+        ]
         if include_sc:
-            for key in anim.scalesX:
+            all_collections += [
+                (self.scales[0], anim.scalesX, 2),
+                (self.scales[1], anim.scalesY, 2),
+                (self.scales[2], anim.scalesZ, 2),
+            ]
+        for dest_collection, src_collection, flag_index in all_collections:
+            for key in src_collection:
                 frame_time = int(fr_sc*key.time+fr_of)
-                self.scales[0][frame_time] = (key.value, key.tangentL, key.tangentR)
-                dict_get_set(self.times, frame_time, [False, False, False])[2] = True
-            for key in anim.scalesY:
-                frame_time = int(fr_sc*key.time+fr_of)
-                self.scales[1][frame_time] = (key.value, key.tangentL, key.tangentR)
-                dict_get_set(self.times, frame_time, [False, False, False])[2] = True
-            for key in anim.scalesZ:
-                frame_time = int(fr_sc*key.time+fr_of)
-                self.scales[2][frame_time] = (key.value, key.tangentL, key.tangentR)
-                dict_get_set(self.times, frame_time, [False, False, False])[2] = True
+                dest_collection[frame_time] = (key.value, key.tangentL, key.tangentR)
+                dict_get_set(self.times, frame_time, [False, False, False])[flag_index] = True
 
         # add last frame on everything (to avoid crashes), but not register them as 'real'
-
-        anim_length = max(self.times.keys())
-        for coordinate in (0,1,2):
-            max_time = max(self.positions[coordinate].keys())
+        anim_length = max(self.times.keys())  # XXX is that animation length  even correct?
+        for dest_collection, _, _ in all_collections:
+            max_time = max(dest_collection.keys())
             if max_time < anim_length:
-                self.positions[coordinate][anim_length] = self.positions[coordinate][max_time]
-            max_time = max(self.rotations[coordinate].keys())
-            if max_time < anim_length:
-                self.rotations[coordinate][anim_length] = self.rotations[coordinate][max_time]
-            max_time = max(self.scales[coordinate].keys())
-            if max_time < anim_length:
-                self.scales[coordinate][anim_length] = self.scales[coordinate][max_time]
+                dest_collection[anim_length] = dest_collection[max_time]
 
+        # compute the distance (in time) between keyframes.
+        # for dest_collection, _, _ in all_collections:
+        #     local_times = list(dest_collection.keys())
+        #     #local_times.sort()  # XXX let's hope it's not needed. if it is, we have bigger problems on our hands.
+        #     lh_distances = [1]*len(local_times)
+        #     for i in range(1,len(local_times)):
+        #         lh_distances[i] = local_times[i] - local_times[i-1]
+        #     rh_distances = lh_distances[1:] + [2]
 
-    def _get_vt(self, data, time):
+        #     for frame_i, time in enumerate(local_times):
+        #         y,dL,dR = dest_collection[time]:
+        #         tL = lh_distances[frame_i]
+        #         tR = rh_distances[frame_i]
+        #         dest_collection[time] = (y,dL,dR, tL,tR)
+            
+
+    @staticmethod
+    def _get_vt(data, time):
+        """for a given array containing animation keyframes, return three values describing the animation at a given time:
+        the value itself, its lefthand tangent, and its righthand tangent.
+        """
         if time in data.keys():
             return data[time]
         elif len(data.keys()) == 1:
@@ -220,10 +217,16 @@ class KeyFrames:
             elif time < frame_t < next_t:
                 next_t = frame_t
 
-        return cubic_interpolator(prev_t, data[prev_t][0], data[prev_t][2],
-                                  next_t, data[next_t][0], data[next_t][1], time)
+        return cubic_interpolator(
+            prev_t, data[prev_t][0], data[prev_t][2],
+            next_t, data[next_t][0], data[next_t][1],
+            time
+        )
 
     def get_pos(self, time):
+        """Return the (possibly interpolated) translation value for a given time, through the animation data stored in this object:
+        give the translation value itself, its lefthand tangent, and its righthand tangent.
+        """
         temp_x = self._get_vt(self.positions[0], time)
         temp_y = self._get_vt(self.positions[1], time)
         temp_z = self._get_vt(self.positions[2], time)
@@ -248,7 +251,10 @@ class KeyFrames:
                 Vector((temp_x[2], temp_y[2], temp_z[2])))
 
     def get_mtx(self, time):
-        EPSILON = 1E-4
+        """Return the (possibly interpolated) transformation matrix for a given time, through the animation data stored in this object:
+        give the translation value itself, its lefthand tangent, and its righthand tangent.
+        """
+        global EPSILON
         vct_y, vct_dL, vct_dR = self.get_pos(time)
         rot_y, rot_dL, rot_dR = self.get_rot(time)
         vct_ydL = sum2(vct_y, product(EPSILON, vct_dL))
@@ -367,11 +373,6 @@ def getBoneByName(name):
         return None
 
 
-def getvct(one, distance, tgt):
-    """get the right keyframe handle vector"""  # XCX use me!
-    # method one:
-    return Vector((one, one*tgt))
-
 finder = re.compile(r'''pose\.bones\[['"](\w*)['"]\]\.(\w*)''')
 #used to determine what curves belong to what bones
 
@@ -379,12 +380,14 @@ finder = re.compile(r'''pose\.bones\[['"](\w*)['"]\]\.(\w*)''')
 def apply_animation(bones, arm_obj, jntframes, name=None):
     """apply keyframes from pseudobones to real, armature bones"""
     if name:
-        arm_obj.animation_data.action = bpy.data.actions.new(name)
+        arm_obj.animation_data.action = bpy.data.actions.new(arm_obj.name + '_' + name)
     else:
-        arm_obj.animation_data.action = bpy.data.actions.new(arm_obj.name + '_unnamed_action')
+        arm_obj.animation_data.action = bpy.data.actions.new(arm_obj.name+'_.unnamed')
 
     # warning: here, the `name` var changes meaning
 
+
+    data = {}
     for com in bones:
         name = com.name.fget()
         arm_obj.data.bones[name].use_inherit_scale = False  # scale can be applied
@@ -395,30 +398,29 @@ def apply_animation(bones, arm_obj, jntframes, name=None):
             posebone.rotation_mode = "XZY"  # remember, coords are flipped
         # this keyframe is needed, overwritten anyways
         # also it is always at 1 because this function is called once per action
-        posebone.keyframe_insert('location', frame=0)
-        posebone.keyframe_insert('rotation_euler', frame=0)
-        posebone.keyframe_insert('scale', frame=0)
-    fcurves = arm_obj.animation_data.action.fcurves
-    data = {}
 
-    for curve in fcurves:
+        bonedict = {}
+        data[name] = bonedict
+        for datatype in ('location', 'rotation_euler', 'scale'):        
+            posebone.keyframe_insert(datatype, frame=0)
+            bonedict[datatype] = [None,None,None]
+            
+    for curve in arm_obj.animation_data.action.fcurves:
         # create data in dicts ({bonename:{datatype:[0,1,2]...}...})
         try:
             bonename, datatype = finder.match(curve.data_path).groups()
-        except TypeError:  # cannit unpack None: this fsurve is not interesting
-            continue
-        bonedict = common.dict_get_set(data, bonename, {})
-        datadict = common.dict_get_set(bonedict, datatype, [None, None, None])
-        datadict[curve.array_index] = curve
+        except TypeError:
+            continue  # cannot unpack None: this fcurve is not one we are interested in
+        data[bonename][datatype][curve.array_index] = curve
 
     # create keyframes, with tengents
     for com in bones:
         name = com.name.fget()
         bonedict = data[name]
         posebone = arm_obj.pose.bones[name]
-        posebone.keyframe_insert('location', frame=0)
-        posebone.keyframe_insert('rotation_euler', frame=0)
-        posebone.keyframe_insert('scale', frame=0)
+        #posebone.keyframe_insert('location', frame=0)
+        #posebone.keyframe_insert('rotation_euler', frame=0)
+        #posebone.keyframe_insert('scale', frame=0)
         every_frame = list(com.frames.times.keys())
         every_frame.sort()
         refpos = com.jnt_frame
@@ -508,5 +510,31 @@ def apply_animation(bones, arm_obj, jntframes, name=None):
                     bonedict['scale'][2].keyframe_points[-1].handle_left = co + Vector((-1, -tgL.z))
                     bonedict['scale'][2].keyframe_points[-1].handle_right = co + Vector((1, tgR.z))
                     posebone.keyframe_insert('scale', index=2, frame=frame)
+
+        # now, re-adjust the interpolation
+        for fcurve in [
+                bonedict['location'][0],
+                bonedict['location'][1],
+                bonedict['location'][2],
+                bonedict['rotation_euler'][0],
+                bonedict['rotation_euler'][1],
+                bonedict['rotation_euler'][2],
+                bonedict['scale'][0],
+                bonedict['scale'][1],
+                bonedict['scale'][2],
+        ]:
+            if fcurve is None:
+                continue
+            for i_kf, kf in enumerate(fcurve.keyframe_points):
+                if i_kf == 0:
+                    left_time = 1
+                else:
+                    left_time = (kf.co[0] - fcurve.keyframe_points[i_kf-1].co[0]) /3
+                kf.handle_left = kf.co + Vector((-left_time, left_time*(kf.handle_left - kf.co)[1] ))
+                if i_kf+1 == len(fcurve.keyframe_points):
+                    right_time = 1
+                else:
+                    right_time = (fcurve.keyframe_points[i_kf+1].co[0] - kf.co[0]) /3
+                kf.handle_right = kf.co + Vector((right_time, right_time*(kf.handle_right - kf.co)[1] ))
 
     return arm_obj.animation_data.action
