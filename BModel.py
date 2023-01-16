@@ -8,6 +8,7 @@ from importlib import reload
 from array import array
 import os
 from os import path as OSPath
+from enum import Enum
 
 import bpy
 from mathutils import Matrix, Vector, Euler
@@ -31,6 +32,14 @@ else:
     )
 
 del LOADED
+
+
+class BckLoopType(Enum):
+    ONESHOT = 0
+    ONESHOT_RESET = 1
+    LOOP = 2
+    YOYO_ONCE = 3
+    YOYO_LOOP = 4
 
 
 class LoopRepresentation:
@@ -90,20 +99,14 @@ class ModelRepresentation:
             ret = array('f', [0.0] * 3 * len(self.loops))
             if common.GLOBALS.no_rot_conversion:
                 for num, com in enumerate(self.loops):
-                    if com.normal is None:
-                        ret[3*num] = ret[3*num+1] = ret[3*num+2] = 0
-                    else:
-                        ret[3 * num] = com.normal.x
-                        ret[3 * num + 1] = com.normal.y
-                        ret[3 * num + 2] = com.normal.z
+                    ret[3 * num] = com.normal.x
+                    ret[3 * num + 1] = com.normal.y
+                    ret[3 * num + 2] = com.normal.z
             else:
                 for num, com in enumerate(self.loops):
-                    if com.normal is None:
-                        ret[3*num] = ret[3*num+1] = ret[3*num+2] = 0
-                    else:
-                        ret[3 * num] = com.normal.x
-                        ret[3 * num + 1] = -com.normal.z
-                        ret[3 * num + 2] = com.normal.y
+                    ret[3 * num] = com.normal.x
+                    ret[3 * num + 1] = -com.normal.z
+                    ret[3 * num + 2] = com.normal.y
         elif type == 'v_indexes':
             ret = array('i')
             for com in self.loops:
@@ -939,6 +942,7 @@ class BModel:
                     try:
                         b.AnimateBoneFrames(0, self._bones, 1, self.params.includeScaling)
                         action = PBones.apply_animation(self._bones, self.arm_obj, self.jnt.frames, bckFileName)
+                        action.bck_loop_type = BckLoopType(b.loop_type).name
                     except Exception as err:
                         log.error('animation file doesn\'t apply as expected (error is %s)', err)
                         continue
@@ -948,7 +952,7 @@ class BModel:
                     bpy.context.scene.frame_end = startFrame + b.animationLength + 5
                     # (create space to insert strip)
                     try:
-                        track.strips.new(bckFileName+'_strip', startFrame, action)
+                        new_strip = track.strips.new(bckFileName + '_strip', startFrame, action)
                     except Exception as err:
                         # assume the previous action is out of range: move it.
                         corrupted_action_track = self.arm_obj.animation_data.nla_tracks.new()

@@ -291,6 +291,7 @@ class Bck_in:
 
     def __init__(self):  # GENERATED!
         self.anims = []
+        self.loop_type = 0
 
     def ConvRotation(self, rots, scale):
         for rot in rots:
@@ -345,7 +346,9 @@ class Bck_in:
 
         if h.numJoints != jointnum:
             return  # this file will not be used anyway
-
+        
+        self.loop_type = h.loopFlags
+            
         self.currAnimTime = 0.0
         self.animationLength = h.animationLength
 
