@@ -362,6 +362,44 @@ class BMD_PT_import_debug(bpy.types.Panel):
         layout.prop(operator, 'dvg')
         layout.prop(operator, 'paranoia')
         layout.prop(operator, 'val_msh')
+
+
+class ACTION_UL_animentry(bpy.types.UIList):
+    def draw_item(self, context, layout, data, item, icon, active_data, active_propname):
+        if self.layout_type in {'DEFAULT', 'COMPACT'}:
+            layout.prop(item, "name", text="", emboss=False, icon_value=icon)
+        else:
+            layout.label(text="", translate=False, icon_value=icon)
+
+
+class AnimationPropertyPanel(bpy.types.Panel):
+    """Creates a Panel in the Object properties window"""
+    bl_label = "BCK Properties"
+    bl_idname = "OBJECT_PT_animationproperties"
+    bl_space_type = 'PROPERTIES'
+    bl_region_type = 'WINDOW'
+    bl_context = "data"
+    
+    def __init__(self):
+        self.active_action = 0
+    
+    @classmethod
+    def poll(cls, context):
+        return context.object.type == 'ARMATURE'
+
+    def draw(self, context):
+        layout = self.layout
+        obj = context.active_object
+        
+        if obj.animation_data is None or len(obj.animation_data.nla_tracks) == 0:
+            layout.label(text="No animation data to edit!")
+            pass
+        
+        # This is the list of strips that are currently part of the selected object's first NLA track.
+        layout.template_list("ACTION_UL_animentry", "", obj.animation_data.nla_tracks[0], "strips", obj, "active_action_index")
+        
+        layout.row().prop(obj.animation_data.nla_tracks[0].strips[obj.active_action_index], "name")
+        layout.row().prop(obj.animation_data.nla_tracks[0].strips[obj.active_action_index].action, "bck_loop_type")
     
 
 # Only needed if you want to add into a dynamic menu
@@ -377,11 +415,31 @@ def register():
     bpy.utils.register_class(BMD_PT_import_texture)
     bpy.utils.register_class(BMD_PT_import_debug)
     
+    bpy.types.Object.active_action_index = bpy.props.IntProperty(default=0)
+    bpy.types.Action.bck_loop_type = bpy.props.EnumProperty(
+        name="Loop Type",
+        items=(
+               ('ONESHOT', "One-shot", 'Animation plays once, then freezes on the last frame'),
+               ('ONESHOT_RESET', "One-shot Reset", 'Animation plays once, then resets to the first frame'),
+               ('LOOP', "Loop", 'Animation plays continuously, returning to the start when it ends'),
+               ('YOYO_ONCE', "Yoyo One-shot", 'Animation plays once forwards, once backwards, then stops on the first frame'),
+               ('YOYO_LOOP', "Yoyo Loop", 'Animation bounces between playing forward and playing backward')
+              ),
+        default='ONESHOT'
+    )
+    bpy.utils.register_class(ACTION_UL_animentry)
+    bpy.utils.register_class(AnimationPropertyPanel)
+    
     bpy.types.TOPBAR_MT_file_import.append(import_menu_func)
 
 
 def unregister():
     bpy.types.TOPBAR_MT_file_import.remove(import_menu_func)
+    
+    bpy.utils.unregister_class(AnimationPropertyPanel)
+    bpy.utils.unregister_class(ACTION_UL_animentry)
+    del bpy.types.Action.bck_loop_type
+    del bpy.types.Object.active_action_index
     
     bpy.utils.unregister_class(BMD_PT_import_debug)
     bpy.utils.unregister_class(BMD_PT_import_texture)
