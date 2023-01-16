@@ -7,6 +7,15 @@ import bpy
 import logging
 log = logging.getLogger('bpy.ops.import_mesh.bmd.bck')
 from math import nan, pi, isnan, isclose, ceil
+from enum import Enum
+
+
+class LoopType(Enum):
+    ONESHOT = 0
+    ONESHOT_RESET = 1
+    LOOP = 2
+    YOYO_ONCE = 3
+    YOYO_LOOP = 4
 
 
 class BckKey:
@@ -291,6 +300,7 @@ class Bck_in:
 
     def __init__(self):  # GENERATED!
         self.anims = []
+        self.loopType = LoopType(0).name
 
     def ConvRotation(self, rots, scale):
         for rot in rots:
@@ -346,6 +356,8 @@ class Bck_in:
         if h.numJoints != jointnum:
             return  # this file will not be used anyway
 
+        self.loopType = LoopType(h.loopFlags).name
+           
         self.currAnimTime = 0.0
         self.animationLength = h.animationLength
 
