@@ -33,7 +33,7 @@ import io, os
 # ImportHelper is a helper class, defines filename and
 # invoke() function which calls the file selector.
 from bpy_extras.io_utils import ImportHelper, ExportHelper
-from bpy.props import StringProperty, BoolProperty, EnumProperty, IntProperty
+from bpy.props import StringProperty, BoolProperty, EnumProperty, IntProperty, PointerProperty
 from bpy.types import Operator
 
 
@@ -362,7 +362,108 @@ class BMD_PT_import_debug(bpy.types.Panel):
         layout.prop(operator, 'dvg')
         layout.prop(operator, 'paranoia')
         layout.prop(operator, 'val_msh')
+
+
+def validate_obj_for_anim_export(obj):
+    # Validate object
+    if obj is None:
+        print("Object was None!")
+        return False
+        
+    obj_anim_data = obj.animation_data
+
+    # Validate animation data
+    if obj_anim_data is None:
+        print("No anim data!")
+        return False
+    if len(obj_anim_data.nla_tracks) == 0:
+        print("No NLA tracks!")
+        return False
+    if len(obj_anim_data.nla_tracks[0].strips) == 0:
+        print("No NLA strips!")
+        return False
+        
+    print("valid!")
+    return True
+      
+
+def arma_items(self, context):
+    obs = []
+    for ob in context.scene.objects:
+        print(ob.name)
+        if validate_obj_for_anim_export(ob):
+            obs.append((ob.name, ob.name, ""))
     
+    if len(obs) == 0:
+        return [("NONE", "None", "")]
+    
+    return obs
+
+def arma_upd(self, context):
+    self.anim_export_armatures_collection.clear()
+    
+    for ob in context.scene.objects:
+        if validate_obj_for_anim_export(ob):
+            item = self.anim_export_armatures_collection.add()
+            item.name = ob.name
+
+    return None
+
+def action_items(self, context):
+    if self.anim_export_armatures == "NONE":
+        return [("NONE", "None", "")]
+        
+    sce = context.scene
+        
+    cur_armature = sce.objects.get(self.anim_export_armatures)
+    if cur_armature is None:
+        return [("NONE", "None", "")]
+        
+    return [(action.name, action.name, "") for action in cur_armature.animation_data.nla_tracks[0].strips]
+
+
+class ExportBck(Operator, ExportHelper):
+    """This appears in the tooltip of the operator and in the generated docs"""
+    bl_idname = "export_object.bck"  # important since its how bpy.ops.import_test.some_data is constructed
+    bl_label = "Export BCK"
+
+    # ExportHelper mixin class uses this
+    filename_ext = ".bck"
+
+    filter_glob: StringProperty(
+        default="*.bck",
+        options={'HIDDEN'},
+        maxlen=255,  # Max internal buffer length, longer would be clamped.
+    )
+    
+    export_anims_mode: EnumProperty(
+        name="Export Mode",
+        description="Choose whether to export a single animation or multiple",
+        items=(('SINGLE', "Single", 'Export a single selected animation'),
+               ('BULK', "Bulk", 'Export multiple animations'),
+               ),
+        default='SINGLE'
+    )
+    
+    # Options for exporting multiple anims at once
+    use_selection: BoolProperty(
+        name="Selected armature only",
+        description="Export animations from ONLY the selected armature",
+        default=True
+    )
+    
+    def execute(self, context):
+        global log_out
+        retcode = 'FINISHED'
+        
+        ex_action = bpy.data.actions.get(context.scene.anim_export_actions)
+        print(ex_action.name)
+        
+        return {retcode}
+        
+    def draw(self, context):
+        pass
+
 
 class ACTION_UL_animentry(bpy.types.UIList):
     def draw_item(self, context, layout, data, item, icon, active_data, active_propname):
@@ -370,7 +471,41 @@ class ACTION_UL_animentry(bpy.types.UIList):
             layout.prop(item, "name", text="", emboss=False, icon_value=icon)
         else:
             layout.label(text="", translate=False, icon_value=icon)
+     
+        
+class BCK_PT_export_options(bpy.types.Panel):
+    bl_space_type = 'FILE_BROWSER'
+    bl_region_type = 'TOOL_PROPS'
+    bl_label = "Options"
+    bl_parent_id = "FILE_PT_operator"
+    
+    @classmethod
+    def poll(cls, context):
+        sfile = context.space_data
+        operator = sfile.active_operator
+        
+        return operator.bl_idname == "EXPORT_OBJECT_OT_bck"
+        
+    def draw(self, context):
+        layout = self.layout
+        layout.use_property_split = True
+        layout.use_property_decorate = False  # No animation.
 
+        sfile = context.space_data
+        operator = sfile.active_operator
+        sce = context.scene
+        
+        layout.prop(operator, 'export_anims_mode')
+        layout.separator()
+        
+        arm_row = layout.row()
+        arm_row.enabled = sce.anim_export_armatures != "NONE"
+        arm_row.prop(sce, "anim_export_armatures")
+        
+        act_row = layout.row()
+        act_row.enabled = operator.export_anims_mode == 'SINGLE' and arm_row.enabled
+        act_row.prop(sce, "anim_export_actions")
+                
 
 class AnimationPropertyPanel(bpy.types.Panel):
     """Creates a Panel in the Object properties window"""
@@ -407,6 +542,10 @@ def import_menu_func(self, context):
     self.layout.operator(ImportBmd.bl_idname, text="Nintendo BMD/BDL")
     
 
+def export_menu_func(self, context):
+    self.layout.operator(ExportBck.bl_idname, text="Nintendo BCK (keyframe animation)")
+    
+
 def register():
     bpy.utils.register_class(ImportBmd)
     bpy.utils.register_class(BMD_PT_import_options)
@@ -414,6 +553,22 @@ def register():
     bpy.utils.register_class(BMD_PT_import_animation)
     bpy.utils.register_class(BMD_PT_import_texture)
     bpy.utils.register_class(BMD_PT_import_debug)
+    
+    bpy.utils.register_class(ExportBck)
+    bpy.utils.register_class(BCK_PT_export_options)
+    
+    bpy.types.Scene.anim_export_armatures = bpy.props.EnumProperty(
+        name="Armatures",
+        items=arma_items,
+        update=arma_upd
+    )
+    bpy.types.Scene.anim_export_actions = bpy.props.EnumProperty(
+        name="Actions",
+        items=action_items,
+    )
+    bpy.types.Scene.anim_export_armatures_collection = bpy.props.CollectionProperty(
+        type=bpy.types.PropertyGroup
+    )
     
     bpy.types.Object.active_action_index = bpy.props.IntProperty(default=0)
     bpy.types.Action.bck_loop_type = bpy.props.EnumProperty(
@@ -430,16 +585,26 @@ def register():
     bpy.utils.register_class(ACTION_UL_animentry)
     bpy.utils.register_class(AnimationPropertyPanel)
     
+    
     bpy.types.TOPBAR_MT_file_import.append(import_menu_func)
+    bpy.types.TOPBAR_MT_file_export.append(export_menu_func)
 
 
 def unregister():
+    bpy.types.TOPBAR_MT_file_export.remove(export_menu_func)
     bpy.types.TOPBAR_MT_file_import.remove(import_menu_func)
     
     bpy.utils.unregister_class(AnimationPropertyPanel)
     bpy.utils.unregister_class(ACTION_UL_animentry)
     del bpy.types.Action.bck_loop_type
     del bpy.types.Object.active_action_index
+    
+    del bpy.types.Scene.anim_export_armatures
+    del bpy.types.Scene.anim_export_actions
+    del bpy.types.Scene.anim_export_armatures_collection
+    
+    bpy.utils.unregister_class(BCK_PT_export_options)
+    bpy.utils.unregister_class(ExportBck)
     
     bpy.utils.unregister_class(BMD_PT_import_debug)
     bpy.utils.unregister_class(BMD_PT_import_texture)
