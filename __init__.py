@@ -456,8 +456,13 @@ class ExportBck(Operator, ExportHelper):
         global log_out
         retcode = 'FINISHED'
         
-        ex_action = bpy.data.actions.get(context.scene.anim_export_actions)
-        print(ex_action.name)
+        out_action = bpy.data.actions.get(context.scene.anim_export_actions)
+        anim_armature = bpy.data.objects.get(context.scene.anim_export_armatures)
+        
+        ex_bck = Bck.Bck_out()
+        ex_bck.dump_action(out_action, anim_armature.pose)
+        
+        ex_bck.dump_bck(self.filepath)
         
         return {retcode}
         
