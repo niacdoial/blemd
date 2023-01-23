@@ -510,7 +510,31 @@ class BCK_PT_export_options(bpy.types.Panel):
         act_row = layout.row()
         act_row.enabled = operator.export_anims_mode == 'SINGLE' and arm_row.enabled
         act_row.prop(sce, "anim_export_actions")
-                
+
+
+class CreateAnimationOperator(bpy.types.Operator):          
+    """Set up a new animation for export"""
+    bl_idname = "object.anim_create_operator"
+    bl_label = "Create BCK Animation"
+
+    def execute(self, context):
+        obj = context.object
+        
+        if obj.animation_data is None:
+            obj.animation_data_create()
+            
+        if len(obj.animation_data.nla_tracks) == 0:
+            obj.animation_data.nla_tracks.new()
+        
+        if len(obj.animation_data.nla_tracks[0].strips) == 0:
+            start_frame = 1
+        else:
+            start_frame = int(obj.animation_data.nla_tracks[0].strips[-1].frame_end + 5)
+            
+        obj.animation_data.nla_tracks[0].strips.new('new_bck_anim', start_frame, bpy.data.actions.new('new_bck_anim'))
+
+        return {'FINISHED'}
+
 
 class AnimationPropertyPanel(bpy.types.Panel):
     """Creates a Panel in the Object properties window"""
@@ -531,15 +555,17 @@ class AnimationPropertyPanel(bpy.types.Panel):
         layout = self.layout
         obj = context.active_object
         
-        if obj.animation_data is None or len(obj.animation_data.nla_tracks) == 0:
-            layout.label(text="No animation data to edit!")
-            pass
+        if obj.animation_data is not None and len(obj.animation_data.nla_tracks) != 0 and len(obj.animation_data.nla_tracks[0].strips) != 0:
+            # This is the list of strips that are currently part of the selected object's first NLA track.
+            layout.template_list("ACTION_UL_animentry", "", obj.animation_data.nla_tracks[0], "strips", obj, "active_action_index")
+            
+            layout.row().prop(obj.animation_data.nla_tracks[0].strips[obj.active_action_index], "name")
+            layout.row().prop(obj.animation_data.nla_tracks[0].strips[obj.active_action_index].action, "bck_loop_type")
+            
+            layout.row().separator()
         
-        # This is the list of strips that are currently part of the selected object's first NLA track.
-        layout.template_list("ACTION_UL_animentry", "", obj.animation_data.nla_tracks[0], "strips", obj, "active_action_index")
+        layout.row().operator(CreateAnimationOperator.bl_idname, text="Create Animation", icon="FILE_NEW")
         
-        layout.row().prop(obj.animation_data.nla_tracks[0].strips[obj.active_action_index], "name")
-        layout.row().prop(obj.animation_data.nla_tracks[0].strips[obj.active_action_index].action, "bck_loop_type")
     
 
 # Only needed if you want to add into a dynamic menu
@@ -593,9 +619,13 @@ def register():
     
     bpy.types.TOPBAR_MT_file_import.append(import_menu_func)
     bpy.types.TOPBAR_MT_file_export.append(export_menu_func)
+    
+    bpy.utils.register_class(CreateAnimationOperator)
 
 
 def unregister():
+    bpy.utils.unregister_class(CreateAnimationOperator)
+
     bpy.types.TOPBAR_MT_file_export.remove(export_menu_func)
     bpy.types.TOPBAR_MT_file_import.remove(import_menu_func)
     
