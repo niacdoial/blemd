@@ -6,7 +6,7 @@ import mathutils
 import bpy
 import logging
 log = logging.getLogger('bpy.ops.import_mesh.bmd.bck')
-from math import nan, pi, isnan, isclose, ceil
+from math import nan, pi, isnan, isclose, ceil, radians, degrees
 from enum import Enum
 
 
@@ -519,9 +519,38 @@ class Bck_out:
     def dump_action(self, action, pose):
         self.loopType = getattr(action, "bck_loop_type", 0)
         
+        tm90 = mathutils.Matrix.Rotation(radians(-90.), 4, mathutils.Vector((1., 0., 0.)))
+        
         for b in pose.bones:
+            print(b.name)
+            
+            if b.bone.parent is None:
+                local_matrix = mathutils.Matrix.Identity(4)
+            else:
+                t = b.bone.parent.matrix_local
+                local_matrix = tm90 @ t.inverted() @ b.bone.matrix_local @ tm90.inverted()
+            
+            print(f'raw trans: { b.bone.matrix_local.to_translation() }')
+            print(f'raw rot: { b.bone.matrix_local.to_euler("XYZ") }')
+            print()
+            print(f'mod trans: { local_matrix.to_translation() }')
+            print(f'mod rot: { local_matrix.to_euler("XYZ") }')
+            #mtx_trans = local_matrix.to_translation()
+            #tmp_f = mtx_trans[1]
+            #mtx_trans[1] = mtx_trans[2]
+            #mtx_trans[2] = tmp_f# * -1.
+            #print(mtx_trans)
+            
+            #mtx_rot = local_matrix.to_euler('XYZ')
+            #tmp_f = mtx_rot[1]
+            #mtx_rot[1] = mtx_rot[2]
+            #mtx_rot[2] = tmp_f# * -1.
+            #print(mtx_rot)
+            
+            #local_matrix = mathutils.Matrix.Translation(mtx_trans) @ mtx_rot.to_matrix().to_4x4()
+            #print(local_matrix)
+            
             joint_anim = BckJointAnim()
-            local_matrix = b.bone.matrix_local
             fcurve_path = f'pose.bones["{ b.name }"]'
             
             trans_fcurves = [fcu for fcu in action.fcurves if fcu.data_path.startswith(fcurve_path + ".location")]
@@ -559,7 +588,6 @@ class Bck_out:
             bck_key.tangentR = k.handle_right[1]
             
             vec = mathutils.Vector((k.co[1], 0., 0.))
-            
             vec = local_matrix @ vec
             
             bck_key.value = vec[0]
@@ -573,7 +601,6 @@ class Bck_out:
             bck_key.tangentR = k.handle_right[1]
             
             vec = mathutils.Vector((0., k.co[1], 0.))
-            
             vec = local_matrix @ vec
             
             bck_key.value = vec[1]
@@ -587,16 +614,74 @@ class Bck_out:
             bck_key.tangentR = k.handle_right[1]
             
             vec = mathutils.Vector((0., 0., k.co[1]))
-            
             vec = local_matrix @ vec
             
             bck_key.value = vec[2]
-            anim.translationsY.append(bck_key)
+            anim.translationsZ.append(bck_key)
         
-    def process_rotation_track(self, curves, anim, bone):
-        pass
+    def process_rotation_track(self, curves, anim, local_matrix):
+        x_track = None
+        y_track = None
+        z_track = None
         
-    def process_scale_track(self, curves, anim, bone):
+        for f in curves:
+            if f.array_index == 0:
+                x_track = f
+            elif f.array_index == 1:
+                y_track = f
+            elif f.array_index == 2:
+                z_track = f
+            else:
+                print(f'Unknown fcurve array index "{ f.array_index }"!')
+                return
+        
+        #temp_vec = local_matrix[1].xyz
+        #local_matrix[1].xyz = local_matrix[2].xyz
+        #local_matrix[2].xyz = (temp_vec * -1.).xyz
+        
+        for k in x_track.keyframe_points:
+            bck_key = BckKey()
+            
+            bck_key.time = k.co[0]
+            bck_key.tangentL = k.handle_left[1]
+            bck_key.tangentR = k.handle_right[1]
+            
+            vec = mathutils.Euler((k.co[1], 0., 0.), 'XYZ')
+            vec.rotate(local_matrix.to_euler('XYZ'))
+            
+            print(degrees(vec[0]))
+            bck_key.value = vec[0]
+            anim.rotationsX.append(bck_key)
+            
+        for k in y_track.keyframe_points:
+            bck_key = BckKey()
+            
+            bck_key.time = k.co[0]
+            bck_key.tangentL = k.handle_left[1]
+            bck_key.tangentR = k.handle_right[1]
+            
+            vec = mathutils.Euler((0., k.co[1], 0.), 'XYZ')
+            vec.rotate(local_matrix.to_euler('XYZ'))
+            
+            print(degrees(vec[1]))
+            bck_key.value = vec[1]
+            anim.rotationsY.append(bck_key)
+            
+        for k in z_track.keyframe_points:
+            bck_key = BckKey()
+            
+            bck_key.time = k.co[0]
+            bck_key.tangentL = k.handle_left[1]
+            bck_key.tangentR = k.handle_right[1]
+            
+            vec = mathutils.Euler((0., 0., k.co[1]), 'XYZ')
+            vec.rotate(local_matrix.to_euler('XYZ'))
+            
+            print(degrees(vec[2]))
+            bck_key.value = vec[2]
+            anim.rotationsZ.append(bck_key)
+        
+    def process_scale_track(self, curves, anim, local_matrix):
         x_track = None
         y_track = None
         z_track = None
@@ -638,7 +723,7 @@ class Bck_out:
             #vec = local_matrix @ vec
             
             bck_key.value = vec[1]
-            anim.scalesX.append(bck_key)
+            anim.scalesY.append(bck_key)
             
         for k in z_track.keyframe_points:
             bck_key = BckKey()
@@ -652,15 +737,15 @@ class Bck_out:
             #vec = local_matrix @ vec
             
             bck_key.value = vec[2]
-            anim.scalesX.append(bck_key)
+            anim.scalesZ.append(bck_key)
 
     def dump_data(self, dst, src):
         index = BckAnimIndex()
         index.double_tangent = 0
         index.count = len(src)
         if len(src) == 1:
-            if src[0].time or src[0].tangentL or src[0].tangentR:  # if non-zero
-                raise ValueError("static animation should be static")
+            #if src[0].time or src[0].tangentL or src[0].tangentR:  # if non-zero
+            #    raise ValueError("static animation should be static")
             if src[0].value in dst:
                 index.index = dst.index(src[0].value)
             else:
@@ -689,7 +774,7 @@ class Bck_out:
         Ank1Offset = bw.Position()
         h = BckAnk1Header()
         h.angleMultiplier = 1  # self.calcmultiplier(anims)
-        rot_scale = (pow(2., h.angleMultiplier) * pi / 32768.)
+        rot_scale = (pow(2., h.angleMultiplier) * (pi / 32768.))
 
         positions = []
         rotations = []
@@ -741,6 +826,7 @@ class Bck_out:
             bw.writeFloat(val)
         bw.writePadding(h.offsetToRots+Ank1Offset - bw.Position())
         for val in rotations:
+            print(val)
             bw.writeShort(val)
         bw.writePadding(h.offsetToTrans+Ank1Offset - bw.Position())
         for val in positions:
