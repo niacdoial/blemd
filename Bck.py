@@ -10,6 +10,9 @@ from math import nan, pi, isnan, isclose, ceil, radians, degrees
 from enum import Enum
 
 
+EPSILON = 1E-4
+
+
 class LoopType(Enum):
     ONESHOT = 0
     ONESHOT_RESET = 1
@@ -519,36 +522,23 @@ class Bck_out:
     def dump_action(self, action, pose):
         self.loopType = getattr(action, "bck_loop_type", 0)
         
-        tm90 = mathutils.Matrix.Rotation(radians(-90.), 4, mathutils.Vector((1., 0., 0.)))
+        z_to_y_mtx = mathutils.Matrix.Rotation(radians(-90.), 4, mathutils.Vector((1., 0., 0.)))
         
         for b in pose.bones:
             print(b.name)
             
-            if b.bone.parent is None:
-                local_matrix = mathutils.Matrix.Identity(4)
-            else:
-                t = b.bone.parent.matrix_local
-                local_matrix = tm90 @ t.inverted() @ b.bone.matrix_local @ tm90.inverted()
+            parent_mtx = mathutils.Matrix.Identity(4)
+            
+            if b.bone.parent is not None:
+                parent_mtx = b.bone.parent.matrix_local
+                
+            local_matrix = z_to_y_mtx @ parent_mtx.inverted() @ b.bone.matrix_local @ z_to_y_mtx.inverted()
             
             print(f'raw trans: { b.bone.matrix_local.to_translation() }')
             print(f'raw rot: { b.bone.matrix_local.to_euler("XYZ") }')
             print()
             print(f'mod trans: { local_matrix.to_translation() }')
             print(f'mod rot: { local_matrix.to_euler("XYZ") }')
-            #mtx_trans = local_matrix.to_translation()
-            #tmp_f = mtx_trans[1]
-            #mtx_trans[1] = mtx_trans[2]
-            #mtx_trans[2] = tmp_f# * -1.
-            #print(mtx_trans)
-            
-            #mtx_rot = local_matrix.to_euler('XYZ')
-            #tmp_f = mtx_rot[1]
-            #mtx_rot[1] = mtx_rot[2]
-            #mtx_rot[2] = tmp_f# * -1.
-            #print(mtx_rot)
-            
-            #local_matrix = mathutils.Matrix.Translation(mtx_trans) @ mtx_rot.to_matrix().to_4x4()
-            #print(local_matrix)
             
             joint_anim = BckJointAnim()
             fcurve_path = f'pose.bones["{ b.name }"]'
@@ -584,8 +574,8 @@ class Bck_out:
             bck_key = BckKey()
             
             bck_key.time = k.co[0]
-            bck_key.tangentL = k.handle_left[1]
-            bck_key.tangentR = k.handle_right[1]
+            bck_key.tangentL = (k.handle_left[1] * EPSILON) + k.co[1]
+            bck_key.tangentR = (k.handle_right[1] * EPSILON) + k.co[1]
             
             vec = mathutils.Vector((k.co[1], 0., 0.))
             vec = local_matrix @ vec
@@ -597,8 +587,8 @@ class Bck_out:
             bck_key = BckKey()
             
             bck_key.time = k.co[0]
-            bck_key.tangentL = k.handle_left[1]
-            bck_key.tangentR = k.handle_right[1]
+            bck_key.tangentL = (k.handle_left[1] * EPSILON) + k.co[1]
+            bck_key.tangentR = (k.handle_right[1] * EPSILON) + k.co[1]
             
             vec = mathutils.Vector((0., k.co[1], 0.))
             vec = local_matrix @ vec
@@ -610,8 +600,8 @@ class Bck_out:
             bck_key = BckKey()
             
             bck_key.time = k.co[0]
-            bck_key.tangentL = k.handle_left[1]
-            bck_key.tangentR = k.handle_right[1]
+            bck_key.tangentL = (k.handle_left[1] * EPSILON) + k.co[1]
+            bck_key.tangentR = (k.handle_right[1] * EPSILON) + k.co[1]
             
             vec = mathutils.Vector((0., 0., k.co[1]))
             vec = local_matrix @ vec
@@ -635,47 +625,46 @@ class Bck_out:
                 print(f'Unknown fcurve array index "{ f.array_index }"!')
                 return
         
-        #temp_vec = local_matrix[1].xyz
-        #local_matrix[1].xyz = local_matrix[2].xyz
-        #local_matrix[2].xyz = (temp_vec * -1.).xyz
-        
         for k in x_track.keyframe_points:
             bck_key = BckKey()
             
             bck_key.time = k.co[0]
-            bck_key.tangentL = k.handle_left[1]
-            bck_key.tangentR = k.handle_right[1]
+            bck_key.tangentL = (k.handle_left[1] * EPSILON) + k.co[1]
+            bck_key.tangentR = (k.handle_right[1] * EPSILON) + k.co[1]
             
-            vec = mathutils.Euler((k.co[1], 0., 0.), 'XYZ')
-            vec.rotate(local_matrix.to_euler('XYZ'))
+            euler = mathutils.Euler((k.co[1], 0., 0.), 'XYZ')
+            euler.rotate(local_matrix.to_quaternion())
             
-            bck_key.value = vec[0]
+            print(f'x rot: { euler[0]} ')
+            bck_key.value = euler[0]
             anim.rotationsX.append(bck_key)
             
         for k in z_track.keyframe_points:
             bck_key = BckKey()
             
             bck_key.time = k.co[0]
-            bck_key.tangentL = k.handle_left[1]
-            bck_key.tangentR = k.handle_right[1]
+            bck_key.tangentL = (k.handle_left[1] * EPSILON) + k.co[1]
+            bck_key.tangentR = (k.handle_right[1] * EPSILON) + k.co[1]
             
-            vec = mathutils.Euler((0., k.co[1], 0.), 'XYZ')
-            vec.rotate(local_matrix.to_euler('XYZ'))
+            euler = mathutils.Euler((0., k.co[1], 0.), 'XYZ')
+            euler.rotate(local_matrix.to_quaternion())
             
-            bck_key.value = vec[1]
+            print(euler[1])
+            bck_key.value = euler[1]
             anim.rotationsY.append(bck_key)
             
         for k in y_track.keyframe_points:
             bck_key = BckKey()
             
             bck_key.time = k.co[0]
-            bck_key.tangentL = k.handle_left[1]
-            bck_key.tangentR = k.handle_right[1]
+            bck_key.tangentL = (k.handle_left[1] * EPSILON) + k.co[1]
+            bck_key.tangentR = (k.handle_right[1] * EPSILON) + k.co[1]
             
-            vec = mathutils.Euler((0., 0., k.co[1]), 'XYZ')
-            vec.rotate(local_matrix.to_euler('XYZ'))
+            euler = mathutils.Euler((0., 0., k.co[1] * -1.), 'XYZ')
+            euler.rotate(local_matrix.to_quaternion())
             
-            bck_key.value = vec[2]
+            print(euler[2])
+            bck_key.value = euler[2]
             anim.rotationsZ.append(bck_key)
         
     def process_scale_track(self, curves, anim, local_matrix):
@@ -698,12 +687,10 @@ class Bck_out:
             bck_key = BckKey()
             
             bck_key.time = k.co[0]
-            bck_key.tangentL = k.handle_left[1]
-            bck_key.tangentR = k.handle_right[1]
+            bck_key.tangentL = (k.handle_left[1] * EPSILON) + k.co[1]
+            bck_key.tangentR = (k.handle_right[1] * EPSILON) + k.co[1]
             
             vec = mathutils.Vector((k.co[1], 0., 0.))
-            
-            #vec = local_matrix @ vec
             
             bck_key.value = 1. #vec[0]
             anim.scalesX.append(bck_key)
@@ -712,12 +699,10 @@ class Bck_out:
             bck_key = BckKey()
             
             bck_key.time = k.co[0]
-            bck_key.tangentL = k.handle_left[1]
-            bck_key.tangentR = k.handle_right[1]
+            bck_key.tangentL = (k.handle_left[1] * EPSILON) + k.co[1]
+            bck_key.tangentR = (k.handle_right[1] * EPSILON) + k.co[1]
             
             vec = mathutils.Vector((0., k.co[1], 0.))
-            
-            #vec = local_matrix @ vec
             
             bck_key.value = 1. #vec[1]
             anim.scalesY.append(bck_key)
@@ -726,12 +711,10 @@ class Bck_out:
             bck_key = BckKey()
             
             bck_key.time = k.co[0]
-            bck_key.tangentL = k.handle_left[1]
-            bck_key.tangentR = k.handle_right[1]
+            bck_key.tangentL = (k.handle_left[1] * EPSILON) + k.co[1]
+            bck_key.tangentR = (k.handle_right[1] * EPSILON) + k.co[1]
             
             vec = mathutils.Vector((0., 0., k.co[1]))
-            
-            #vec = local_matrix @ vec
             
             bck_key.value = 1. #vec[2]
             anim.scalesZ.append(bck_key)
@@ -753,7 +736,7 @@ class Bck_out:
             index.index = len(dst)
             for com in src:
                 dst.append(com.time)
-                #self.maxframe = max(self.maxframe, com.time)
+                self.maxframe = max(self.maxframe, com.time)
                 dst.append(com.value)
                 dst.append(com.tangentL)
                 dst.append(com.tangentR)  # XCX simplify for identiqual tangents
@@ -823,7 +806,7 @@ class Bck_out:
             bw.writeFloat(val)
         bw.writePadding(h.offsetToRots+Ank1Offset - bw.Position())
         for val in rotations:
-            bw.writeShort(int(val))
+            bw.writeShort(val)
         bw.writePadding(h.offsetToTrans+Ank1Offset - bw.Position())
         for val in positions:
             bw.writeFloat(val)
