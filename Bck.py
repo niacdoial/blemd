@@ -579,7 +579,7 @@ class Bck_out:
             else:
                 print(f'Unknown fcurve array index "{ f.array_index }"!')
                 return
-                
+                       
         for k in x_track.keyframe_points:
             bck_key = BckKey()
             
@@ -649,11 +649,10 @@ class Bck_out:
             vec = mathutils.Euler((k.co[1], 0., 0.), 'XYZ')
             vec.rotate(local_matrix.to_euler('XYZ'))
             
-            print(degrees(vec[0]))
             bck_key.value = vec[0]
             anim.rotationsX.append(bck_key)
             
-        for k in y_track.keyframe_points:
+        for k in z_track.keyframe_points:
             bck_key = BckKey()
             
             bck_key.time = k.co[0]
@@ -663,11 +662,10 @@ class Bck_out:
             vec = mathutils.Euler((0., k.co[1], 0.), 'XYZ')
             vec.rotate(local_matrix.to_euler('XYZ'))
             
-            print(degrees(vec[1]))
             bck_key.value = vec[1]
             anim.rotationsY.append(bck_key)
             
-        for k in z_track.keyframe_points:
+        for k in y_track.keyframe_points:
             bck_key = BckKey()
             
             bck_key.time = k.co[0]
@@ -677,7 +675,6 @@ class Bck_out:
             vec = mathutils.Euler((0., 0., k.co[1]), 'XYZ')
             vec.rotate(local_matrix.to_euler('XYZ'))
             
-            print(degrees(vec[2]))
             bck_key.value = vec[2]
             anim.rotationsZ.append(bck_key)
         
@@ -708,7 +705,7 @@ class Bck_out:
             
             #vec = local_matrix @ vec
             
-            bck_key.value = vec[0]
+            bck_key.value = 1. #vec[0]
             anim.scalesX.append(bck_key)
             
         for k in y_track.keyframe_points:
@@ -722,7 +719,7 @@ class Bck_out:
             
             #vec = local_matrix @ vec
             
-            bck_key.value = vec[1]
+            bck_key.value = 1. #vec[1]
             anim.scalesY.append(bck_key)
             
         for k in z_track.keyframe_points:
@@ -736,7 +733,7 @@ class Bck_out:
             
             #vec = local_matrix @ vec
             
-            bck_key.value = vec[2]
+            bck_key.value = 1. #vec[2]
             anim.scalesZ.append(bck_key)
 
     def dump_data(self, dst, src):
@@ -756,7 +753,7 @@ class Bck_out:
             index.index = len(dst)
             for com in src:
                 dst.append(com.time)
-                self.maxframe = max(self.maxframe, com.time)
+                #self.maxframe = max(self.maxframe, com.time)
                 dst.append(com.value)
                 dst.append(com.tangentL)
                 dst.append(com.tangentR)  # XCX simplify for identiqual tangents
@@ -812,7 +809,7 @@ class Bck_out:
         h.offsetToScales = ceil(h.numJoints*3*3*3*2/16)*16 + h.offsetToJoints
         h.offsetToRots = ceil(h.scaleCount*4/16)*16 + h.offsetToScales
         h.offsetToTrans = ceil(h.rotCount*2/16)*16 + h.offsetToRots
-        h.animationLength = self.maxframe
+        h.animationLength = int(self.maxframe)
         h.tag = 'ANK1'
         h.sizeOfSection = h.offsetToTrans + ceil(h.transCount*4/16)*16 +16
         h.loopFlags = LoopType[self.loopType].value  # 0: once, 2: loop
@@ -826,8 +823,7 @@ class Bck_out:
             bw.writeFloat(val)
         bw.writePadding(h.offsetToRots+Ank1Offset - bw.Position())
         for val in rotations:
-            print(val)
-            bw.writeShort(val)
+            bw.writeShort(int(val))
         bw.writePadding(h.offsetToTrans+Ank1Offset - bw.Position())
         for val in positions:
             bw.writeFloat(val)
