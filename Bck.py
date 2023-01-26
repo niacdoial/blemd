@@ -521,6 +521,7 @@ class Bck_out:
 
     def dump_action(self, action, pose):
         self.loopType = getattr(action, "bck_loop_type", 0)
+        self.maxframe = int(action.frame_range[1] - action.frame_range[0])
         
         z_to_y_mtx = mathutils.Matrix.Rotation(radians(-90.), 4, mathutils.Vector((1., 0., 0.)))
         
@@ -534,82 +535,43 @@ class Bck_out:
                 
             local_matrix = z_to_y_mtx @ parent_mtx.inverted() @ b.bone.matrix_local @ z_to_y_mtx.inverted()
             
-            print(f'raw trans: { b.bone.matrix_local.to_translation() }')
-            print(f'raw rot: { b.bone.matrix_local.to_euler("XYZ") }')
-            print()
-            print(f'mod trans: { local_matrix.to_translation() }')
-            print(f'mod rot: { local_matrix.to_euler("XYZ") }')
-            
             joint_anim = BckJointAnim()
             fcurve_path = f'pose.bones["{ b.name }"]'
             
             trans_fcurves = [fcu for fcu in action.fcurves if fcu.data_path.startswith(fcurve_path + ".location")]
-            self.process_translation_track(trans_fcurves, joint_anim, local_matrix)
-            
             rot_fcurves = [fcu for fcu in action.fcurves if fcu.data_path.startswith(fcurve_path + ".rotation_euler")]
-            self.process_rotation_track(rot_fcurves, joint_anim, local_matrix)
-            
             scale_fcurves = [fcu for fcu in action.fcurves if fcu.data_path.startswith(fcurve_path + ".scale")]
-            self.process_scale_track(scale_fcurves, joint_anim, local_matrix)
+
+            for f in range(self.maxframe + 1):
+              self.process_translation_track(trans_fcurves, f, joint_anim, local_matrix)
+              self.process_rotation_track(rot_fcurves, f, joint_anim, local_matrix)
+              self.process_scale_track(scale_fcurves, f, joint_anim, local_matrix)
                     
             self.anims.append(joint_anim)
-            
-    def process_translation_track(self, curves, anim, local_matrix):
-        x_track = None
-        y_track = None
-        z_track = None
+    
+    def get_key_value(self, curve, frame):
+        keyframe = next((k for k in curve.keyframe_points if k.co[0] == frame), None)
         
-        for f in curves:
-            if f.array_index == 0:
-                x_track = f
-            elif f.array_index == 1:
-                y_track = f
-            elif f.array_index == 2:
-                z_track = f
-            else:
-                print(f'Unknown fcurve array index "{ f.array_index }"!')
-                return
-                       
-        for k in x_track.keyframe_points:
-            bck_key = BckKey()
+        if keyframe is not None:
+            return (keyframe.co, keyframe.handle_left, keyframe.handle_right)
             
-            bck_key.time = k.co[0]
-            bck_key.tangentL = (k.handle_left[1] * EPSILON) + k.co[1]
-            bck_key.tangentR = (k.handle_right[1] * EPSILON) + k.co[1]
-            
-            vec = mathutils.Vector((k.co[1], 0., 0.))
-            vec = local_matrix @ vec
-            
-            bck_key.value = vec[0]
-            anim.translationsX.append(bck_key)
-            
-        for k in y_track.keyframe_points:
-            bck_key = BckKey()
-            
-            bck_key.time = k.co[0]
-            bck_key.tangentL = (k.handle_left[1] * EPSILON) + k.co[1]
-            bck_key.tangentR = (k.handle_right[1] * EPSILON) + k.co[1]
-            
-            vec = mathutils.Vector((0., k.co[1], 0.))
-            vec = local_matrix @ vec
-            
-            bck_key.value = vec[1]
-            anim.translationsY.append(bck_key)
-            
-        for k in z_track.keyframe_points:
-            bck_key = BckKey()
-            
-            bck_key.time = k.co[0]
-            bck_key.tangentL = (k.handle_left[1] * EPSILON) + k.co[1]
-            bck_key.tangentR = (k.handle_right[1] * EPSILON) + k.co[1]
-            
-            vec = mathutils.Vector((0., 0., k.co[1]))
-            vec = local_matrix @ vec
-            
-            bck_key.value = vec[2]
-            anim.translationsZ.append(bck_key)
+        return (None, None, None)
+    
+    def get_track_keyframe(self, x_curve, y_curve, z_curve, frame):
+        (x_co, x_handle_left, x_handle_right) = self.get_key_value(x_curve, frame)
+        (y_co, y_handle_left, y_handle_right) = self.get_key_value(y_curve, frame)
+        (z_co, z_handle_left, z_handle_right) = self.get_key_value(z_curve, frame)
         
-    def process_rotation_track(self, curves, anim, local_matrix):
+        if x_co is not None and y_co is not None and z_co is not None:
+            keyframe_value = (x_co[1], y_co[1], z_co[1])
+        else:
+            keyframe_value = None
+        #keyframe_handle_left = ?
+        #keyframe_handle_right = ?
+        
+        return (keyframe_value, None, None)
+    
+    def process_translation_track(self, curves, frame, anim, local_matrix):
         x_track = None
         y_track = None
         z_track = None
@@ -625,49 +587,49 @@ class Bck_out:
                 print(f'Unknown fcurve array index "{ f.array_index }"!')
                 return
         
-        for k in x_track.keyframe_points:
-            bck_key = BckKey()
-            
-            bck_key.time = k.co[0]
-            bck_key.tangentL = (k.handle_left[1] * EPSILON) + k.co[1]
-            bck_key.tangentR = (k.handle_right[1] * EPSILON) + k.co[1]
-            
-            euler = mathutils.Euler((k.co[1], 0., 0.), 'XYZ')
-            euler.rotate(local_matrix.to_quaternion())
-            
-            print(f'x rot: { euler[0]} ')
-            bck_key.value = euler[0]
-            anim.rotationsX.append(bck_key)
-            
-        for k in z_track.keyframe_points:
-            bck_key = BckKey()
-            
-            bck_key.time = k.co[0]
-            bck_key.tangentL = (k.handle_left[1] * EPSILON) + k.co[1]
-            bck_key.tangentR = (k.handle_right[1] * EPSILON) + k.co[1]
-            
-            euler = mathutils.Euler((0., k.co[1], 0.), 'XYZ')
-            euler.rotate(local_matrix.to_quaternion())
-            
-            print(euler[1])
-            bck_key.value = euler[1]
-            anim.rotationsY.append(bck_key)
-            
-        for k in y_track.keyframe_points:
-            bck_key = BckKey()
-            
-            bck_key.time = k.co[0]
-            bck_key.tangentL = (k.handle_left[1] * EPSILON) + k.co[1]
-            bck_key.tangentR = (k.handle_right[1] * EPSILON) + k.co[1]
-            
-            euler = mathutils.Euler((0., 0., k.co[1] * -1.), 'XYZ')
-            euler.rotate(local_matrix.to_quaternion())
-            
-            print(euler[2])
-            bck_key.value = euler[2]
-            anim.rotationsZ.append(bck_key)
+        value, handle_left, handle_right = self.get_track_keyframe(x_track, y_track, z_track, frame)
+        if value is None:
+            return
         
-    def process_scale_track(self, curves, anim, local_matrix):
+        trans_vec = local_matrix @ mathutils.Vector((value[0], value[2], value[1] * -1.))
+        print(trans_vec)
+        
+        x_bck_key = BckKey()
+        x_bck_key.time = frame
+        x_bck_key.tangentL = 0 #handle_left
+        x_bck_key.tangentR = 0 #handle_right
+        x_bck_key.value = trans_vec[0]
+        anim.translationsX.append(x_bck_key)
+        
+        y_bck_key = BckKey()
+        y_bck_key.time = frame
+        y_bck_key.tangentL = 0 #handle_left
+        y_bck_key.tangentR = 0 #handle_right
+        y_bck_key.value = trans_vec[1]
+        anim.translationsY.append(y_bck_key)
+        
+        z_bck_key = BckKey()
+        z_bck_key.time = frame
+        z_bck_key.tangentL = 0 #handle_left
+        z_bck_key.tangentR = 0 #handle_right
+        z_bck_key.value = trans_vec[2]
+        anim.translationsZ.append(z_bck_key)
+        
+        # Keeping one of the original loops for reference
+        #for k in x_track.keyframe_points:
+        #    bck_key = BckKey()
+        #    
+        #    bck_key.time = k.co[0]
+        #    bck_key.tangentL = (k.handle_left[1] * EPSILON) + k.co[1]
+        #    bck_key.tangentR = (k.handle_right[1] * EPSILON) + k.co[1]
+        #    
+        #    vec = mathutils.Vector((k.co[1], 0., 0.))
+        #    vec = local_matrix @ vec
+        #    
+        #    bck_key.value = vec[0]
+        #    anim.translationsX.append(bck_key)
+        
+    def process_rotation_track(self, curves, frame, anim, local_matrix):
         x_track = None
         y_track = None
         z_track = None
@@ -682,46 +644,110 @@ class Bck_out:
             else:
                 print(f'Unknown fcurve array index "{ f.array_index }"!')
                 return
+        
+        value, handle_left, handle_right = self.get_track_keyframe(x_track, y_track, z_track, frame)
+        if value is None:
+            return
+        
+        rot_euler = mathutils.Euler((value[0], value[2], value[1] * -1.), 'XYZ')
+        rot_euler.rotate(local_matrix.to_quaternion())
+        print(rot_euler)
+        
+        x_bck_key = BckKey()
+        x_bck_key.time = frame
+        x_bck_key.tangentL = 0 #handle_left
+        x_bck_key.tangentR = 0 #handle_right
+        x_bck_key.value = rot_euler[0]
+        anim.rotationsX.append(x_bck_key)
+        
+        y_bck_key = BckKey()
+        y_bck_key.time = frame
+        y_bck_key.tangentL = 0 #handle_left
+        y_bck_key.tangentR = 0 #handle_right
+        y_bck_key.value = rot_euler[1]
+        anim.rotationsY.append(y_bck_key)
+        
+        z_bck_key = BckKey()
+        z_bck_key.time = frame
+        z_bck_key.tangentL = 0 #handle_left
+        z_bck_key.tangentR = 0 #handle_right
+        z_bck_key.value = rot_euler[2]
+        anim.rotationsZ.append(z_bck_key)
+        
+        # Keeping one of the original loops for reference
+        #for k in x_track.keyframe_points:
+        #    bck_key = BckKey()
+        #    
+        #    bck_key.time = k.co[0]
+        #    bck_key.tangentL = (k.handle_left[1] * EPSILON) + k.co[1]
+        #    bck_key.tangentR = (k.handle_right[1] * EPSILON) + k.co[1]
+        #    
+        #    euler = mathutils.Euler((k.co[1], 0., 0.), 'XYZ')
+        #    euler.rotate(local_matrix.to_quaternion())
+        #    
+        #    print(f'x rot: { euler[0]} ')
+        #    bck_key.value = euler[0]
+        #    anim.rotationsX.append(bck_key)
+        
+    def process_scale_track(self, curves, frame, anim, local_matrix):
+        x_track = None
+        y_track = None
+        z_track = None
+        
+        for f in curves:
+            if f.array_index == 0:
+                x_track = f
+            elif f.array_index == 1:
+                y_track = f
+            elif f.array_index == 2:
+                z_track = f
+            else:
+                print(f'Unknown fcurve array index "{ f.array_index }"!')
+                return
+        
+        value, handle_left, handle_right = self.get_track_keyframe(x_track, y_track, z_track, frame)
+        if value is None:
+            return
+        
+        scale_vec = mathutils.Vector((value[0], value[2], value[1]))
+        print(scale_vec)
+        
+        x_bck_key = BckKey()
+        x_bck_key.time = frame
+        x_bck_key.tangentL = 0 #handle_left
+        x_bck_key.tangentR = 0 #handle_right
+        x_bck_key.value = scale_vec[0]
+        anim.scalesX.append(x_bck_key)
+        
+        y_bck_key = BckKey()
+        y_bck_key.time = frame
+        y_bck_key.tangentL = 0 #handle_left
+        y_bck_key.tangentR = 0 #handle_right
+        y_bck_key.value = scale_vec[1]
+        anim.scalesY.append(y_bck_key)
+        
+        z_bck_key = BckKey()
+        z_bck_key.time = frame
+        z_bck_key.tangentL = 0 #handle_left
+        z_bck_key.tangentR = 0 #handle_right
+        z_bck_key.value = scale_vec[2]
+        anim.scalesZ.append(z_bck_key)
                 
-        for k in x_track.keyframe_points:
-            bck_key = BckKey()
-            
-            bck_key.time = k.co[0]
-            bck_key.tangentL = (k.handle_left[1] * EPSILON) + k.co[1]
-            bck_key.tangentR = (k.handle_right[1] * EPSILON) + k.co[1]
-            
-            vec = mathutils.Vector((k.co[1], 0., 0.))
-            
-            bck_key.value = 1. #vec[0]
-            anim.scalesX.append(bck_key)
-            
-        for k in y_track.keyframe_points:
-            bck_key = BckKey()
-            
-            bck_key.time = k.co[0]
-            bck_key.tangentL = (k.handle_left[1] * EPSILON) + k.co[1]
-            bck_key.tangentR = (k.handle_right[1] * EPSILON) + k.co[1]
-            
-            vec = mathutils.Vector((0., k.co[1], 0.))
-            
-            bck_key.value = 1. #vec[1]
-            anim.scalesY.append(bck_key)
-            
-        for k in z_track.keyframe_points:
-            bck_key = BckKey()
-            
-            bck_key.time = k.co[0]
-            bck_key.tangentL = (k.handle_left[1] * EPSILON) + k.co[1]
-            bck_key.tangentR = (k.handle_right[1] * EPSILON) + k.co[1]
-            
-            vec = mathutils.Vector((0., 0., k.co[1]))
-            
-            bck_key.value = 1. #vec[2]
-            anim.scalesZ.append(bck_key)
+        #for k in x_track.keyframe_points:
+        #    bck_key = BckKey()
+        #    
+        #    bck_key.time = k.co[0]
+        #    bck_key.tangentL = (k.handle_left[1] * EPSILON) + k.co[1]
+        #    bck_key.tangentR = (k.handle_right[1] * EPSILON) + k.co[1]
+        #    
+        #    vec = mathutils.Vector((k.co[1], 0., 0.))
+        #    
+        #    bck_key.value = 1. #vec[0]
+        #    anim.scalesX.append(bck_key)
 
     def dump_data(self, dst, src):
         index = BckAnimIndex()
-        index.double_tangent = 0
+        index.double_tangent = 1
         index.count = len(src)
         if len(src) == 1:
             #if src[0].time or src[0].tangentL or src[0].tangentR:  # if non-zero
@@ -806,6 +832,7 @@ class Bck_out:
             bw.writeFloat(val)
         bw.writePadding(h.offsetToRots+Ank1Offset - bw.Position())
         for val in rotations:
+            print(val)
             bw.writeShort(val)
         bw.writePadding(h.offsetToTrans+Ank1Offset - bw.Position())
         for val in positions:
