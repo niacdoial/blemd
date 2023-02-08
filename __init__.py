@@ -567,56 +567,11 @@ class BMD_PT_export_options_include(bpy.types.Panel):
         col.prop(operator, 'use_active_scene')
 
 
-class BMD_PT_export_options_geometry(bpy.types.Panel):
-    bl_space_type = 'FILE_BROWSER'
-    bl_region_type = 'TOOL_PROPS'
-    bl_label = "Geometry"
-    bl_parent_id = "FILE_PT_operator"
-    bl_options = {'DEFAULT_CLOSED'}
-
-    @classmethod
-    def poll(cls, context):
-        sfile = context.space_data
-        operator = sfile.active_operator
-
-        return operator.bl_idname == "EXPORT_OBJECT_OT_bmd"
-
-    def draw(self, context):
-        pass
-        
-
-class BMD_PT_export_options_geometry_mesh(bpy.types.Panel):
-    bl_space_type = 'FILE_BROWSER'
-    bl_region_type = 'TOOL_PROPS'
-    bl_label = ""
-    bl_parent_id = "BMD_PT_export_options_geometry"
-    bl_options = {'HIDE_HEADER'}
-
-    @classmethod
-    def poll(cls, context):
-        sfile = context.space_data
-        operator = sfile.active_operator
-
-        return operator.bl_idname == "EXPORT_OBJECT_OT_bmd"
-
-    def draw(self, context):
-        layout = self.layout
-        layout.use_property_split = True
-        layout.use_property_decorate = False  # No animation.
-
-        sfile = context.space_data
-        operator = sfile.active_operator
-
-        layout.prop(operator, 'export_normals')
-        layout.prop(operator, 'export_colors')
-        layout.prop(operator, 'export_texcoords')
-
-
 class BMD_PT_export_options_geometry_compression(bpy.types.Panel):
     bl_space_type = 'FILE_BROWSER'
     bl_region_type = 'TOOL_PROPS'
     bl_label = "Compression"
-    bl_parent_id = "BMD_PT_export_options_geometry"
+    bl_parent_id = "FILE_PT_operator"
     bl_options = {'DEFAULT_CLOSED'}
 
     @classmethod
@@ -787,10 +742,10 @@ class AnimationPropertyPanel(bpy.types.Panel):
 
 
 class TOPBAR_MT_file_export_nintendo(bpy.types.Menu):
-    bl_label = "Nintendo J3D"
+    bl_label = "Nintendo J3D (GameCube/Wii)"
     
     def draw(self, context):
-        self.layout.operator(ExportBmd.bl_idname, text="Model (*.bmd/*.bdl)")
+        self.layout.operator(ExportBmd.bl_idname, text="Model (*.bmd, *.bdl)")
         self.layout.separator()
         self.layout.operator(ExportBck.bl_idname, text="Joint Animation (*.bck)")
         #self.layout.operator(ExportBca.bl_idname, text="Joint Animation (*.bca)") # TODO
@@ -819,8 +774,6 @@ def register():
     bpy.utils.register_class(ExportBmd)
     bpy.utils.register_class(BMD_PT_export_options_main)
     bpy.utils.register_class(BMD_PT_export_options_include)
-    bpy.utils.register_class(BMD_PT_export_options_geometry)
-    bpy.utils.register_class(BMD_PT_export_options_geometry_mesh)
     bpy.utils.register_class(BMD_PT_export_options_geometry_compression)
     bpy.utils.register_class(ExportBck)
     bpy.utils.register_class(BCK_PT_export_options)
@@ -881,8 +834,6 @@ def unregister():
     bpy.utils.unregister_class(BCK_PT_export_options)
     bpy.utils.unregister_class(ExportBck)
     bpy.utils.unregister_class(BMD_PT_export_options_geometry_compression)
-    bpy.utils.unregister_class(BMD_PT_export_options_geometry_mesh)
-    bpy.utils.unregister_class(BMD_PT_export_options_geometry)
     bpy.utils.unregister_class(BMD_PT_export_options_include)
     bpy.utils.unregister_class(BMD_PT_export_options_main)
     bpy.utils.unregister_class(ExportBmd)
