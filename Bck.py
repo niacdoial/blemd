@@ -592,7 +592,6 @@ class Bck_out:
             return
         
         trans_vec = local_matrix @ mathutils.Vector((value[0], value[2], value[1] * -1.))
-        print(trans_vec)
         
         x_bck_key = BckKey()
         x_bck_key.time = frame
@@ -628,7 +627,15 @@ class Bck_out:
         #    
         #    bck_key.value = vec[0]
         #    anim.translationsX.append(bck_key)
-        
+
+    def correct_rotation(self, value):
+        if isclose(value, pi, rel_tol=0.001):
+            value -= 2.0 * pi
+        elif isclose(value, -1.0 * pi, rel_tol=0.001):
+            value += 2.0 * pi
+            
+        return value
+    
     def process_rotation_track(self, curves, frame, anim, local_matrix):
         x_track = None
         y_track = None
@@ -657,21 +664,21 @@ class Bck_out:
         x_bck_key.time = frame
         x_bck_key.tangentL = 0 #handle_left
         x_bck_key.tangentR = 0 #handle_right
-        x_bck_key.value = rot_euler[0]
+        x_bck_key.value = self.correct_rotation(rot_euler[0])
         anim.rotationsX.append(x_bck_key)
         
         y_bck_key = BckKey()
         y_bck_key.time = frame
         y_bck_key.tangentL = 0 #handle_left
         y_bck_key.tangentR = 0 #handle_right
-        y_bck_key.value = rot_euler[1]
+        y_bck_key.value = self.correct_rotation(rot_euler[1])
         anim.rotationsY.append(y_bck_key)
         
         z_bck_key = BckKey()
         z_bck_key.time = frame
         z_bck_key.tangentL = 0 #handle_left
         z_bck_key.tangentR = 0 #handle_right
-        z_bck_key.value = rot_euler[2]
+        z_bck_key.value = self.correct_rotation(rot_euler[2])
         anim.rotationsZ.append(z_bck_key)
         
         # Keeping one of the original loops for reference
@@ -710,7 +717,6 @@ class Bck_out:
             return
         
         scale_vec = mathutils.Vector((value[0], value[2], value[1]))
-        print(scale_vec)
         
         x_bck_key = BckKey()
         x_bck_key.time = frame
@@ -832,7 +838,6 @@ class Bck_out:
             bw.writeFloat(val)
         bw.writePadding(h.offsetToRots+Ank1Offset - bw.Position())
         for val in rotations:
-            print(val)
             bw.writeShort(val)
         bw.writePadding(h.offsetToTrans+Ank1Offset - bw.Position())
         for val in positions:
