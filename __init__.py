@@ -745,8 +745,8 @@ class TOPBAR_MT_file_export_nintendo(bpy.types.Menu):
     bl_label = "Nintendo J3D (GameCube/Wii)"
     
     def draw(self, context):
-        self.layout.operator(ExportBmd.bl_idname, text="Model (*.bmd, *.bdl)")
-        self.layout.separator()
+        #self.layout.operator(ExportBmd.bl_idname, text="Model (*.bmd, *.bdl)")
+        #self.layout.separator()
         self.layout.operator(ExportBck.bl_idname, text="Joint Animation (*.bck)")
         #self.layout.operator(ExportBca.bl_idname, text="Joint Animation (*.bca)") # TODO
         
