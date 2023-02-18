@@ -92,35 +92,31 @@ def cubic_interpolator(t1, y1, d1, t2, y2, d2, t):
 # this (each contains translation and rotation):
 # origin_s*origin_d*bone_1_s*bone_1_d*....*bone_n_s*bone_n_d
 
-def get_dynamic_mtx(p_bone, frame):
-    if frame not in p_bone.computed_d_matrices.keys():
-        local_mtx_y, local_mtx_ydL, local_mtx_ydR = p_bone.frames.get_mtx(frame)
-        inv_static_mtx = p_bone.jnt_frame.getFrameMatrix().inverted()
-        p_bone.computed_d_matrices[frame] = (inv_static_mtx @ local_mtx_y,
-                                             inv_static_mtx @ local_mtx_ydL,
-                                             inv_static_mtx @ local_mtx_ydR)
-    return p_bone.computed_d_matrices[frame]
-
 
 def get_pos_vct(p_bone, frame):
-    global EPSILON
-    y, ydL, ydR = get_dynamic_mtx(p_bone, frame)
-    y = y.to_translation()
-    ydL = ydL.to_translation()
-    ydR = ydR.to_translation()
-    # yd = get_dynamic_mtx(p_bone, frame+EPSILON).position()
-    dL = (ydL-y)/EPSILON
-    dR = (ydR-y)/EPSILON
-    return y, dL, dR
-
+    if p_bone.inverted_static_rotmtx is None:
+        p_bone.inverted_static_rotmtx = p_bone.jnt_frame.getInvRotMatrix()
+    y, dL, dR = p_bone.frames.get_pos(frame)
+    y -= p_bone.jnt_frame.t
+    return (
+        p_bone.inverted_static_rotmtx @ y,
+        p_bone.inverted_static_rotmtx @ dL,
+        p_bone.inverted_static_rotmtx @ dR,
+    )
 
 def get_rot_vct(p_bone, frame):
     global EPSILON
-    y, ydL, ydR = get_dynamic_mtx(p_bone, frame)
-    y = y.to_euler('XYZ')
-    ydL = ydL.to_euler('XYZ')
-    ydR = ydR.to_euler('XYZ')
-    # yd = get_dynamic_mtx(p_bone, frame+EPSILON).rotation()
+    if p_bone.inverted_static_rotmtx is None:
+        p_bone.inverted_static_rotmtx = p_bone.jnt_frame.getInvRotMatrix()
+
+    y, dL, dR = p_bone.frames.get_rot(frame)
+    ydL = sum2(y, product(EPSILON, dL))
+    ydR = sum2(y, product(EPSILON, dR))
+
+    y = (p_bone.inverted_static_rotmtx @ y.to_matrix().to_4x4()).to_euler('XYZ')
+    ydL = (p_bone.inverted_static_rotmtx @ ydL.to_matrix().to_4x4()).to_euler('XYZ')
+    ydR = (p_bone.inverted_static_rotmtx @ ydR.to_matrix().to_4x4()).to_euler('XYZ')
+
     dL = product(1/EPSILON, subtract2(ydL, y))
     dR = product(1/EPSILON, subtract2(ydR, y))
     return y, dL, dR
@@ -250,20 +246,6 @@ class KeyFrames:
                 Vector((temp_x[1], temp_y[1], temp_z[1])),
                 Vector((temp_x[2], temp_y[2], temp_z[2])))
 
-    def get_mtx(self, time):
-        """Return the (possibly interpolated) transformation matrix for a given time, through the animation data stored in this object:
-        give the translation value itself, its lefthand tangent, and its righthand tangent.
-        """
-        global EPSILON
-        vct_y, vct_dL, vct_dR = self.get_pos(time)
-        rot_y, rot_dL, rot_dR = self.get_rot(time)
-        vct_ydL = sum2(vct_y, product(EPSILON, vct_dL))
-        rot_ydL = sum2(rot_y, product(EPSILON, rot_dL))
-        vct_ydR = sum2(vct_y, product(EPSILON, vct_dR))
-        rot_ydR = sum2(rot_y, product(EPSILON, rot_dR))
-        return ( (Matrix.Translation(vct_y) @ rot_y.to_matrix().to_4x4()),
-                 (Matrix.Translation(vct_ydL) @ rot_ydL.to_matrix().to_4x4()),
-                 (Matrix.Translation(vct_ydR) @ rot_ydR.to_matrix().to_4x4()) )
 
 
 class Pseudobone:
@@ -279,7 +261,7 @@ class Pseudobone:
         # self.rotation_euler = Euler((0, 0, 0), 'XYZ')
         self.position = startpoint
         self.frames = KeyFrames()
-        # self.inverted_static_mtx = None
+        self.inverted_static_rotmtx = None
         self.computed_d_matrices = {}
         self.computed_t_matrices = {}
         # self.scale_kf = {}  # keyframes (values)

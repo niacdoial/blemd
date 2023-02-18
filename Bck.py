@@ -564,12 +564,20 @@ class Bck_out:
         
         if x_co is not None and y_co is not None and z_co is not None:
             keyframe_value = (x_co[1], y_co[1], z_co[1])
+            if abs(x_co[0]-x_handle_left[0])<1E-2:
+                tangent_left = 0  # note: we do not support "infinite" tangents at keyframes
+            else:
+                tangent_left = (x_co[1] - x_handle_left[1])/(x_co[0] - x_handle_left[0])
+            if abs(x_co[0]-x_handle_right[0])<1E-2:
+                tangent_right = 0  # note: we do not support "infinite" tangents at keyframes
+            else:
+                tangent_right = (x_handle_right[1] - x_co[1])/(x_handle_left[0] - x_co[0])
         else:
             keyframe_value = None
-        #keyframe_handle_left = ?
-        #keyframe_handle_right = ?
+            tangent_left = None
+            tangent_right = None
         
-        return (keyframe_value, None, None)
+        return (keyframe_value, tangent_left, tangent_right)
     
     def process_translation_track(self, curves, frame, anim, local_matrix):
         x_track = None
@@ -595,22 +603,22 @@ class Bck_out:
         
         x_bck_key = BckKey()
         x_bck_key.time = frame
-        x_bck_key.tangentL = 0 #handle_left
-        x_bck_key.tangentR = 0 #handle_right
+        x_bck_key.tangentL = handle_left
+        x_bck_key.tangentR = handle_right
         x_bck_key.value = trans_vec[0]
         anim.translationsX.append(x_bck_key)
         
         y_bck_key = BckKey()
         y_bck_key.time = frame
-        y_bck_key.tangentL = 0 #handle_left
-        y_bck_key.tangentR = 0 #handle_right
+        y_bck_key.tangentL = handle_left
+        y_bck_key.tangentR = handle_right
         y_bck_key.value = trans_vec[1]
         anim.translationsY.append(y_bck_key)
         
         z_bck_key = BckKey()
         z_bck_key.time = frame
-        z_bck_key.tangentL = 0 #handle_left
-        z_bck_key.tangentR = 0 #handle_right
+        z_bck_key.tangentL = handle_left
+        z_bck_key.tangentR = handle_right
         z_bck_key.value = trans_vec[2]
         anim.translationsZ.append(z_bck_key)
         
@@ -662,22 +670,22 @@ class Bck_out:
         
         x_bck_key = BckKey()
         x_bck_key.time = frame
-        x_bck_key.tangentL = 0 #handle_left
-        x_bck_key.tangentR = 0 #handle_right
+        x_bck_key.tangentL = handle_left
+        x_bck_key.tangentR = handle_right
         x_bck_key.value = self.correct_rotation(rot_euler[0])
         anim.rotationsX.append(x_bck_key)
         
         y_bck_key = BckKey()
         y_bck_key.time = frame
-        y_bck_key.tangentL = 0 #handle_left
-        y_bck_key.tangentR = 0 #handle_right
+        y_bck_key.tangentL = handle_left
+        y_bck_key.tangentR = handle_right
         y_bck_key.value = self.correct_rotation(rot_euler[1])
         anim.rotationsY.append(y_bck_key)
         
         z_bck_key = BckKey()
         z_bck_key.time = frame
-        z_bck_key.tangentL = 0 #handle_left
-        z_bck_key.tangentR = 0 #handle_right
+        z_bck_key.tangentL = handle_left
+        z_bck_key.tangentR = handle_right
         z_bck_key.value = self.correct_rotation(rot_euler[2])
         anim.rotationsZ.append(z_bck_key)
         
@@ -720,22 +728,22 @@ class Bck_out:
         
         x_bck_key = BckKey()
         x_bck_key.time = frame
-        x_bck_key.tangentL = 0 #handle_left
-        x_bck_key.tangentR = 0 #handle_right
+        x_bck_key.tangentL = handle_left
+        x_bck_key.tangentR = handle_right
         x_bck_key.value = scale_vec[0]
         anim.scalesX.append(x_bck_key)
         
         y_bck_key = BckKey()
         y_bck_key.time = frame
-        y_bck_key.tangentL = 0 #handle_left
-        y_bck_key.tangentR = 0 #handle_right
+        y_bck_key.tangentL = handle_left
+        y_bck_key.tangentR = handle_right
         y_bck_key.value = scale_vec[1]
         anim.scalesY.append(y_bck_key)
         
         z_bck_key = BckKey()
         z_bck_key.time = frame
-        z_bck_key.tangentL = 0 #handle_left
-        z_bck_key.tangentR = 0 #handle_right
+        z_bck_key.tangentL = handle_left
+        z_bck_key.tangentR = handle_right
         z_bck_key.value = scale_vec[2]
         anim.scalesZ.append(z_bck_key)
                 
