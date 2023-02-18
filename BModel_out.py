@@ -299,14 +299,14 @@ class BModel_out:
         bw = BinaryWriter.BinaryWriter()
         bw.Open(filePath)
         # self._bmdFilePath = filePath
-        # self._bmdDir = common.getFilenamePath(self._bmdFilePath)
+        # self._bmdDir = os.split(self._bmdFilePath)[0]
         # self._bmdFileName = common.getFilenameFile(self._bmdFilePath)
-        # self._bmdDir += self._bmdFileName + "\\"
+        # self._bmdDir = os.path.join(self._bmdDir, self._bmdFileName+"_expbmd")
         # try:
         #    os.mkdir(self._bmdDir)
         # except FileExistsError:
         #    pass
-        # self._texturePath = self._bmdDir + "Textures"
+        # self._texturePath = os.path.join(self._bmdDir, "Textures")
 
         # XCX what is the file header?
 

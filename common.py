@@ -1,15 +1,12 @@
 """
 A common function module for BleMD.
 Mostly used by BModel, but can be expanded further
-
 """
 
 import bpy
-import os
-import re
+import os, sys, re, glob
 from time import sleep
 import subprocess
-import sys
 from contextlib import contextmanager
 import logging
 
@@ -76,9 +73,8 @@ def ReverseArray(inputArray):
     rev = []
     i = len(inputArray)
     while i > 0:
-        rev.append(inputArray[i-1])  # corrected!
+        rev.append(inputArray[i-1])
         i -= 1
-    # -- inputArray = rev doesn't work
     return rev
 
 
@@ -116,12 +112,9 @@ def SubProcCall(exefile, args, startpath=os.getcwd()):
         log.error('process errors:\n %s', temp.stderr)
 
 
-def getFilenamePath(path):
-    return os.path.split(path)[0] + os.sep
-
 
 def newfile(name):
-    if not getFiles(name):  # if it doesn't exist
+    if not os.exists(name):  # if it doesn't exist
         open(name, 'ab').close()  # create file
 
 
@@ -131,35 +124,11 @@ def getFilenameFile(path):
     return file
     # return os.path.join(dir, file)
 
-# XCX use glob instead
-def getFiles(wc_name):
-    # assume wild card is in the last part
-    path, file = os.path.split(wc_name)
-    returnable = []
-    
-    if '*' in path:
-        raise ValueError('must implement getFiles better')
-    try:
-        a, dirs, files = next(os.walk(os.path.normpath(path)))
-    except StopIteration:
-        return returnable
-        
-    if os.sep == '/':
-      wc_name = wc_name.replace('\\', '/')
-    else:
-      wc_name = wc_name.replace('/', '\\').replace('\\', r'\\')
-      path = path.replace('/', '\\')
-    
-    rematcher = wc_name.replace('.', r'\.').\
-                    replace('*', '.*').\
-                    replace('(', r'\(').\
-                    replace(')', r'\)')
-    
-    for com in files:
-        if re.fullmatch(rematcher, path + os.sep + com):
-            returnable.append(os.path.join(path, com))
-            
-    return returnable
+
+def getFiles(*pathparts, basedir=""):
+    """get the path of files matching a known globbing pattern, starting with a known base directory"""
+    basedir = glob.escape(basedir)
+    return glob.glob(os.path.join(basedir, *pathparts))
 
 def dedup_lines(string):
     lines = {}  # dict: {line: count}

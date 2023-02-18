@@ -7,7 +7,6 @@ else:
 from importlib import reload
 from array import array
 import os
-from os import path as OSPath
 
 import bpy
 from mathutils import Matrix, Vector, Euler
@@ -228,15 +227,6 @@ class BModel:
     def SetBmdViewExePath(self, value):
         self._bmdViewPathExe = value
 
-    def TryHiddenDOSCommand(self, exefile, args, startpath):
-
-        # --print "###################"
-        # --print cmd
-        # --print startpath
-        try:
-            common.SubProcCall(exefile, args, startpath=startpath)
-        except common.subprocess.CalledProcessError as err:
-            log.error('subprocess error: %s. Expect missing/glitchy textures', err)
 
     def BuildSingleMesh(self):
         # -----------------------------------------------------------------
@@ -1000,18 +990,23 @@ class BModel:
         except FileExistsError:
             pass
 
-        self._images = common.getFiles(self._texturePath + os.sep+"*" + imageExt)
+        self._images = common.getFiles("*"+imageExt, basedir=self._texturePath)
 
         if len(self._images) == 0 or force:
-            self.TryHiddenDOSCommand("bmdview",  # DO NOT capitalize: unix-like OSes use case-sensitive paths.
-                                     [self._bmdFilePath, self._texturePath, self.params.imtype],
-                                     self._bmdViewPathExe)
+            try:
+                common.SubProcCall(
+                    "bmdview",  # DO NOT capitalize: unix-like OSes use case-sensitive paths.
+                    [self._bmdFilePath, self._texturePath, self.params.imtype],
+                    self._bmdViewPathExe,
+                )
+            except common.subprocess.CalledProcessError as err:
+                log.error('subprocess error: %s. Expect missing/glitchy textures', err) 
 
         # TODO: need to update BmdView.exe to process all file formats like BmdView2
         errorMessage = "Error generating dds / tga image file(s).\
                        Use BmdView2 to export the missing tga file(s)\
                        then delete the *.ERROR file(s) and run the importer again"
-        errorFiles = common.getFiles(self._texturePath + os.sep +"*.ERROR")
+        errorFiles = common.getFiles("*.ERROR", basedir=self._texturePath)
         for f in errorFiles:
             errorMessage += f + "\n"  # report file
             common.newfile(f[:-6] + imageExt)  # and avoid crashes in the future
@@ -1022,7 +1017,7 @@ class BModel:
         return True
 
     def CreateBTPDataFile(self):
-        btpFiles = common.getFiles(self._bmdDir + "..\\btp\\*.btp".replace('\\', os.sep))
+        btpFiles = common.getFiles("..", "btp", "*.btp", basedir=self._bmdDir)
         # --messageBox (bckFiles as string)
 
         fBTP = open(self._bmdDir + "TextureAnimations.xml", 'w')
@@ -1087,11 +1082,11 @@ class BModel:
         #if filename = 'P:\ath\to\file.bmd',
         self._bmdFilePath = filename
         # this is 'P:\ath\to\file' and '.bmd' (the second string is useful because it can also be 'bdl'
-        temp_path, temp_ext = OSPath.splitext(filename)
+        temp_path, temp_ext = os.path.splitext(filename)
         # this is 'P:\ath\to\file_bmd\'
         self._bmdDir = temp_path+ '_' + temp_ext[1:] + os.sep  # generates dir name from file name?
         # P:\ath\to'
-        self._bmdPath = OSPath.split(temp_path)[0]
+        self._bmdPath = os.path.split(temp_path)[0]
         # file(.bmd?)
         self._bmdFileName = common.getFilenameFile(filename)
         # P:\ath\to\file_bmd\Textures

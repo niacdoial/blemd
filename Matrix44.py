@@ -46,7 +46,7 @@ def updateMatrixTable(evp, drw, jnt, currPacket, multiMatrixTable, matrixTable, 
 
         # if index is 0xffff, use the last packet's data.
         if index != 0xffff:  # 0xffff this means keep old entry
-            if drw.isWeighted[index]:  # corrected
+            if drw.isWeighted[index]: 
                 # --TODO: the EVP1 data should probably be used here,
                 # --figure out how this works (most files look ok
                 # --without this, but models/ji.bdl is for example
@@ -61,7 +61,7 @@ def updateMatrixTable(evp, drw, jnt, currPacket, multiMatrixTable, matrixTable, 
                 m = Matrix()
                 m.zero()  # zero-ifiy m
 
-                mm = evp.weightedIndices[drw.data[index]]  # -- get MultiMatrix # corrected
+                mm = evp.weightedIndices[drw.data[index]]  # -- get MultiMatrix
                 singleMultiMatrixEntry = MultiMatrix()
 
                 singleMultiMatrixEntry.weights = mm.weights.copy()
@@ -109,7 +109,7 @@ def updateMatrixTable(evp, drw, jnt, currPacket, multiMatrixTable, matrixTable, 
                 while len(multiMatrixTable) <= n:
                     multiMatrixTable.append(None)
                 multiMatrixTable[n] = singleMultiMatrixEntry
-                # -- end if drw.isWeighted[index] then
+            # -- end if drw.isWeighted[index] then
 
 
 def rotation_part(mtx):
