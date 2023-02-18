@@ -929,7 +929,7 @@ class BModel:
                     try:
                         b.AnimateBoneFrames(0, self._bones, 1, self.params.includeScaling)
                         action = PBones.apply_animation(self._bones, self.arm_obj, self.jnt.frames, bckFileName)
-                        action.bck_loop_type = b.loopType
+                        action.bck_loop_type = b.loopType.name
                     except Exception as err:
                         log.error('animation file doesn\'t apply as expected (error is %s)', err)
                         continue

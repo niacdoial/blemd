@@ -22,13 +22,7 @@ class LoopType(Enum):
 
 
 class BckKey:
-    # <variable time>
-    # -- float 
-    # <variable value>
-    # -- float 
-    # <variable tangent>
-    # -- float  //??
-    def __init__(self, tm=0, vl=0.0, tgL=0.0, tgR=0.0):  # GENERATED!
+    def __init__(self, tm=0, vl=0.0, tgL=0.0, tgR=0.0):
         self.time = tm
         self.value = vl
         self.tangentL = tgL
@@ -45,25 +39,7 @@ class BckKey:
 
 
 class BckJointAnim:
-    # <variable scalesX>
-    # -- std::vector<Key>
-    # <variable scalesY>
-    # -- std::vector<Key>
-    # <variable scalesZ>
-    # -- std::vector<Key>
-    # <variable rotationsX>
-    # -- std::vector<Key>
-    # <variable rotationsY>
-    # -- std::vector<Key>
-    # <variable rotationsZ>
-    # -- std::vector<Key>
-    # <variable translationsX>
-    # -- std::vector<Key>
-    # <variable translationsY>
-    # -- std::vector<Key>
-    # <variable translationsZ>
-    # -- std::vector<Key>
-    def __init__(self):  # GENERATED!
+    def __init__(self): 
         self.scalesX = []
         self.rotationsY = []
         self.rotationsZ = []
@@ -79,58 +55,28 @@ class BckJointAnim:
     # ------------------------------------
 
     def __eq__(self, other):
-        return (self.scalesX == other.scalesX and
-                self.scalesY == other.scalesY and
-                self.scalesZ == other.scalesZ and
-                self.rotationsX == other.rotationsX and
-                self.rotationsY == other.rotationsY and
-                self.rotationsZ == other.rotationsZ and
-                self.translationsX == other.translationsX and
-                self.translationsY == other.translationsY and
-                self.translationsZ == other.translationsZ)
+        return (
+            self.scalesX == other.scalesX and
+            self.scalesY == other.scalesY and
+            self.scalesZ == other.scalesZ and
+            self.rotationsX == other.rotationsX and
+            self.rotationsY == other.rotationsY and
+            self.rotationsZ == other.rotationsZ and
+            self.translationsX == other.translationsX and
+            self.translationsY == other.translationsY and
+            self.translationsZ == other.translationsZ
+        )
 
 
 class BckAnk1Header:
-    """# <variable tag>
-    # -- char[4] 'ANK1'
-    # <variable sizeOfSection>
-    # -- u32 
-    # -- 0 - play once, 2 - loop
-    # <variable loopFlags>
-    # -- u8 
-    # <variable angleMultiplier>
-    # -- u8 all angles have to multiplied by pow(2, angleMultiplyer)
-    # <variable animationLength>
-    # -- u16 in time units
-    # <variable numJoints>
-    # -- u16 that many animated joints at offsetToJoints
-    # <variable scaleCount>
-    # --u16  that many floats at offsetToScales
-    # <variable rotCount>
-    # -- u16 that many s16s at offsetToRots
-    # <variable transCount>
-    # -- u16 that many floats at offsetToTrans
-    # <variable offsetToJoints>
-    # -- u32 
-    # <variable offsetToScales>
-    # -- u32 
-    # <variable offsetToRots>
-    # -- u32 
-    # <variable offsetToTrans>
-    # -- u32 
-    # <function>"""
 
-    def __init__(self):  # GENERATED!
-        pass
-
-    def LoadData(self, br):
-                
-      self.tag = br.ReadFixedLengthString(4)
+    def LoadData(self, br):                
+      self.tag = br.ReadFixedLengthString(4)  # "ANK1"
       self.sizeOfSection = br.ReadDWORD()
-      self.loopFlags = br.GetByte()
-      self.angleMultiplier = br.GetByte()
+      self.loopFlags = LoopType(br.GetByte())
+      self.angleMultiplier = br.GetByte()  # multiply angles by 2**multiplier
       self.animationLength = br.ReadWORD()
-      self.numJoints = br.ReadWORD()
+      self.numJoints = br.ReadWORD()  # in time units?
       self.scaleCount = br.ReadWORD()
       self.rotCount = br.ReadWORD()
       self.transCount = br.ReadWORD()
@@ -138,7 +84,6 @@ class BckAnk1Header:
       self.offsetToScales = br.ReadDWORD()
       self.offsetToRots = br.ReadDWORD()
       self.offsetToTrans = br.ReadDWORD()
-    # -- TODO: the following two structs have really silly names, rename them
 
     def DumpData(self, bw):
         bw.writeString(self.tag)
@@ -156,22 +101,15 @@ class BckAnk1Header:
         bw.writeDword(self.offsetToTrans)
 
 
+# -- TODO: the following two structs have really silly names, rename them
+
 class BckAnimIndex:
-    # <variable count>
-    # -- u16 
-    # <variable index>
-    # -- u16 
-    # <variable double_tangent>
-    # -- u16 always 0?? -> no (biawatermill01.bck) TODO: find out what it means
-    # <function>
-
-    def __init__(self):  # GENERATED!
-        pass
-
     def LoadData(self, br):
         self.count = br.GetSHORT()
         self.index = br.GetSHORT()
-        self.double_tangent = br.GetSHORT()
+        self.double_tangent = br.GetSHORT()  # note: are there other values than 0 or 1?
+        if self.double_tangent not in (0,1):
+            log.warning("BckAnimIndex: unknown value of `double_tangent`: {:d}", self.double_tangent)            
 
     def DumpData(self, bw):
         bw.writeShort(self.count)
@@ -180,18 +118,10 @@ class BckAnimIndex:
 
 
 class BckAnimComponent:
-    # <variable s>
-    # -- AnimIndex scale
-    # <variable r>
-    # -- AnimIndex rotation
-    # <variable t>
-    # -- AnimIndex translation
-    # <function>
-
-    def __init__(self):  # GENERATED!
-        self.s= BckAnimIndex()
-        self.r= BckAnimIndex()
-        self.t= BckAnimIndex()
+    def __init__(self):
+        self.s= BckAnimIndex()  # scale
+        self.r= BckAnimIndex()  # rotation
+        self.t= BckAnimIndex()  # translation
 
     def LoadData(self, br):
      self.s.LoadData(br)
@@ -207,15 +137,8 @@ class BckAnimComponent:
 class BckAnimatedJoint:
     # --if count > 1, count*3 floats/shorts stored at index (time, value, unk [interpolation info, e.g. tangent??])?
     # --for shorts, time is a "real" short, no fixedpoint
-    # <variable x>
-    # -- AnimComponent 
-    # <variable y>
-    # -- AnimComponent 
-    # <variable z>
-    # -- AnimComponent 
-    # <function>
 
-    def __init__(self):  # GENERATED!
+    def __init__(self):
         self.z= BckAnimComponent()
         self.y= BckAnimComponent()
         self.x= BckAnimComponent()
@@ -235,75 +158,9 @@ class BckAnimatedJoint:
 
 
 class Bck_in:
-    """# <variable anims>
-    # -- std::vector<JointAnim>
-    # <variable animationLength>
-    # -- int
-    # <variable currAnimTime>
-    # -- float
-    # -- ConvRotation(vector<Key>& rots, float scale)
-    # <function>
-
-    # -- void readComp(vector<Key>& dst, const vector<T>& src, const bck::AnimIndex& index)
-    # <function>
-
-    # <function>
-
-    # <function>
-
-    # <function>
-
-    # <function>
-
-    # -- the caller has to ensure that jnt1.frames and bck.anims contain
-    # --the same number of elements
-    # <function>
-
-    # -- IMPORTANT: scale values are absolute and not related to the parent
-    # -- e.g Bone A (scale=200%), Bone B (Scale=200%), Bone C (Scale=100%). Bone A is the parent of Bone B and Bone B is the parent of Bone C
-    # --  need to remove the parent scaling. e.g Bone C shouldn't change in size but in 3DS max it will equal 400% (2 * 2 * 1 * 100)
-    # <function>
-
-    # -- CalcScale anims[i].scalesX parentBoneIndexs 8
-    # <function>
-
-    # -- only calc on first parent. ignore boneIndex
-    # <function>
-
-    # -- gets total x scale (excluding self)
-    # -- bck file stores the absolute scale at that point and should ignore all parent bone scaling
-    # -- e.g. bone a (200%) -> bone b (200%) -> bone C (200%).
-    # -- bone a (1 * 2 * 100), bone b ((1 / 2 (bone a scale)) * 2 * 100 = 50 %), bone c (1/2 * 1/2 * 100 = 25%)
-    # -- however, the parent bone is already scaled based on all items before it so only the parents scale is required. e.g. bone c (1/2 * 100 = 50) because bone b is already at 50%, total scale = 50%*50%=25%
-    # -- WARNING: skewed bones?
-    # <function>
-
-    # <function>
-
-    # <function>
-
-    # <function>
-
-    # <function>
-
-    # -- could use timeOffset to load all animations one after another
-    # -- parentBoneIndexs array of ints. e.g. parentBoneIndexs[2] = 1 (2nd bones parent is the first bone)
-    # <function>
-
-    # -- deltaTime in ticks
-    # <function>
-
-    # -- from stdplugs/stdscripts/CharacterPluginObject.ms
-    # <function>
-
-    # -- from stdplugs/stdscripts/CharacterPluginObject.ms
-    # <function>
-
-    # <function>"""
-
     def __init__(self):  # GENERATED!
         self.anims = []
-        self.loopType = LoopType(0).name
+        self.loopType = LoopType(0)
 
     def ConvRotation(self, rots, scale):
         for rot in rots:
@@ -317,25 +174,20 @@ class Bck_in:
             log.warning("readComp(): count is <= 0")
             return [BckKey()]
         dst = [BckKey() for _ in range(index.count)]
-        # -- dst.resize(index.count);
 
-        # -- violated by biawatermill01.bck
-
-        # if index.double_tangent != 0:
-        #
         if index.count == 1:
             dst[0].time = 0
             dst[0].value = src[index.index]
             dst[0].tangentL = 0
             dst[0].tangentR = 0
         elif index.double_tangent == 0:
-            for j in range(index.count):  # (int j = 0; j < index.count; ++j)
+            for j in range(index.count):
                 dst[j].time = src[(index.index + 3*j)]
                 dst[j].value = src[(index.index + 3*j + 1)]
                 dst[j].tangent_L = src[(index.index + 3*j + 2)]
                 dst[j].tangent_R = src[(index.index + 3*j + 2)]
         elif index.double_tangent == 1:
-            for j in range(index.count):  # (int j = 0; j < index.count; ++j)
+            for j in range(index.count):
                 while len(dst) <= j:
                     dst.append(None)
                 dst[j] = BckKey()
@@ -352,39 +204,44 @@ class Bck_in:
         i = 0
         ank1Offset = br.Position()
 
-        # -- read header
+        # read header
         h = BckAnk1Header()
         h.LoadData(br)
 
         if h.numJoints != jointnum:
-            return  # this file will not be used anyway
+            # if the number of bones in the animation do not match the number of bones in the model, reject the animation
+            return
 
-        self.loopType = LoopType(h.loopFlags).name
+        self.loopType = h.loopFlags
            
         self.currAnimTime = 0.0
         self.animationLength = h.animationLength
 
-        # -- read scale floats:
+        # read scale floats:
         br.SeekSet(ank1Offset + h.offsetToScales)
         scales = [br.GetFloat() for _ in range(h.scaleCount)]
 
-        # -- read rotation s16s:
+        # read rotation s16s:
         br.SeekSet(ank1Offset + h.offsetToRots)
         rotations = [br.GetSHORT() for _ in range(h.rotCount)]
 
-        # -- read translation floats:
+        # read translation floats:
         br.SeekSet(ank1Offset + h.offsetToTrans)
         translations = [br.GetFloat() for _ in range(h.transCount)]
 
-        # -- read joints
+        # read joints
         rotScale = (pow(2., h.angleMultiplier) * pi / 32768.)  # result in RADIANS  per increment (in a short)
         br.SeekSet(ank1Offset + h.offsetToJoints)
         self.anims = [BckJointAnim() for _ in range(h.numJoints)]
-        # -- bck.self.anims.resize(h.numJoints);
+        # bck.self.anims.resize(h.numJoints);
 
         for i in range(h.numJoints):
             joint = BckAnimatedJoint()
             joint.LoadData(br)
+
+            # -- IMPORTANT: scale values are absolute and not related to the parent
+            # -- e.g Bone A (scale=200%), Bone B (Scale=200%), Bone C (Scale=100%). Bone A is the parent of Bone B and Bone B is the parent of Bone C
+            # --  need to remove the parent scaling. e.g Bone C shouldn't change in size but in 3DS max it will equal 400% (2 * 2 * 1 * 100)
             self.anims[i].scalesX = self.ReadComp(scales, joint.x.s)
             self.anims[i].scalesY = self.ReadComp(scales, joint.y.s)
             self.anims[i].scalesZ = self.ReadComp(scales, joint.z.s)
@@ -414,100 +271,32 @@ class Bck_in:
             size = br.ReadDWORD()
 
             if size < 8:
-                size = 8  # -- prevent endless loop on corrupt data
+                log.warning("Bck file at {:s}: corrupt size of section. Is this really a bck file?", filePath)
+                size = 8  #  prevent endless loop on corrupt data
 
             br.SeekSet(pos)
 
             if tag == "ANK1":
                 self.LoadAnk1(br, jointlen)
             else:
-                # MessageBox("readBck(): Unsupported section " + tag)
-                raise ValueError("readBck(): Unsupported section " + tag)
+                raise ValueError("Bck file at "+filePath+": Unsupported section " + tag)
             br.SeekSet(pos)
             i += 1
         br.Close()
 
-    # no use here
-    def Interpolate(self, v1, d1, v2, d2, t):  # -- t in [0,1]
-        # linear imterpolation:
-        # return v1+t*(v1-v1)
-
-        # --cubic interpolation:
-        # -- float values
-        a = 2*(v1 - v2) + d1 + d2
-        b = -3 * v1 + 3 * v2 - 2 * d1 - d2
-        c = d1
-        d = v1
-        # --TODO: yoshi_walk.bck has strange-looking legs...not sure if
-        # --the following line is to blame, though
-        return ((a*t + b)*t + c) *t + d
-
     # TODO: erase dummy bone system
     def GetPositionBone(self, curBone):
         dummyBone = getBoneByName(curBone.name.fget() + "_dummy")
-
         if dummyBone is None:
             return curBone
-
         else:
             return dummyBone
 
-    # function which only has docs in it. Whut?!
-    def ValidateScale(self, curBone, scaleValue):
-
-        """# --if (scaleValue != 1 and curBone.children.count > 1) then
-        # --	throw (curBone.name + " unable to scale ( " +(scaleValue as string)+" ) bones with more than one child bone")"""
-
-    # GOT it!
     def AnimateBoneFrames(self, timeOffset, bones, frameScale, includeScaling):
-        # --alert (bones.count as string)
-
         for i in range(len(bones)):
             bone = bones[i]
             anim = self.anims[i]
-
             bone.frames.feed_anim(anim, includeScaling, frameScale, timeOffset)
-            pass
-            # # position correction LATER in the program
-            # if includeScaling:
-            #     translate_animation(timeOffset, bone, anim, frameScale,
-            #               'scale', 'x', mathutils.Vector((nan, nan, nan)))
-            #     translate_animation(timeOffset, bone, anim, frameScale,
-            #               'scale', 'y', mathutils.Vector((nan, nan, nan)))
-            #     translate_animation(timeOffset, bone, anim, frameScale,
-            #               'scale', 'z', mathutils.Vector((nan, nan, nan)))
-            # translate_animation(timeOffset, bone, anim, frameScale,
-            #           'rotation', 'x', mathutils.Euler((nan, nan, nan), 'XYZ'))
-            # translate_animation(timeOffset, bone, anim, frameScale,
-            #           'rotation', 'y', mathutils.Euler((nan, nan, nan), 'XYZ'))
-            # translate_animation(timeOffset, bone, anim, frameScale,
-            #           'rotation', 'z', mathutils.Euler((nan, nan, nan), 'XYZ'))
-            # translate_animation(timeOffset, bone, anim, frameScale,
-            #           'position', 'x', mathutils.Vector((nan, nan, nan)))
-            # translate_animation(timeOffset, bone, anim, frameScale,
-            #           'position', 'y', mathutils.Vector((nan, nan, nan)))
-            # translate_animation(timeOffset, bone, anim, frameScale,
-            #           'position', 'z', mathutils.Vector((nan, nan, nan)))
-            #
-            # if includeScaling:
-            #     complete_animation(timeOffset, bone, anim, self.animationLength,
-            #                         'scale', 'x', mathutils.Vector((nan, nan, nan)))
-            #     complete_animation(timeOffset, bone, anim, self.animationLength,
-            #                         'scale', 'y', mathutils.Vector((nan, nan, nan)))
-            #     complete_animation(timeOffset, bone, anim, self.animationLength,
-            #                         'scale', 'z', mathutils.Vector((nan, nan, nan)))
-            # complete_animation(timeOffset, bone, anim, self.animationLength,
-            #                     'rotation', 'x', mathutils.Euler((nan, nan, nan), 'XYZ'))
-            # complete_animation(timeOffset, bone, anim, self.animationLength,
-            #                     'rotation', 'y', mathutils.Euler((nan, nan, nan), 'XYZ'))
-            # complete_animation(timeOffset, bone, anim, self.animationLength,
-            #                     'rotation', 'z', mathutils.Euler((nan, nan, nan), 'XYZ'))
-            # complete_animation(timeOffset, bone, anim, self.animationLength,
-            #                     'position', 'x', mathutils.Vector((nan, nan, nan)))
-            # complete_animation(timeOffset, bone, anim, self.animationLength,
-            #                     'position', 'y', mathutils.Vector((nan, nan, nan)))
-            # complete_animation(timeOffset, bone, anim, self.animationLength,
-            #                     'position', 'z', mathutils.Vector((nan, nan, nan)))
 
 
 class Bck_out:
@@ -520,7 +309,7 @@ class Bck_out:
         ret = 1  # number of total full turns
 
     def dump_action(self, action, pose):
-        self.loopType = getattr(action, "bck_loop_type", 0)
+        self.loopType = LoopType[getattr(action, "bck_loop_type", 0)]
         self.maxframe = int(action.frame_range[1] - action.frame_range[0])
         
         z_to_y_mtx = mathutils.Matrix.Rotation(radians(-90.), 4, mathutils.Vector((1., 0., 0.)))
@@ -779,7 +568,7 @@ class Bck_out:
                 self.maxframe = max(self.maxframe, com.time)
                 dst.append(com.value)
                 dst.append(com.tangentL)
-                dst.append(com.tangentR)  # XCX simplify for identiqual tangents
+                dst.append(com.tangentR)  # TODO simplify for identiqual tangents
 
         return index
 
@@ -835,7 +624,7 @@ class Bck_out:
         h.animationLength = int(self.maxframe)
         h.tag = 'ANK1'
         h.sizeOfSection = h.offsetToTrans + ceil(h.transCount*4/16)*16 +16
-        h.loopFlags = LoopType[self.loopType].value  # 0: once, 2: loop
+        h.loopFlags = self.loopType
 
         h.DumpData(bw)
         bw.writePadding(h.offsetToJoints+Ank1Offset - bw.Position())
