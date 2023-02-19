@@ -2,6 +2,7 @@ from mathutils import Vector, Euler, Matrix
 import bpy
 import math
 import re
+from time import sleep
 from collections import OrderedDict as ODict
 
 from .common import dict_get_set
@@ -368,7 +369,6 @@ def apply_animation(bones, arm_obj, jntframes, name=None):
 
     # warning: here, the `name` var changes meaning
 
-
     data = {}
     for com in bones:
         name = com.name.fget()
@@ -381,28 +381,24 @@ def apply_animation(bones, arm_obj, jntframes, name=None):
         # this keyframe is needed, overwritten anyways
         # also it is always at 1 because this function is called once per action
 
-        bonedict = {}
+        bonedict = {'location': [None,None,None], 'rotation_euler':[None,None,None], 'scale': [None,None,None]}
         data[name] = bonedict
-        for datatype in ('location', 'rotation_euler', 'scale'):        
-            posebone.keyframe_insert(datatype, frame=0)
-            bonedict[datatype] = [None,None,None]
-            
-    for curve in arm_obj.animation_data.action.fcurves:
-        # create data in dicts ({bonename:{datatype:[0,1,2]...}...})
-        try:
-            bonename, datatype = finder.match(curve.data_path).groups()
-        except TypeError:
-            continue  # cannot unpack None: this fcurve is not one we are interested in
-        data[bonename][datatype][curve.array_index] = curve
+
+        for datatype in ('location', 'rotation_euler', 'scale'):
+            data_path = f'pose.bones["{name:s}"].{datatype:s}'
+            for array_index in (0,1,2):
+                curve = arm_obj.animation_data.action.fcurves.find(data_path, index = array_index)
+                if curve is None:
+                    curve = arm_obj.animation_data.action.fcurves.new(data_path, index = array_index)
+                curve.auto_smoothing = 'NONE'
+                curve.update()
+                data[name][datatype][array_index] = curve
 
     # create keyframes, with tengents
     for com in bones:
         name = com.name.fget()
         bonedict = data[name]
         posebone = arm_obj.pose.bones[name]
-        #posebone.keyframe_insert('location', frame=0)
-        #posebone.keyframe_insert('rotation_euler', frame=0)
-        #posebone.keyframe_insert('scale', frame=0)
         every_frame = list(com.frames.times.keys())
         every_frame.sort()
         refpos = com.jnt_frame
@@ -424,24 +420,43 @@ def apply_animation(bones, arm_obj, jntframes, name=None):
                     tgR.z, tgR.y = tgR.y, -tgR.z
                     vct.z, vct.y = vct.y, -vct.z
                 if not math.isnan(vct.x):
-                    posebone.location[0] = vct.x
-                    co = bonedict['location'][0].keyframe_points[-1].co
-                    bonedict['location'][0].keyframe_points[-1].handle_left = co+Vector((-1, -tgL.x))
-                    bonedict['location'][0].keyframe_points[-1].handle_right = co+Vector((1, tgR.x))
-                    posebone.keyframe_insert('location', index=0, frame=frame)
+                    #posebone.location[0] = vct.x
+                    #co = bonedict['location'][0].keyframe_points[-1].co
+                    co = Vector((frame, vct.x))
+                    bonedict['location'][0].keyframe_points.insert(frame, vct.x, options={'FAST'})
+                    #bonedict['location'][0].keyframe_points[-1].handle_left_type = 'FREE'
+                    #bonedict['location'][0].keyframe_points[-1].handle_right_type = 'FREE'
+                    #bonedict['location'][0].update()
+                    bonedict['location'][0].keyframe_points[-1].handle_left = co+Vector((-1, tgL.x))
+                    bonedict['location'][0].keyframe_points[-1].handle_right = co+Vector((1, -tgR.x))
+                    bonedict['location'][0].update()
                     # fixed: add frame to keyframes AFTER setting the right value to it. so conter-intuitive.
+                    #posebone.keyframe_insert('location', index=0, frame=frame)  # counterintuitive order of operations :|
                 if not math.isnan(vct.y):
-                    posebone.location[1] = vct.y
-                    co = bonedict['location'][1].keyframe_points[-1].co
-                    bonedict['location'][1].keyframe_points[-1].handle_left = co + Vector((-1, -tgL.y))
-                    bonedict['location'][1].keyframe_points[-1].handle_right = co + Vector((1, tgR.y))
-                    posebone.keyframe_insert('location', index=1, frame=frame)
+                    #posebone.location[1] = vct.y
+                    #co = bonedict['location'][1].keyframe_points[-1].co
+                    co = Vector((frame, vct.y))
+                    bonedict['location'][1].keyframe_points.insert(frame, vct.y, options={'FAST'})
+                    #bonedict['location'][1].keyframe_points[-1].handle_left_type = 'FREE'
+                    #bonedict['location'][1].keyframe_points[-1].handle_right_type = 'FREE'
+                    #bonedict['location'][1].update()
+                    bonedict['location'][1].keyframe_points[-1].handle_left = co + Vector((-1, tgL.y))
+                    bonedict['location'][1].keyframe_points[-1].handle_right = co + Vector((1, -tgR.y))
+                    bonedict['location'][1].update()
+                    #posebone.keyframe_insert('location', index=1, frame=frame)  # counterintuitive order of operations :|
                 if not math.isnan(vct.z):
-                    posebone.location[2] = vct.z
-                    co = bonedict['location'][2].keyframe_points[-1].co
-                    bonedict['location'][2].keyframe_points[-1].handle_left = co + Vector((-1, -tgL.z))
-                    bonedict['location'][2].keyframe_points[-1].handle_right = co + Vector((1, tgR.z))
-                    posebone.keyframe_insert('location', index=2, frame=frame)
+                    #posebone.location[2] = vct.z
+                    #co = bonedict['location'][2].keyframe_points[-1].co
+                    co = Vector((frame, vct.z))
+                    bonedict['location'][2].keyframe_points.insert(frame, vct.z, options={'FAST'})
+                    bonedict['location'][2].keyframe_points[-1].handle_left_type = 'FREE'
+                    bonedict['location'][2].keyframe_points[-1].handle_right_type = 'FREE'
+                    bonedict['location'][2].update()
+                    #sleep(0.005)
+                    bonedict['location'][2].keyframe_points[-1].handle_left = co + Vector((-1, tgL.z))
+                    bonedict['location'][2].keyframe_points[-1].handle_right = co + Vector((1, -tgR.z))
+                    #bonedict['location'][2].update()
+                    #posebone.keyframe_insert('location', index=2, frame=frame)  # counterintuitive order of operations :|
 
             if com.frames.times[frame][1]:
                 vct, tgL, tgR = get_rot_vct(com, frame)
@@ -450,23 +465,35 @@ def apply_animation(bones, arm_obj, jntframes, name=None):
                     tgR.z, tgR.y = tgR.y, -tgR.z
                     vct.z, vct.y = vct.y, -vct.z
                 if not math.isnan(vct.x):
-                    posebone.rotation_euler[0] = vct.x
-                    co = bonedict['rotation_euler'][0].keyframe_points[-1].co
+                    #posebone.rotation_euler[0] = vct.x
+                    #co = bonedict['rotation_euler'][0].keyframe_points[-1].co
+                    co = Vector((frame, vct.x))
+                    bonedict['rotation_euler'][0].keyframe_points.insert(frame, vct.x, options={'FAST'})
+                    #bonedict['rotation_euler'][0].keyframe_points[-1].handle_left_type = 'FREE'
+                    #bonedict['rotation_euler'][0].keyframe_points[-1].handle_right_type = 'FREE'
                     bonedict['rotation_euler'][0].keyframe_points[-1].handle_left = co + Vector((-1, -tgL.x))
                     bonedict['rotation_euler'][0].keyframe_points[-1].handle_right = co + Vector((1, tgR.x))
-                    posebone.keyframe_insert('rotation_euler', index=0, frame=frame)
+                    #posebone.keyframe_insert('rotation_euler', index=0, frame=frame)  # counterintuitive order of operations :|
                 if not math.isnan(vct.y):
-                    posebone.rotation_euler[1] = vct.y
-                    co = bonedict['rotation_euler'][1].keyframe_points[-1].co
+                    #posebone.rotation_euler[1] = vct.y
+                    #co = bonedict['rotation_euler'][1].keyframe_points[-1].co
+                    co = Vector((frame, vct.y))
+                    bonedict['rotation_euler'][1].keyframe_points.insert(frame, vct.y, options={'FAST'})
+                    #bonedict['rotation_euler'][1].keyframe_points[-1].handle_left_type = 'FREE'
+                    #bonedict['rotation_euler'][1].keyframe_points[-1].handle_right_type = 'FREE'
                     bonedict['rotation_euler'][1].keyframe_points[-1].handle_left = co + Vector((-1, -tgL.y))
                     bonedict['rotation_euler'][1].keyframe_points[-1].handle_right = co + Vector((1, tgR.y))
-                    posebone.keyframe_insert('rotation_euler', index=1, frame=frame)
+                    #posebone.keyframe_insert('rotation_euler', index=1, frame=frame)  # counterintuitive order of operations :|
                 if not math.isnan(vct.z):
-                    posebone.rotation_euler[2] = vct.z
-                    co = bonedict['rotation_euler'][2].keyframe_points[-1].co
+                    #posebone.rotation_euler[2] = vct.z
+                    #co = bonedict['rotation_euler'][2].keyframe_points[-1].co
+                    co = Vector((frame, vct.z))
+                    bonedict['rotation_euler'][2].keyframe_points.insert(frame, vct.z, options={'FAST'})
+                    #bonedict['rotation_euler'][2].keyframe_points[-1].handle_left_type = 'FREE'
+                    #bonedict['rotation_euler'][2].keyframe_points[-1].handle_right_type = 'FREE'
                     bonedict['rotation_euler'][2].keyframe_points[-1].handle_left = co + Vector((-1, -tgL.z))
                     bonedict['rotation_euler'][2].keyframe_points[-1].handle_right = co + Vector((1, tgR.z))
-                    posebone.keyframe_insert('rotation_euler', index=2, frame=frame)
+                    #posebone.keyframe_insert('rotation_euler', index=2, frame=frame)  # counterintuitive order of operations :|
 
             if com.frames.times[frame][2]:
                 vct, tgL, tgR = get_sc_vct(com, frame)
@@ -475,23 +502,35 @@ def apply_animation(bones, arm_obj, jntframes, name=None):
                     tgR.z, tgR.y = tgR.y, tgR.z
                     vct.z, vct.y = vct.y, vct.z
                 if not math.isnan(vct.x):
-                    posebone.scale[0] = vct.x
-                    co = bonedict['scale'][0].keyframe_points[-1].co
+                    #posebone.scale[0] = vct.x
+                    #co = bonedict['scale'][0].keyframe_points[-1].co
+                    co = Vector((frame, vct.x))
+                    bonedict['scale'][0].keyframe_points.insert(frame, vct.x, options={'FAST'})
                     bonedict['scale'][0].keyframe_points[-1].handle_left = co + Vector((-1, -tgL.x))
                     bonedict['scale'][0].keyframe_points[-1].handle_right = co + Vector((1, tgR.x))
-                    posebone.keyframe_insert('scale', index=0, frame=frame)
+                    #posebone.keyframe_insert('scale', index=0, frame=frame)  # counterintuitive order of operations :|
+                    #bonedict['scale'][0].keyframe_points[-1].handle_left_type = 'FREE'
+                    #bonedict['scale'][0].keyframe_points[-1].handle_right_type = 'FREE'
                 if not math.isnan(vct.y):
-                    posebone.scale[1] = vct.y
-                    co = bonedict['scale'][1].keyframe_points[-1].co
+                    #posebone.scale[1] = vct.y
+                    #co = bonedict['scale'][1].keyframe_points[-1].co
+                    co = Vector((frame, vct.y))
+                    bonedict['scale'][1].keyframe_points.insert(frame, vct.y, options={'FAST'})
                     bonedict['scale'][1].keyframe_points[-1].handle_left = co + Vector((-1, -tgL.y))
                     bonedict['scale'][1].keyframe_points[-1].handle_right = co + Vector((1, tgR.y))
-                    posebone.keyframe_insert('scale', index=1, frame=frame)
+                    #posebone.keyframe_insert('scale', index=1, frame=frame)  # counterintuitive order of operations :|
+                    #bonedict['scale'][1].keyframe_points[-1].handle_left_type = 'FREE'
+                    #bonedict['scale'][1].keyframe_points[-1].handle_right_type = 'FREE'
                 if not math.isnan(vct.z):
-                    posebone.scale[2] = vct.z
-                    co = bonedict['scale'][2].keyframe_points[-1].co
+                    #posebone.scale[2] = vct.z
+                    #co = bonedict['scale'][2].keyframe_points[-1].co
+                    co = Vector((frame, vct.z))
+                    bonedict['scale'][2].keyframe_points.insert(frame, vct.z, options={'FAST'})
                     bonedict['scale'][2].keyframe_points[-1].handle_left = co + Vector((-1, -tgL.z))
                     bonedict['scale'][2].keyframe_points[-1].handle_right = co + Vector((1, tgR.z))
-                    posebone.keyframe_insert('scale', index=2, frame=frame)
+                    #posebone.keyframe_insert('scale', index=2, frame=frame)  # counterintuitive order of operations :|
+                    #bonedict['scale'][2].keyframe_points[-1].handle_left_type = 'FREE'
+                    #bonedict['scale'][2].keyframe_points[-1].handle_right_type = 'FREE'
 
         # now, re-adjust the interpolation
         for fcurve in [
@@ -512,11 +551,11 @@ def apply_animation(bones, arm_obj, jntframes, name=None):
                     left_time = 1
                 else:
                     left_time = (kf.co[0] - fcurve.keyframe_points[i_kf-1].co[0]) /3
-                kf.handle_left = kf.co + Vector((-left_time, left_time*(kf.handle_left - kf.co)[1] ))
+                kf.handle_left = kf.co + Vector((1, (kf.handle_left - kf.co)[1]+0.5  )) #Vector((-left_time, left_time*(kf.handle_left - kf.co)[1] ))
                 if i_kf+1 == len(fcurve.keyframe_points):
                     right_time = 1
                 else:
                     right_time = (fcurve.keyframe_points[i_kf+1].co[0] - kf.co[0]) /3
-                kf.handle_right = kf.co + Vector((right_time, right_time*(kf.handle_right - kf.co)[1] ))
+                kf.handle_right = kf.co + Vector((1, (kf.handle_left - kf.co)[1]+0.5  ))  #Vector((right_time, right_time*(kf.handle_right - kf.co)[1] ))
 
     return arm_obj.animation_data.action
