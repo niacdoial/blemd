@@ -114,9 +114,9 @@ def get_rot_vct(p_bone, frame):
     ydL = sum2(y, product(EPSILON, dL))
     ydR = sum2(y, product(EPSILON, dR))
 
-    y = (p_bone.inverted_static_rotmtx @ y.to_matrix().to_4x4()).to_euler('XYZ')
-    ydL = (p_bone.inverted_static_rotmtx @ ydL.to_matrix().to_4x4()).to_euler('XYZ')
-    ydR = (p_bone.inverted_static_rotmtx @ ydR.to_matrix().to_4x4()).to_euler('XYZ')
+    y.rotate(p_bone.inverted_static_rotmtx.to_quaternion())
+    ydL.rotate(p_bone.inverted_static_rotmtx.to_quaternion())
+    ydR.rotate(p_bone.inverted_static_rotmtx.to_quaternion())
 
     dL = product(1/EPSILON, subtract2(ydL, y))
     dR = product(1/EPSILON, subtract2(ydR, y))
