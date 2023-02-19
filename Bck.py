@@ -88,7 +88,7 @@ class BckAnk1Header:
     def DumpData(self, bw):
         bw.writeString(self.tag)
         bw.writeDword(self.sizeOfSection)
-        bw.writeByte(self.loopFlags)
+        bw.writeByte(self.loopFlags.value)
         bw.writeByte(self.angleMultiplier)
         bw.writeWord(self.animationLength)
         bw.writeWord(self.numJoints)
@@ -184,8 +184,8 @@ class Bck_in:
             for j in range(index.count):
                 dst[j].time = src[(index.index + 3*j)]
                 dst[j].value = src[(index.index + 3*j + 1)]
-                dst[j].tangent_L = src[(index.index + 3*j + 2)]
-                dst[j].tangent_R = src[(index.index + 3*j + 2)]
+                dst[j].tangentL = src[(index.index + 3*j + 2)]
+                dst[j].tangentR = src[(index.index + 3*j + 2)]
         elif index.double_tangent == 1:
             for j in range(index.count):
                 while len(dst) <= j:
@@ -193,8 +193,8 @@ class Bck_in:
                 dst[j] = BckKey()
                 dst[j].time = src[(index.index + 4 * j)]
                 dst[j].value = src[(index.index + 4 * j + 1)]
-                dst[j].tangent_L = src[(index.index + 4 * j + 2)]
-                dst[j].tangent_R = src[(index.index + 4 * j + 3)]
+                dst[j].tangentL = src[(index.index + 4 * j + 2)]
+                dst[j].tangentR = src[(index.index + 4 * j + 3)]
         else:
             log.error("readComp(): unknown `double_tangent` value %d. This animation wil not be loaded", index.double_tangent)
             dst = [BckKey()]
@@ -353,14 +353,35 @@ class Bck_out:
         
         if x_co is not None and y_co is not None and z_co is not None:
             keyframe_value = (x_co[1], y_co[1], z_co[1])
+
             if abs(x_co[0]-x_handle_left[0])<1E-2:
-                tangent_left = 0  # note: we do not support "infinite" tangents at keyframes
+                x_tangent_left = 0  # note: we do not support "infinite" tangents at keyframes
             else:
-                tangent_left = (x_co[1] - x_handle_left[1])/(x_co[0] - x_handle_left[0])
-            if abs(x_co[0]-x_handle_right[0])<1E-2:
-                tangent_right = 0  # note: we do not support "infinite" tangents at keyframes
+                x_tangent_left = (x_co[1] - x_handle_left[1])/(x_co[0] - x_handle_left[0])
+            if abs(x_co[0] - x_handle_right[0])<1E-2:
+                x_tangent_right = 0  # note: we do not support "infinite" tangents at keyframes
             else:
-                tangent_right = (x_handle_right[1] - x_co[1])/(x_handle_left[0] - x_co[0])
+                x_tangent_right = (x_handle_right[1] - x_co[1])/(x_handle_left[0] - x_co[0])
+
+            if abs(y_co[0] - y_handle_left[0])<1E-2:
+                y_tangent_left = 0  # note: we do not support "infinite" tangents at keyframes
+            else:
+                y_tangent_left = (y_co[1] - y_handle_left[1])/(y_co[0] - y_handle_left[0])
+            if abs(y_co[0] - y_handle_right[0])<1E-2:
+                y_tangent_right = 0  # note: we do not support "infinite" tangents at keyframes
+            else:
+                y_tangent_right = (y_handle_right[1] - y_co[1])/(y_handle_left[0] - y_co[0])
+
+            if abs(z_co[0] - z_handle_left[0])<1E-2:
+                z_tangent_left = 0  # note: we do not support "infinite" tangents at keyframes
+            else:
+                z_tangent_left = (z_co[1] - z_handle_left[1])/(z_co[0] - z_handle_left[0])
+            if abs(z_co[0] - z_handle_right[0])<1E-2:
+                z_tangent_right = 0  # note: we do not support "infinite" tangents at keyframes
+            else:
+                z_tangent_right = (z_handle_right[1] - z_co[1])/(z_handle_left[0] - z_co[0])
+            tangent_left = (x_tangent_left, y_tangent_left, z_tangent_left)
+            tangent_right = (x_tangent_right, y_tangent_right, z_tangent_right)
         else:
             keyframe_value = None
             tangent_left = None
@@ -389,25 +410,24 @@ class Bck_out:
             return
         
         trans_vec = local_matrix @ mathutils.Vector((value[0], value[2], value[1] * -1.))
-        
         x_bck_key = BckKey()
         x_bck_key.time = frame
-        x_bck_key.tangentL = handle_left
-        x_bck_key.tangentR = handle_right
+        x_bck_key.tangentL = handle_left[0]
+        x_bck_key.tangentR = handle_right[0]
         x_bck_key.value = trans_vec[0]
         anim.translationsX.append(x_bck_key)
         
         y_bck_key = BckKey()
         y_bck_key.time = frame
-        y_bck_key.tangentL = handle_left
-        y_bck_key.tangentR = handle_right
+        y_bck_key.tangentL = handle_left[1]
+        y_bck_key.tangentR = handle_right[1]
         y_bck_key.value = trans_vec[1]
         anim.translationsY.append(y_bck_key)
         
         z_bck_key = BckKey()
         z_bck_key.time = frame
-        z_bck_key.tangentL = handle_left
-        z_bck_key.tangentR = handle_right
+        z_bck_key.tangentL = handle_left[2]
+        z_bck_key.tangentR = handle_right[2]
         z_bck_key.value = trans_vec[2]
         anim.translationsZ.append(z_bck_key)
         
@@ -459,22 +479,22 @@ class Bck_out:
         
         x_bck_key = BckKey()
         x_bck_key.time = frame
-        x_bck_key.tangentL = handle_left
-        x_bck_key.tangentR = handle_right
+        x_bck_key.tangentL = handle_left[0]
+        x_bck_key.tangentR = handle_right[0]
         x_bck_key.value = self.correct_rotation(rot_euler[0])
         anim.rotationsX.append(x_bck_key)
         
         y_bck_key = BckKey()
         y_bck_key.time = frame
-        y_bck_key.tangentL = handle_left
-        y_bck_key.tangentR = handle_right
+        y_bck_key.tangentL = handle_left[1]
+        y_bck_key.tangentR = handle_right[1]
         y_bck_key.value = self.correct_rotation(rot_euler[1])
         anim.rotationsY.append(y_bck_key)
         
         z_bck_key = BckKey()
         z_bck_key.time = frame
-        z_bck_key.tangentL = handle_left
-        z_bck_key.tangentR = handle_right
+        z_bck_key.tangentL = handle_left[2]
+        z_bck_key.tangentR = handle_right[2]
         z_bck_key.value = self.correct_rotation(rot_euler[2])
         anim.rotationsZ.append(z_bck_key)
         
@@ -517,22 +537,22 @@ class Bck_out:
         
         x_bck_key = BckKey()
         x_bck_key.time = frame
-        x_bck_key.tangentL = handle_left
-        x_bck_key.tangentR = handle_right
+        x_bck_key.tangentL = handle_left[0]
+        x_bck_key.tangentR = handle_right[0]
         x_bck_key.value = scale_vec[0]
         anim.scalesX.append(x_bck_key)
         
         y_bck_key = BckKey()
         y_bck_key.time = frame
-        y_bck_key.tangentL = handle_left
-        y_bck_key.tangentR = handle_right
+        y_bck_key.tangentL = handle_left[1]
+        y_bck_key.tangentR = handle_right[1]
         y_bck_key.value = scale_vec[1]
         anim.scalesY.append(y_bck_key)
         
         z_bck_key = BckKey()
         z_bck_key.time = frame
-        z_bck_key.tangentL = handle_left
-        z_bck_key.tangentR = handle_right
+        z_bck_key.tangentL = handle_left[2]
+        z_bck_key.tangentR = handle_right[2]
         z_bck_key.value = scale_vec[2]
         anim.scalesZ.append(z_bck_key)
                 

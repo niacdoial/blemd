@@ -2,6 +2,7 @@ from mathutils import Vector, Euler, Matrix
 import bpy
 import math
 import re
+from time import sleep
 from collections import OrderedDict as ODict
 
 from .common import dict_get_set
@@ -368,8 +369,7 @@ def apply_animation(bones, arm_obj, jntframes, name=None):
 
     # warning: here, the `name` var changes meaning
 
-
-    data = {}
+    all_curves = {}
     for com in bones:
         name = com.name.fget()
         arm_obj.data.bones[name].use_inherit_scale = False  # scale can be applied
@@ -381,28 +381,24 @@ def apply_animation(bones, arm_obj, jntframes, name=None):
         # this keyframe is needed, overwritten anyways
         # also it is always at 1 because this function is called once per action
 
-        bonedict = {}
-        data[name] = bonedict
-        for datatype in ('location', 'rotation_euler', 'scale'):        
-            posebone.keyframe_insert(datatype, frame=0)
-            bonedict[datatype] = [None,None,None]
-            
-    for curve in arm_obj.animation_data.action.fcurves:
-        # create data in dicts ({bonename:{datatype:[0,1,2]...}...})
-        try:
-            bonename, datatype = finder.match(curve.data_path).groups()
-        except TypeError:
-            continue  # cannot unpack None: this fcurve is not one we are interested in
-        data[bonename][datatype][curve.array_index] = curve
+        bonecurves = {'location': [None,None,None], 'rotation_euler':[None,None,None], 'scale': [None,None,None]}
+        all_curves[name] = bonecurves
+
+        for datatype in ('location', 'rotation_euler', 'scale'):
+            data_path = f'pose.bones["{name:s}"].{datatype:s}'
+            for array_index in (0,1,2):
+                curve = arm_obj.animation_data.action.fcurves.find(data_path, index = array_index)
+                if curve is None:
+                    curve = arm_obj.animation_data.action.fcurves.new(data_path, index = array_index)
+                curve.auto_smoothing = 'NONE'
+                curve.update()
+                all_curves[name][datatype][array_index] = curve
 
     # create keyframes, with tengents
     for com in bones:
         name = com.name.fget()
-        bonedict = data[name]
+        bonecurves = all_curves[name]
         posebone = arm_obj.pose.bones[name]
-        #posebone.keyframe_insert('location', frame=0)
-        #posebone.keyframe_insert('rotation_euler', frame=0)
-        #posebone.keyframe_insert('scale', frame=0)
         every_frame = list(com.frames.times.keys())
         every_frame.sort()
         refpos = com.jnt_frame
@@ -424,24 +420,29 @@ def apply_animation(bones, arm_obj, jntframes, name=None):
                     tgR.z, tgR.y = tgR.y, -tgR.z
                     vct.z, vct.y = vct.y, -vct.z
                 if not math.isnan(vct.x):
-                    posebone.location[0] = vct.x
-                    co = bonedict['location'][0].keyframe_points[-1].co
-                    bonedict['location'][0].keyframe_points[-1].handle_left = co+Vector((-1, -tgL.x))
-                    bonedict['location'][0].keyframe_points[-1].handle_right = co+Vector((1, tgR.x))
-                    posebone.keyframe_insert('location', index=0, frame=frame)
-                    # fixed: add frame to keyframes AFTER setting the right value to it. so conter-intuitive.
+                    co = Vector((frame, vct.x))
+                    bonecurves['location'][0].keyframe_points.insert(frame, vct.x, options={'FAST'})
+                    bonecurves['location'][0].keyframe_points[-1].handle_left_type = 'FREE'
+                    bonecurves['location'][0].keyframe_points[-1].handle_right_type = 'FREE'
+                    bonecurves['location'][0].keyframe_points[-1].handle_left = co+Vector((-1, -tgL.x))
+                    bonecurves['location'][0].keyframe_points[-1].handle_right = co+Vector((1, tgR.x))
+                    bonecurves['location'][0].update()
                 if not math.isnan(vct.y):
-                    posebone.location[1] = vct.y
-                    co = bonedict['location'][1].keyframe_points[-1].co
-                    bonedict['location'][1].keyframe_points[-1].handle_left = co + Vector((-1, -tgL.y))
-                    bonedict['location'][1].keyframe_points[-1].handle_right = co + Vector((1, tgR.y))
-                    posebone.keyframe_insert('location', index=1, frame=frame)
+                    co = Vector((frame, vct.y))
+                    bonecurves['location'][1].keyframe_points.insert(frame, vct.y, options={'FAST'})
+                    bonecurves['location'][1].keyframe_points[-1].handle_left_type = 'FREE'
+                    bonecurves['location'][1].keyframe_points[-1].handle_right_type = 'FREE'
+                    bonecurves['location'][1].keyframe_points[-1].handle_left = co + Vector((-1, -tgL.y))
+                    bonecurves['location'][1].keyframe_points[-1].handle_right = co + Vector((1, tgR.y))
+                    bonecurves['location'][1].update()
                 if not math.isnan(vct.z):
-                    posebone.location[2] = vct.z
-                    co = bonedict['location'][2].keyframe_points[-1].co
-                    bonedict['location'][2].keyframe_points[-1].handle_left = co + Vector((-1, -tgL.z))
-                    bonedict['location'][2].keyframe_points[-1].handle_right = co + Vector((1, tgR.z))
-                    posebone.keyframe_insert('location', index=2, frame=frame)
+                    co = Vector((frame, vct.z))
+                    bonecurves['location'][2].keyframe_points.insert(frame, vct.z, options={'FAST'})
+                    bonecurves['location'][2].keyframe_points[-1].handle_left_type = 'FREE'
+                    bonecurves['location'][2].keyframe_points[-1].handle_right_type = 'FREE'
+                    bonecurves['location'][2].update()
+                    bonecurves['location'][2].keyframe_points[-1].handle_left = co + Vector((-1, -tgL.z))
+                    bonecurves['location'][2].keyframe_points[-1].handle_right = co + Vector((1, tgR.z))
 
             if com.frames.times[frame][1]:
                 vct, tgL, tgR = get_rot_vct(com, frame)
@@ -450,23 +451,26 @@ def apply_animation(bones, arm_obj, jntframes, name=None):
                     tgR.z, tgR.y = tgR.y, -tgR.z
                     vct.z, vct.y = vct.y, -vct.z
                 if not math.isnan(vct.x):
-                    posebone.rotation_euler[0] = vct.x
-                    co = bonedict['rotation_euler'][0].keyframe_points[-1].co
-                    bonedict['rotation_euler'][0].keyframe_points[-1].handle_left = co + Vector((-1, -tgL.x))
-                    bonedict['rotation_euler'][0].keyframe_points[-1].handle_right = co + Vector((1, tgR.x))
-                    posebone.keyframe_insert('rotation_euler', index=0, frame=frame)
+                    co = Vector((frame, vct.x))
+                    bonecurves['rotation_euler'][0].keyframe_points.insert(frame, vct.x, options={'FAST'})
+                    bonecurves['rotation_euler'][0].keyframe_points[-1].handle_left_type = 'FREE'
+                    bonecurves['rotation_euler'][0].keyframe_points[-1].handle_right_type = 'FREE'
+                    bonecurves['rotation_euler'][0].keyframe_points[-1].handle_left = co + Vector((-1, -tgL.x))
+                    bonecurves['rotation_euler'][0].keyframe_points[-1].handle_right = co + Vector((1, tgR.x))
                 if not math.isnan(vct.y):
-                    posebone.rotation_euler[1] = vct.y
-                    co = bonedict['rotation_euler'][1].keyframe_points[-1].co
-                    bonedict['rotation_euler'][1].keyframe_points[-1].handle_left = co + Vector((-1, -tgL.y))
-                    bonedict['rotation_euler'][1].keyframe_points[-1].handle_right = co + Vector((1, tgR.y))
-                    posebone.keyframe_insert('rotation_euler', index=1, frame=frame)
+                    co = Vector((frame, vct.y))
+                    bonecurves['rotation_euler'][1].keyframe_points.insert(frame, vct.y, options={'FAST'})
+                    bonecurves['rotation_euler'][1].keyframe_points[-1].handle_left_type = 'FREE'
+                    bonecurves['rotation_euler'][1].keyframe_points[-1].handle_right_type = 'FREE'
+                    bonecurves['rotation_euler'][1].keyframe_points[-1].handle_left = co + Vector((-1, -tgL.y))
+                    bonecurves['rotation_euler'][1].keyframe_points[-1].handle_right = co + Vector((1, tgR.y))
                 if not math.isnan(vct.z):
-                    posebone.rotation_euler[2] = vct.z
-                    co = bonedict['rotation_euler'][2].keyframe_points[-1].co
-                    bonedict['rotation_euler'][2].keyframe_points[-1].handle_left = co + Vector((-1, -tgL.z))
-                    bonedict['rotation_euler'][2].keyframe_points[-1].handle_right = co + Vector((1, tgR.z))
-                    posebone.keyframe_insert('rotation_euler', index=2, frame=frame)
+                    co = Vector((frame, vct.z))
+                    bonecurves['rotation_euler'][2].keyframe_points.insert(frame, vct.z, options={'FAST'})
+                    bonecurves['rotation_euler'][2].keyframe_points[-1].handle_left_type = 'FREE'
+                    bonecurves['rotation_euler'][2].keyframe_points[-1].handle_right_type = 'FREE'
+                    bonecurves['rotation_euler'][2].keyframe_points[-1].handle_left = co + Vector((-1, -tgL.z))
+                    bonecurves['rotation_euler'][2].keyframe_points[-1].handle_right = co + Vector((1, tgR.z))
 
             if com.frames.times[frame][2]:
                 vct, tgL, tgR = get_sc_vct(com, frame)
@@ -475,35 +479,39 @@ def apply_animation(bones, arm_obj, jntframes, name=None):
                     tgR.z, tgR.y = tgR.y, tgR.z
                     vct.z, vct.y = vct.y, vct.z
                 if not math.isnan(vct.x):
-                    posebone.scale[0] = vct.x
-                    co = bonedict['scale'][0].keyframe_points[-1].co
-                    bonedict['scale'][0].keyframe_points[-1].handle_left = co + Vector((-1, -tgL.x))
-                    bonedict['scale'][0].keyframe_points[-1].handle_right = co + Vector((1, tgR.x))
-                    posebone.keyframe_insert('scale', index=0, frame=frame)
+                    co = Vector((frame, vct.x))
+                    bonecurves['scale'][0].keyframe_points.insert(frame, vct.x, options={'FAST'})
+                    bonecurves['scale'][0].keyframe_points[-1].handle_left_type = 'FREE'
+                    bonecurves['scale'][0].keyframe_points[-1].handle_right_type = 'FREE'
+                    bonecurves['scale'][0].keyframe_points[-1].handle_left = co + Vector((-1, -tgL.x))
+                    bonecurves['scale'][0].keyframe_points[-1].handle_right = co + Vector((1, tgR.x))
                 if not math.isnan(vct.y):
-                    posebone.scale[1] = vct.y
-                    co = bonedict['scale'][1].keyframe_points[-1].co
-                    bonedict['scale'][1].keyframe_points[-1].handle_left = co + Vector((-1, -tgL.y))
-                    bonedict['scale'][1].keyframe_points[-1].handle_right = co + Vector((1, tgR.y))
-                    posebone.keyframe_insert('scale', index=1, frame=frame)
+                    co = Vector((frame, vct.y))
+                    bonecurves['scale'][1].keyframe_points.insert(frame, vct.y, options={'FAST'})
+                    bonecurves['scale'][1].keyframe_points[-1].handle_left_type = 'FREE'
+                    bonecurves['scale'][1].keyframe_points[-1].handle_right_type = 'FREE'
+                    bonecurves['scale'][1].keyframe_points[-1].handle_left = co + Vector((-1, -tgL.y))
+                    bonecurves['scale'][1].keyframe_points[-1].handle_right = co + Vector((1, tgR.y))
                 if not math.isnan(vct.z):
-                    posebone.scale[2] = vct.z
-                    co = bonedict['scale'][2].keyframe_points[-1].co
-                    bonedict['scale'][2].keyframe_points[-1].handle_left = co + Vector((-1, -tgL.z))
-                    bonedict['scale'][2].keyframe_points[-1].handle_right = co + Vector((1, tgR.z))
-                    posebone.keyframe_insert('scale', index=2, frame=frame)
+                    co = Vector((frame, vct.z))
+                    bonecurves['scale'][2].keyframe_points.insert(frame, vct.z, options={'FAST'})
+                    bonecurves['scale'][2].keyframe_points[-1].handle_left_type = 'FREE'
+                    bonecurves['scale'][2].keyframe_points[-1].handle_right_type = 'FREE'
+                    bonecurves['scale'][2].keyframe_points[-1].handle_left = co + Vector((-1, -tgL.z))
+                    bonecurves['scale'][2].keyframe_points[-1].handle_right = co + Vector((1, tgR.z))
+
 
         # now, re-adjust the interpolation
         for fcurve in [
-                bonedict['location'][0],
-                bonedict['location'][1],
-                bonedict['location'][2],
-                bonedict['rotation_euler'][0],
-                bonedict['rotation_euler'][1],
-                bonedict['rotation_euler'][2],
-                bonedict['scale'][0],
-                bonedict['scale'][1],
-                bonedict['scale'][2],
+                bonecurves['location'][0],
+                bonecurves['location'][1],
+                bonecurves['location'][2],
+                bonecurves['rotation_euler'][0],
+                bonecurves['rotation_euler'][1],
+                bonecurves['rotation_euler'][2],
+                bonecurves['scale'][0],
+                bonecurves['scale'][1],
+                bonecurves['scale'][2],
         ]:
             if fcurve is None:
                 continue
