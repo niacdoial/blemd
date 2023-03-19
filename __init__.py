@@ -8,7 +8,6 @@ bl_info = {
     "location": "File > Import > Nintendo BMD",
     "description": "Import files in the gc/wii BMD format (.bmd, .bdl)",
     "wiki_url": "https://github.com/niacdoial/blemd",
-    "warning": "still in devlopement",
     "tracker_url": "https://github.com/niacdoial/blemd/issues",
     "category": "Import-Export",
 }
@@ -66,6 +65,7 @@ if LOADED:
     from importlib import reload
     reload(BModel)
     reload(BModel_out)
+    reload(Bck)
     reload(common)
     #log_out = log.handlers[1].stream  # kinda hacky, but it works (?)
 else:
@@ -73,7 +73,7 @@ else:
         # if this list is not empty, logging is configured.
         # here, it isn't
         config_logging()
-    from . import common, BModel, BModel_out
+    from . import common, BModel, BModel_out, Bck
 del LOADED
 
 log = logging.getLogger('bpy.ops.import_mesh.bmd')
@@ -204,7 +204,7 @@ class ImportBmd(Operator, ImportHelper):
         
         try:
             temp.SetBmdViewExePath(path + os.sep)  # add 'backslash' for good measure
-            temp.Import(filename=self.filepath, **{x: getattr(self, x) for x in self.ALL_PARAMS})
+            temp.Import(filepath=self.filepath, **{x: getattr(self, x) for x in self.ALL_PARAMS})
         except Exception as err:
             log.critical('An error happened. If it wasn\'t reported before, here it is: %s', err)
             retcode = 'ERROR'

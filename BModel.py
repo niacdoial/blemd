@@ -40,18 +40,10 @@ class LoopRepresentation:
         self.normal = None
         self.mm = -1  # reference to the multimatrix entry used to move the point
 
-    # def __eq__(self, other):
-    #    return self.vertex == other.vertex and \
-    #           self.UVs == other.UVs and \
-    #           self.VColors == other.VColors and \
-    #           self.normal == other.normal
-
-
 class FaceRepresentation:
     def __init__(self):
         self.loop_start = -1
         self.material = None
-
 
 class ModelRepresentation:
     def __init__(self):
@@ -129,86 +121,7 @@ class ModelRepresentation:
 
 
 class BModel:
-    """# <variable _boneThickness>
-    # <variable inf>
-    # <variable vtx>
-    # <variable shp>
-    # <variable jnt>
-    # <variable evp>
-    # <variable drw>
-    # <variable _mat1>
-    # <variable tex>
-    # <variable _bmdViewPathExe>
-    # <variable _bones>
-    # <variable _iconSize>
-    # <variable _currMaterialIndex>
-    # <variable _currMaterial>
-    # <variable _texturePath>
-    # <variable _texturePrefix>
-    # <variable _bckPaths>
-    # <variable _bmdFilePath>
-    # <variable _bmdDir>
-    # <variable _bmdFileName>
-    # <variable _createBones>
-    # <variable _loadAnimations>
-    # <variable vertices>
-    # <variable faces>
-    # <variable tverts>
-    # <variable tFaces>
-    # <variable normals>
-    # <variable vcFaces>
-    # -- vertex color
-    # <variable vertexMultiMatrixEntry>
-    # <variable _materialIDS>
-    # <variable _subMaterials>
-    # <variable _parentBoneIndexs>
-    # -- doesn't work on characters? required for stages?
-    # <variable _forceCreateBones>
-    # <variable _exportType>
-    # -- #XFILE, #CHARACTER
-    # <variable _runExtractTexturesCmd>
-    # <variable _includeScaling>
-    # <variable _reverseFaces>
-    # -- required for .x export (render eyeraises before face)
-    # <function>
-
-
-    # <function>
-
-    # <function>
-
-    # <function>
-
-    # <function>
-
-    # <function>
-
-    # <function>
-
-    # <function>
-
-    # --newVertIndex = 1,
-    # <variable faceIndex>
-    # <function>
-
-    # <function>
-
-    # -- create frame nodes and setup jnt.matrices
-    # <function>
-
-    # <function>
-
-    # <function>
-
-    # <function>
-
-    # <function>
-
-    # <function>
-
-    # <function>"""
-
-    def __init__(self):  # GENERATED!
+    def __init__(self):
         self.vtx = None
         self.DEBUGvgroups = {}
         self._bmdFilePath = ""
@@ -229,29 +142,27 @@ class BModel:
 
 
     def BuildSingleMesh(self):
-        # -----------------------------------------------------------------
-        # -- mesh
-        log.debug('BuildSMesh point reached')
-        """if False:  #self._reverseFaces and False:
-            self.model.faces = ReverseArray(self.model.faces)
-            self._materialIDS = ReverseArray(self._materialIDS)
-            #for com in range(len(self._materialIDS)):
-            #    self._materialIDS[com] = len(self._subMaterials)-1-self._materialIDS[com]
-            for uv in range(8):
-                self.tFaces[uv] = ReverseArray(self.tFaces[uv])
-                for num, com in enumerate(self.tv_to_f_v[uv]):
-                    for num2, com2 in enumerate(com):
-                        com2 = (len(self.model.faces)-1-com2[0], com2[1])
-                        com[num2] = com2
-                    self.tv_to_f_v[uv][num] = com
-            # vertex colors are now similar to uv textures
-            for cv in range(2):
-                self.vcFaces[cv] = ReverseArray(self.vcFaces[cv])
-                for num, com in enumerate(self.cv_to_f_v[cv]):
-                    for num2, com2 in enumerate(com):
-                        com2 = (len(self.model.faces)-1-com2[0], com2[1])
-                        com[num2] = com2
-                    self.cv_to_f_v[cv][num] = com"""
+        log.debug('Started import section: BuildSingleMesh')
+        # if False:  #self._reverseFaces and False:
+        #     self.model.faces = ReverseArray(self.model.faces)
+        #     self._materialIDS = ReverseArray(self._materialIDS)
+        #     #for com in range(len(self._materialIDS)):
+        #     #    self._materialIDS[com] = len(self._subMaterials)-1-self._materialIDS[com]
+        #     for uv in range(8):
+        #         self.tFaces[uv] = ReverseArray(self.tFaces[uv])
+        #         for num, com in enumerate(self.tv_to_f_v[uv]):
+        #             for num2, com2 in enumerate(com):
+        #                 com2 = (len(self.model.faces)-1-com2[0], com2[1])
+        #                 com[num2] = com2
+        #             self.tv_to_f_v[uv][num] = com
+        #     # vertex colors are now similar to uv textures
+        #     for cv in range(2):
+        #         self.vcFaces[cv] = ReverseArray(self.vcFaces[cv])
+        #         for num, com in enumerate(self.cv_to_f_v[cv]):
+        #             for num2, com2 in enumerate(com):
+        #                 com2 = (len(self.model.faces)-1-com2[0], com2[1])
+        #                 com[num2] = com2
+        #             self.cv_to_f_v[cv][num] = com
 
         # TODO: should never have undefined materials
 
@@ -438,7 +349,7 @@ class BModel:
     def LoadModel(self, filePath):
         """loads mesh data from file"""
 
-        log.debug("Load : ")
+        log.debug("Started import section: Load")
         # -- load model
         br = BinaryReader.BinaryReader()
         br.Open(filePath)
@@ -737,7 +648,7 @@ class BModel:
 
     def DrawScenegraph(self, sg, parentMatrix, onDown=True, matIndex=0):
         """create faces and assign UVs, Vcolors, materials"""
-
+        log.debug("Started imprort section: DrawScenegraph")
         effP = parentMatrix.copy()
 
         n = sg
@@ -837,7 +748,7 @@ class BModel:
             self.BuildScenegraph(childSG, child)
 
     def DrawScene(self):
-        log.debug("DrawScene point reached")
+        log.debug("Started import section: DrawScene")
         try:
             sg = self.inf.rootSceneGraph
             self.model = ModelRepresentation()
@@ -881,7 +792,7 @@ class BModel:
             self.LoadAnimations()
 
     def LoadAnimations(self):
-        log.debug("animations: ")
+        log.debug("Started import section: animations")
         animationCount = 1  # default pose at frame 0
 
         startFrame = 1
@@ -932,6 +843,7 @@ class BModel:
                         action.bck_loop_type = b.loopType.name
                     except Exception as err:
                         log.error('animation file doesn\'t apply as expected (error is %s)', err)
+                        import pdb; pdb.post_mortem(err.__traceback__)
                         continue
                     finally:
                         for com in self._bones:
@@ -982,25 +894,26 @@ class BModel:
             self.arm_obj.animation_data.action = None
 
     def ExtractImages(self, force=False):
-
+        log.debug("ExtractImages function called")
         imageExt = '.' + self.params.imtype.lower()
 
-        try:
+        if not os.path.exists(self._texturePath):
             os.mkdir(self._texturePath)
-        except FileExistsError:
-            pass
 
         self._images = common.getFiles("*"+imageExt, basedir=self._texturePath)
 
         if len(self._images) == 0 or force:
+            log.debug("Decided to actually extract images")
             try:
                 common.SubProcCall(
-                    "bmdview",  # DO NOT capitalize: unix-like OSes use case-sensitive paths.
+                    "bmdview",  # do not capitalize: unix-like OSes use case-sensitive paths.
                     [self._bmdFilePath, self._texturePath, self.params.imtype],
                     self._bmdViewPathExe,
                 )
             except common.subprocess.CalledProcessError as err:
                 log.error('subprocess error: %s. Expect missing/glitchy textures', err) 
+            else:
+                log.debug("Finished extracting images")
 
         # TODO: need to update BmdView.exe to process all file formats like BmdView2
         errorMessage = "Error generating dds / tga image file(s).\
@@ -1013,10 +926,10 @@ class BModel:
         if len(errorFiles) != 0:
             log.error(errorMessage)
             return False
-
         return True
 
     def CreateBTPDataFile(self):
+        log.debug("dealing with BTP files, if any")
         btpFiles = common.getFiles("..", "btp", "*.btp", basedir=self._bmdDir)
         # --messageBox (bckFiles as string)
 
@@ -1051,11 +964,11 @@ class BModel:
                 print("\t\t\t<Material>\n", file=fBTP)
                 print("\t\t\t\t<MaterialIndex>%d</MaterialIndex>\n" %anim.materialIndex, file=fBTP)
                 # -- print("\t\t\t\t<Name>%</Name>\n", anim.materialName, file=fBTP)
-                animaitonKeys = ""
+                animationKeys = ""
                 for key in anim.indices:
-                    animaitonKeys = animaitonKeys + "#"
-                    animaitonKeys = animaitonKeys + str(key)
-                print("\t\t\t\t<KeyFrames>%s</KeyFrames>\n" %animaitonKeys, file=fBTP)
+                    animationKeys += "#"
+                    animationKeys += str(key)
+                print("\t\t\t\t<KeyFrames>%s</KeyFrames>\n" %animationKeys, file=fBTP)
                 print("\t\t\t</Material>\n", file=fBTP)
                 # --messageBox (anim.animationName + ":" + animaitonKeys)
             print("\t\t</Animation>\n", file=fBTP)
@@ -1063,14 +976,14 @@ class BModel:
         print("</TextureAnimation>", file=fBTP)
         fBTP.close()
 
-    def Import(self, filename, **kw):
+    def Import(self, filepath, **kw):
         # contents of kw:
         # imtype, tx_pck (packTextures), sv_anim (loadAnimations, animationType),
         # nat_bn (naturalBones, disables loadAnimations and animationType),
         # ic_sc (includeScaling), frc_cr_bn (forceCreateBones),
         # boneThickness, dvg (DEBUGBG), val_msh (valudate_mesh), paranoia (PARANOID)
         # use_nodes, no_rot_cv (no_rot_conversion)
-        self.params = common.Prog_params(filename, **kw)
+        self.params = common.Prog_params(filepath, **kw)
         
         # provide access to parameters to other modules in this plugin. (kinda hacky solution)
         common.GLOBALS = self.params
@@ -1079,52 +992,43 @@ class BModel:
         TexH.MODE = self.params.packTextures
         TexH.textures_reset()  # avoid use of potentially deleted data
 
-        #if filename = 'P:\ath\to\file.bmd',
-        self._bmdFilePath = filename
-        # this is 'P:\ath\to\file' and '.bmd' (the second string is useful because it can also be 'bdl'
-        temp_path, temp_ext = os.path.splitext(filename)
-        # this is 'P:\ath\to\file_bmd\'
-        self._bmdDir = temp_path+ '_' + temp_ext[1:] + os.sep  # generates dir name from file name?
-        # P:\ath\to'
-        self._bmdPath = os.path.split(temp_path)[0]
-        # file(.bmd?)
-        self._bmdFileName = common.getFilenameFile(filename)
-        # P:\ath\to\file_bmd\Textures
+        # assuming filepath is 'P:\ath\to\file.bmd':
+        self._bmdFilePath = filepath
+        filepath_base, temp_ext = os.path.splitext(filepath)  # 'P:\ath\to\file', '.bmd'
+        self._bmdDir = filepath_base+ '_' + temp_ext[1:] + os.sep  # 'P:\ath\to\file_bmd\'
+        self._bmdPath, self._bmdFileName = os.path.split(filepath_base)  # 'P:\ath\to', 'file'
         self._texturePath = self._bmdDir + "Textures"
 
-
-        self._bckPaths.append("{1}{0}..{0}bck{0}*.bck".format(os.sep, self._bmdPath))
-        self._bckPaths.append("{1}{0}..{0}bcks{0}*.bck".format(os.sep, self._bmdPath))
-        self._bckPaths.append("{1}{0}..{0}scrn{0}*.bck".format(os.sep, self._bmdPath))
-        self._bckPaths.append("{1}{0}*.bck".format(os.sep, self._bmdPath))
+        for path in [
+            "{1}{0}..{0}bck{0}*.bck",
+            "{1}{0}..{0}bcks{0}*.bck",
+            "{1}{0}..{0}scrn{0}*.bck",
+            "{1}{0}*.bck",
+        ]:
+            self._bckPaths.append(path.format(os.sep, self._bmdPath))
         self._btpPaths.append("{1}{0}..{0}btp{0}*.btp".format(os.sep, self._bmdPath))
 
-        try:
+        if not os.path.exists(self._bmdDir):
             os.mkdir(self._bmdDir)
-        except FileExistsError:
-            pass
 
         try:
-            self.LoadModel(filename)
+            self.LoadModel(filepath)
         except Exception as err:
             log.critical('Could not load bmd file: looks corrupted (error is %s)', err)
             raise
 
-        #  XCX this should not be needed vvv
-        # if (not exportTextures) or (exportTextures and self.ExtractImages()):
-        if True:
-            try:
-                self.ExtractImages()
-            except Exception as err:
-                log.error('Could not extract images. This could be the cause of a plugin crash'
-                            ' later on (error is %s)', err)
-            self.DrawScene()
+        try:
+            self.ExtractImages()
+        except Exception as err:
+            log.error('Could not extract images. This could be the cause of a plugin crash'
+                      ' later on (error is %s)', err)
+        self.DrawScene()
 
         try:
             self.CreateBTPDataFile()
         except Exception as err:
             log.warning('couldn\'t transform BTP animations into xml files. Model should beave normally nevertheless')
-        log.debug('end!')
+        log.debug('Finished import!')
 
     def __del__(self):
         if self._bones:
@@ -1132,5 +1036,3 @@ class BModel:
 
         MatH.MPL.MIX_GROUP_MTX = {}
         common.GLOBALS = None
-        # object.__del__(self)
-

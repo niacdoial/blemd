@@ -351,7 +351,7 @@ class Bck_out:
             
         return (None, None, None)
     
-    def get_track_keyframe(self, x_curve, y_curve, z_curve, frame):
+    def get_track_keyframe(self, x_curve, y_curve, z_curve, frame, is_scale=False):
         (x_co, x_handle_left, x_handle_right) = self.get_key_value(x_curve, frame)
         (y_co, y_handle_left, y_handle_right) = self.get_key_value(y_curve, frame)
         (z_co, z_handle_left, z_handle_right) = self.get_key_value(z_curve, frame)
@@ -388,6 +388,12 @@ class Bck_out:
                 keyframe_value = (x_co[1], y_co[1], z_co[1])
                 tangent_left = (x_tangent_left, y_tangent_left, z_tangent_left)
                 tangent_right = (x_tangent_right, y_tangent_right, z_tangent_right)
+            elif is_scale:
+                # the axis conversion for scale is a little bit different:
+                # there are no minus signs here
+                keyframe_value = (x_co[1], z_co[1], y_co[1])
+                tangent_left = (x_tangent_left, z_tangent_left, y_tangent_left)
+                tangent_right = (x_tangent_right, z_tangent_right, y_tangent_right)
             else:
                 keyframe_value = (x_co[1], z_co[1], -y_co[1])
                 tangent_left = (x_tangent_left, z_tangent_left, -y_tangent_left)
@@ -547,7 +553,7 @@ class Bck_out:
                 print(f'Unknown fcurve array index "{ f.array_index }"!')
                 return
         
-        value, handle_left, handle_right = self.get_track_keyframe(x_track, y_track, z_track, frame)
+        value, handle_left, handle_right = self.get_track_keyframe(x_track, y_track, z_track, frame, is_scale=True)
         if value is None:
             return
         
