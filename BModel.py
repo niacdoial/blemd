@@ -397,7 +397,10 @@ class BModel:
             elif strTag == "TEX":  # TEX1
                 self.tex.LoadData(br)
             elif strTag == "MDL":  # MDL3
-                self.mdl.LoadData(br)
+                try:
+                    self.mdl.LoadData(br)
+                except Exception as err:
+                    log.warning("failed to load the (currently unused) MDL section: %s", repr(err))
             else:
                 log.warning('Tag (%s) not recognized. Resulting mesh could be weird', strTag)
             br.SeekSet(streamPos)
@@ -843,7 +846,6 @@ class BModel:
                         action.bck_loop_type = b.loopType.name
                     except Exception as err:
                         log.error('animation file doesn\'t apply as expected (error is %s)', err)
-                        import pdb; pdb.post_mortem(err.__traceback__)
                         continue
                     finally:
                         for com in self._bones:

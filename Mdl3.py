@@ -14,6 +14,8 @@ class Part1Entry:
         
         buffer = br.read(4)
         while True:  # break is used to end loop
+            if buffer == b'':
+                raise RuntimeError("Early EOF in MDL section")
             if buffer == b'\xff\xff\xff\xff':
                 self.subpart2 += buffer
                 buf2 = br.read(1)
