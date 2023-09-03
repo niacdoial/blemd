@@ -32,7 +32,14 @@ import io, os
 # ImportHelper is a helper class, defines filename and
 # invoke() function which calls the file selector.
 from bpy_extras.io_utils import ImportHelper, ExportHelper
-from bpy.props import StringProperty, BoolProperty, EnumProperty, IntProperty, PointerProperty
+from bpy.props import   (
+                            StringProperty,
+                            BoolProperty,
+                            EnumProperty,
+                            IntProperty,
+                            PointerProperty,
+                            CollectionProperty
+                        )
 from bpy.types import Operator
 
 
@@ -193,37 +200,46 @@ class ImportBmd(Operator, ImportHelper):
     ALL_PARAMS = ['use_nodes', 'imtype', 'tx_pck', 'import_anims', 'import_anims_type',
                   'nat_bn', 'ic_sc', 'frc_cr_bn', 'boneThickness', 'dvg', 'val_msh', 'paranoia', 'no_rot_cv']
 
+    files: CollectionProperty(
+        name="File Path",
+        type=bpy.types.OperatorFileListElement
+    )
+
     def execute(self, context):
         global log_out
         retcode = 'FINISHED'
+
+        path = os.path.abspath( os.path.dirname(__file__) )  # automatically find where we are
         
         temp = BModel.BModel()
-        path = os.path.abspath(os.path.split(__file__)[0])  # automatically find where we are
+        temp.SetBmdViewExePath(path + os.sep)  # add 'backslash' for good measure
+
+        for file in self.files:
+            fname = os.path.join(os.path.dirname(self.filepath), file.name)
         
-        print(__file__)
+            print(fname)
         
-        try:
-            temp.SetBmdViewExePath(path + os.sep)  # add 'backslash' for good measure
-            temp.Import(filepath=self.filepath, **{x: getattr(self, x) for x in self.ALL_PARAMS})
-        except Exception as err:
-            log.critical('An error happened. If it wasn\'t reported before, here it is: %s', err)
-            retcode = 'ERROR'
-            raise
-        finally:
             try:
-                message = log_out.getvalue()
-                message = common.dedup_lines(message)
-                
-                log_out.truncate(0)
-            except:
-                message = "warning: logging glitched out. see system console for a more complete result"
-                
-            if message:
-                if retcode == 'ERROR':
-                    self.report({'ERROR'}, message)
-                else:
-                    self.report({'WARNING'}, message)
+                temp.Import(fname, **{x: getattr(self, x) for x in self.ALL_PARAMS})
+            except Exception as err:
+                log.critical('An error happened. If it wasn\'t reported before, here it is: %s', err)
+                retcode = 'ERROR'
+                raise
+            finally:
+                try:
+                    message = log_out.getvalue()
+                    message = common.dedup_lines(message)
                     
+                    log_out.truncate(0)
+                except:
+                    message = "warning: logging glitched out. see system console for a more complete result"
+                    
+                if message:
+                    if retcode == 'ERROR':
+                        self.report({'ERROR'}, message)
+                    else:
+                        self.report({'WARNING'}, message)
+                        
         return {retcode}
         
     def draw(self, context):
