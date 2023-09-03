@@ -208,16 +208,18 @@ class ImportBmd(Operator, ImportHelper):
     def execute(self, context):
         global log_out
         retcode = 'FINISHED'
+
+        path = os.path.abspath( os.path.dirname(__file__) )  # automatically find where we are
         
         temp = BModel.BModel()
+        temp.SetBmdViewExePath(path + os.sep)  # add 'backslash' for good measure
+
         for file in self.files:
             fname = os.path.join(os.path.dirname(self.filepath), file.name)
-            path = os.path.abspath(os.path.split(fname)[0])  # automatically find where we are
         
             print(fname)
         
             try:
-                temp.SetBmdViewExePath(path + os.sep)  # add 'backslash' for good measure
                 temp.Import(fname, **{x: getattr(self, x) for x in self.ALL_PARAMS})
             except Exception as err:
                 log.critical('An error happened. If it wasn\'t reported before, here it is: %s', err)
