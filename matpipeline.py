@@ -820,6 +820,7 @@ def makeTexCoords(material, texGen, i, matbase, mat3, data_placer):
             mapping.inputs[3].default_value[1] = tmi.scaleV
             mapping.inputs[1].default_value[0] = (tmi.scaleCenterX*(1 - tmi.scaleU))
             mapping.inputs[1].default_value[1] = (1 - tmi.scaleCenterY) * (1 - tmi.scaleV)
+            dst = mapping.outputs[0]
     elif texGen.texGenType == 0xa:
         if (texGen.matrix != 0x3c):
             log.warning("writeTexGen() type 0xa: unexpected matrix %x", texGen.matrix)
