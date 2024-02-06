@@ -101,8 +101,8 @@ class ImportBmd(Operator, ImportHelper):
         description="",
         default=True
     )
-    
     import_anims_type: EnumProperty(
+
         name="Animation Mode",
         description="If you choose to import animations, you can choose to chain them or put them in individual actions",
         items=(('SEPARATE', "Separate", 'Animations will be imported into individual actions inside an NLA Track'),
@@ -196,12 +196,12 @@ class ImportBmd(Operator, ImportHelper):
     def execute(self, context):
         global log_out
         retcode = 'FINISHED'
-        
+
         temp = BModel.BModel()
         path = os.path.abspath(os.path.split(__file__)[0])  # automatically find where we are
-        
+
         print(__file__)
-        
+
         try:
             temp.SetBmdViewExePath(path + os.sep)  # add 'backslash' for good measure
             temp.Import(filepath=self.filepath, **{x: getattr(self, x) for x in self.ALL_PARAMS})
@@ -213,19 +213,19 @@ class ImportBmd(Operator, ImportHelper):
             try:
                 message = log_out.getvalue()
                 message = common.dedup_lines(message)
-                
+
                 log_out.truncate(0)
             except:
                 message = "warning: logging glitched out. see system console for a more complete result"
-                
+
             if message:
                 if retcode == 'ERROR':
                     self.report({'ERROR'}, message)
                 else:
                     self.report({'WARNING'}, message)
-                    
+
         return {retcode}
-        
+
     def draw(self, context):
         pass
 
@@ -240,9 +240,9 @@ class BMD_PT_import_options(bpy.types.Panel):
     def poll(cls, context):
         sfile = context.space_data
         operator = sfile.active_operator
-        
+
         return operator.bl_idname == "IMPORT_MESH_OT_bmd"
-        
+
     def draw(self, context):
         layout = self.layout
         layout.use_property_split = True
@@ -250,7 +250,7 @@ class BMD_PT_import_options(bpy.types.Panel):
 
         sfile = context.space_data
         operator = sfile.active_operator
-        
+
         layout.prop(operator, 'no_rot_cv')
         layout.prop(operator, 'use_nodes')
 
@@ -265,16 +265,16 @@ class BMD_PT_import_animation(bpy.types.Panel):
     def poll(cls, context):
         sfile = context.space_data
         operator = sfile.active_operator
-        
+
         return operator.bl_idname == "IMPORT_MESH_OT_bmd"
         
     def draw_header(self, context):
         sfile = context.space_data
         operator = sfile.active_operator
-        
+
         self.layout.enabled = getattr(operator, 'nat_bn') != True
         self.layout.prop(operator, "import_anims", text="")
-        
+
     def draw(self, context):
         layout = self.layout
         layout.use_property_split = True
@@ -282,7 +282,7 @@ class BMD_PT_import_animation(bpy.types.Panel):
 
         sfile = context.space_data
         operator = sfile.active_operator
-        
+
         layout.enabled = operator.import_anims and not operator.nat_bn
         layout.prop(operator, 'import_anims_type')
 
@@ -297,9 +297,9 @@ class BMD_PT_import_armature(bpy.types.Panel):
     def poll(cls, context):
         sfile = context.space_data
         operator = sfile.active_operator
-        
+
         return operator.bl_idname == "IMPORT_MESH_OT_bmd"
-        
+
     def draw(self, context):
         layout = self.layout
         layout.use_property_split = True
@@ -307,7 +307,7 @@ class BMD_PT_import_armature(bpy.types.Panel):
 
         sfile = context.space_data
         operator = sfile.active_operator
-        
+
         layout.prop(operator, 'frc_cr_bn')
         layout.prop(operator, 'nat_bn')
         layout.prop(operator, 'boneThickness')
@@ -323,9 +323,9 @@ class BMD_PT_import_texture(bpy.types.Panel):
     def poll(cls, context):
         sfile = context.space_data
         operator = sfile.active_operator
-        
+
         return operator.bl_idname == "IMPORT_MESH_OT_bmd"
-        
+
     def draw(self, context):
         layout = self.layout
         layout.use_property_split = True
@@ -333,10 +333,10 @@ class BMD_PT_import_texture(bpy.types.Panel):
 
         sfile = context.space_data
         operator = sfile.active_operator
-        
+
         layout.prop(operator, 'tx_pck')
         layout.prop(operator, 'imtype')
-        
+
 
 class BMD_PT_import_debug(bpy.types.Panel):
     bl_space_type = 'FILE_BROWSER'
@@ -349,9 +349,9 @@ class BMD_PT_import_debug(bpy.types.Panel):
     def poll(cls, context):
         sfile = context.space_data
         operator = sfile.active_operator
-        
+
         return operator.bl_idname == "IMPORT_MESH_OT_bmd"
-        
+
     def draw(self, context):
         layout = self.layout
         layout.use_property_split = True
@@ -359,7 +359,7 @@ class BMD_PT_import_debug(bpy.types.Panel):
 
         sfile = context.space_data
         operator = sfile.active_operator
-        
+
         layout.prop(operator, 'dvg')
         layout.prop(operator, 'paranoia')
         layout.prop(operator, 'val_msh')
@@ -370,7 +370,7 @@ def validate_obj_for_anim_export(obj):
     if obj is None:
         print("Object was None!")
         return False
-        
+
     obj_anim_data = obj.animation_data
 
     # Validate animation data
@@ -383,10 +383,10 @@ def validate_obj_for_anim_export(obj):
     if len(obj_anim_data.nla_tracks[0].strips) == 0:
         print("No NLA strips!")
         return False
-        
+
     print("valid!")
     return True
-      
+
 
 def arma_items(self, context):
     obs = []
@@ -394,15 +394,15 @@ def arma_items(self, context):
         print(ob.name)
         if validate_obj_for_anim_export(ob):
             obs.append((ob.name, ob.name, ""))
-    
+
     if len(obs) == 0:
         return [("NONE", "None", "")]
-    
+
     return obs
 
 def arma_upd(self, context):
     self.anim_export_armatures_collection.clear()
-    
+
     for ob in context.scene.objects:
         if validate_obj_for_anim_export(ob):
             item = self.anim_export_armatures_collection.add()
@@ -413,13 +413,13 @@ def arma_upd(self, context):
 def action_items(self, context):
     if self.anim_export_armatures == "NONE":
         return [("NONE", "None", "")]
-        
+
     sce = context.scene
-        
+
     cur_armature = sce.objects.get(self.anim_export_armatures)
     if cur_armature is None:
         return [("NONE", "None", "")]
-        
+
     return [(action.name, action.name, "") for action in cur_armature.animation_data.nla_tracks[0].strips]
 
 
@@ -436,16 +436,16 @@ class ExportBmd(Operator, ExportHelper):
         options={'HIDDEN'},
         maxlen=255,  # Max internal buffer length, longer would be clamped.
     )
-    
     export_format: EnumProperty(
+
         name="Format",
         description="Choose whether to export a BMD or BDL",
         items=(('BMD', "BMD", 'Export a BMD; used in e.g. Super Mario Sunshine, Twilight Princess'),
                ('BDL', "BDL", 'Export a BDL; used in e.g. The Wind Waker, Super Mario Galaxy')),
         default='BMD'
     )
-    
     use_selection: BoolProperty(
+
         name='Selected Objects',
         description='Export selected objects only',
         default=False
@@ -462,52 +462,52 @@ class ExportBmd(Operator, ExportHelper):
         description='Export active scene only',
         default=False
     )
-    
     export_normals: BoolProperty(
+
         name='Normals',
         description='Export vertex normals with meshes',
         default=True
     )
-    
     export_colors: BoolProperty(
+
         name='Vertex Colors',
         description='Export vertex colors with meshes',
         default=True
     )
-    
     export_texcoords: BoolProperty(
+
         name='UVs',
         description='Export UVs (texture coordinates) with meshes',
         default=True
     )
-    
     export_position_compression_enable: BoolProperty(
+
         name='Position attribute compression',
         description='Compress vertex position data',
         default=False
     )
-    
     export_normal_compression_enable: BoolProperty(
+
         name='Normal attribute compression',
         description='Compress vertex normal data',
         default=True
     )
-    
     export_texcoord_compression_enable: BoolProperty(
+
         name='Tex coord attribute compression',
         description='Compress vertex tex coord data',
         default=True
     )
-    
+
     def execute(self, context):
         global log_out
         retcode = 'FINISHED'
-        
+
         model_out = BModel_out()
         model_out.export(is_bdl=False)
-        
+
         return {retcode}
-        
+
     def draw(self, context):
         pass
 
@@ -518,14 +518,14 @@ class BMD_PT_export_options_main(bpy.types.Panel):
     bl_label = ""
     bl_parent_id = "FILE_PT_operator"
     bl_options = {'HIDE_HEADER'}
-    
+
     @classmethod
     def poll(cls, context):
         sfile = context.space_data
         operator = sfile.active_operator
-        
+
         return operator.bl_idname == "EXPORT_OBJECT_OT_bmd"
-        
+
     def draw(self, context):
         layout = self.layout
         layout.use_property_split = True
@@ -534,7 +534,7 @@ class BMD_PT_export_options_main(bpy.types.Panel):
         sfile = context.space_data
         operator = sfile.active_operator
         sce = context.scene
-        
+
         layout.prop(operator, 'export_format')
         layout.separator()
 
@@ -560,7 +560,7 @@ class BMD_PT_export_options_include(bpy.types.Panel):
 
         sfile = context.space_data
         operator = sfile.active_operator
-        
+
         col = layout.column(heading = "Limit to", align = True)
         col.prop(operator, 'use_selection')
         col.prop(operator, 'use_visible')
@@ -580,7 +580,7 @@ class BMD_PT_export_options_geometry_compression(bpy.types.Panel):
         operator = sfile.active_operator
 
         return operator.bl_idname == "EXPORT_OBJECT_OT_bmd"
-        
+
     def draw(self, context):
         layout = self.layout
         layout.use_property_split = True
@@ -608,8 +608,8 @@ class ExportBck(Operator, ExportHelper):
         options={'HIDDEN'},
         maxlen=255,  # Max internal buffer length, longer would be clamped.
     )
-    
     export_anims_mode: EnumProperty(
+
         name="Export Mode",
         description="Choose whether to export a single animation or multiple",
         items=(('SINGLE', "Single", 'Export a single selected animation'),
@@ -617,28 +617,28 @@ class ExportBck(Operator, ExportHelper):
                ),
         default='SINGLE'
     )
-    
+
     # Options for exporting multiple anims at once
     use_selection: BoolProperty(
         name="Selected armature only",
         description="Export animations from ONLY the selected armature",
         default=True
     )
-    
+
     def execute(self, context):
         global log_out
         retcode = 'FINISHED'
-        
+
         out_action = bpy.data.actions.get(context.scene.anim_export_actions)
         anim_armature = bpy.data.objects.get(context.scene.anim_export_armatures)
-        
+
         ex_bck = Bck.Bck_out()
         ex_bck.dump_action(out_action, anim_armature.pose)
-        
+
         ex_bck.dump_bck(self.filepath)
-        
+
         return {retcode}
-        
+
     def draw(self, context):
         pass
 
@@ -649,22 +649,22 @@ class ACTION_UL_animentry(bpy.types.UIList):
             layout.prop(item, "name", text="", emboss=False, icon_value=icon)
         else:
             layout.label(text="", translate=False, icon_value=icon)
-     
-        
+
+
 class BCK_PT_export_options(bpy.types.Panel):
     bl_space_type = 'FILE_BROWSER'
     bl_region_type = 'TOOL_PROPS'
     bl_label = ""
     bl_parent_id = "FILE_PT_operator"
     bl_options = {'HIDE_HEADER'}
-    
+
     @classmethod
     def poll(cls, context):
         sfile = context.space_data
         operator = sfile.active_operator
-        
+
         return operator.bl_idname == "EXPORT_OBJECT_OT_bck"
-        
+
     def draw(self, context):
         layout = self.layout
         layout.use_property_split = True
@@ -673,14 +673,14 @@ class BCK_PT_export_options(bpy.types.Panel):
         sfile = context.space_data
         operator = sfile.active_operator
         sce = context.scene
-        
+
         layout.prop(operator, 'export_anims_mode')
         layout.separator()
-        
+
         arm_row = layout.row()
         arm_row.enabled = sce.anim_export_armatures != "NONE"
         arm_row.prop(sce, "anim_export_armatures")
-        
+
         act_row = layout.row()
         act_row.enabled = operator.export_anims_mode == 'SINGLE' and arm_row.enabled
         act_row.prop(sce, "anim_export_actions")
@@ -693,18 +693,18 @@ class CreateAnimationOperator(bpy.types.Operator):
 
     def execute(self, context):
         obj = context.object
-        
+
         if obj.animation_data is None:
             obj.animation_data_create()
-            
+
         if len(obj.animation_data.nla_tracks) == 0:
             obj.animation_data.nla_tracks.new()
-        
+
         if len(obj.animation_data.nla_tracks[0].strips) == 0:
             start_frame = 1
         else:
             start_frame = int(obj.animation_data.nla_tracks[0].strips[-1].frame_end + 5)
-            
+
         obj.animation_data.nla_tracks[0].strips.new('new_bck_anim', start_frame, bpy.data.actions.new('new_bck_anim'))
 
         return {'FINISHED'}
@@ -717,10 +717,10 @@ class AnimationPropertyPanel(bpy.types.Panel):
     bl_space_type = 'PROPERTIES'
     bl_region_type = 'WINDOW'
     bl_context = "data"
-    
+
     def __init__(self):
         self.active_action = 0
-    
+
     @classmethod
     def poll(cls, context):
         return context.object.type == 'ARMATURE'
@@ -728,28 +728,28 @@ class AnimationPropertyPanel(bpy.types.Panel):
     def draw(self, context):
         layout = self.layout
         obj = context.active_object
-        
+
         if obj.animation_data is not None and len(obj.animation_data.nla_tracks) != 0 and len(obj.animation_data.nla_tracks[0].strips) != 0:
             # This is the list of strips that are currently part of the selected object's first NLA track.
             layout.template_list("ACTION_UL_animentry", "", obj.animation_data.nla_tracks[0], "strips", obj, "active_action_index")
-            
+
             layout.row().prop(obj.animation_data.nla_tracks[0].strips[obj.active_action_index], "name")
             layout.row().prop(obj.animation_data.nla_tracks[0].strips[obj.active_action_index].action, "bck_loop_type")
-            
+
             layout.row().separator()
-        
+
         layout.row().operator(CreateAnimationOperator.bl_idname, text="Create Animation", icon="FILE_NEW")
 
 
 class TOPBAR_MT_file_export_nintendo(bpy.types.Menu):
     bl_label = "Nintendo J3D (GameCube/Wii)"
-    
+
     def draw(self, context):
         #self.layout.operator(ExportBmd.bl_idname, text="Model (*.bmd, *.bdl)")
         #self.layout.separator()
         self.layout.operator(ExportBck.bl_idname, text="Joint Animation (*.bck)")
         #self.layout.operator(ExportBca.bl_idname, text="Joint Animation (*.bca)") # TODO
-        
+
     def menu_draw(self, context):
         self.layout.menu("TOPBAR_MT_file_export_nintendo")
 
@@ -757,11 +757,11 @@ class TOPBAR_MT_file_export_nintendo(bpy.types.Menu):
 # Only needed if you want to add into a dynamic menu
 def import_menu_func(self, context):
     self.layout.operator(ImportBmd.bl_idname, text="Nintendo BMD/BDL")
-    
+
 
 def export_menu_func(self, context):
     self.layout.operator(ExportBck.bl_idname, text="Nintendo BCK (keyframe animation)")
-    
+
 
 def register():
     bpy.utils.register_class(ImportBmd)
@@ -770,14 +770,14 @@ def register():
     bpy.utils.register_class(BMD_PT_import_animation)
     bpy.utils.register_class(BMD_PT_import_texture)
     bpy.utils.register_class(BMD_PT_import_debug)
-    
+
     bpy.utils.register_class(ExportBmd)
     bpy.utils.register_class(BMD_PT_export_options_main)
     bpy.utils.register_class(BMD_PT_export_options_include)
     bpy.utils.register_class(BMD_PT_export_options_geometry_compression)
     bpy.utils.register_class(ExportBck)
     bpy.utils.register_class(BCK_PT_export_options)
-    
+
     bpy.types.Scene.anim_export_armatures = bpy.props.EnumProperty(
         name="Armatures",
         items=arma_items,
@@ -790,7 +790,7 @@ def register():
     bpy.types.Scene.anim_export_armatures_collection = bpy.props.CollectionProperty(
         type=bpy.types.PropertyGroup
     )
-    
+
     bpy.types.Object.active_action_index = bpy.props.IntProperty(default=0)
     bpy.types.Action.bck_loop_type = bpy.props.EnumProperty(
         name="Loop Type",
@@ -826,18 +826,18 @@ def unregister():
     bpy.utils.unregister_class(ACTION_UL_animentry)
     del bpy.types.Action.bck_loop_type
     del bpy.types.Object.active_action_index
-    
+
     del bpy.types.Scene.anim_export_armatures
     del bpy.types.Scene.anim_export_actions
     del bpy.types.Scene.anim_export_armatures_collection
-    
+
     bpy.utils.unregister_class(BCK_PT_export_options)
     bpy.utils.unregister_class(ExportBck)
     bpy.utils.unregister_class(BMD_PT_export_options_geometry_compression)
     bpy.utils.unregister_class(BMD_PT_export_options_include)
     bpy.utils.unregister_class(BMD_PT_export_options_main)
     bpy.utils.unregister_class(ExportBmd)
-    
+
     bpy.utils.unregister_class(BMD_PT_import_debug)
     bpy.utils.unregister_class(BMD_PT_import_texture)
     bpy.utils.unregister_class(BMD_PT_import_animation)

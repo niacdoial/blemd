@@ -372,11 +372,15 @@ def apply_animation(bones, arm_obj, jntframes, name=None):
     all_curves = {}
     for com in bones:
         name = com.name.fget()
-        arm_obj.data.bones[name].use_inherit_scale = False  # scale can be applied
+        if bpy.app.version > (2,81,0):
+            # new API from 2.81, old one removed somewhere in the 3.X
+            arm_obj.data.bones[name].inherit_scale = 'NONE'
+        else:
+            arm_obj.data.bones[name].use_inherit_scale = False
         posebone = arm_obj.pose.bones[name]
         if common.GLOBALS.no_rot_conversion:
             posebone.rotation_mode = "XYZ"
-        else:    
+        else:
             posebone.rotation_mode = "XZY"  # remember, coords are flipped
         # this keyframe is needed, overwritten anyways
         # also it is always at 1 because this function is called once per action
@@ -385,7 +389,7 @@ def apply_animation(bones, arm_obj, jntframes, name=None):
         all_curves[name] = bonecurves
 
         for datatype in ('location', 'rotation_euler', 'scale'):
-            data_path = f'pose.bones["{name:s}"].{datatype:s}'
+            data_path = 'pose.bones["{0:s}"].{1:s}'.format(name,datatype)
             for array_index in (0,1,2):
                 curve = arm_obj.animation_data.action.fcurves.find(data_path, index = array_index)
                 if curve is None:

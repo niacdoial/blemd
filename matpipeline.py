@@ -36,6 +36,14 @@ def get_mixgroup(type):
             MIX_GROUP_NODETREE_C = gnt = bpy.data.node_groups.new('glsl_mix', 'ShaderNodeTree')
             in_n = gnt.nodes.new('NodeGroupInput')
             out_n = gnt.nodes.new('NodeGroupOutput')  # creating real input and output nodes
+            if bpy.app.version >= (4,0,0):
+                gnt.interface.new_socket('mixer',in_out='INPUT',socket_type='NodeSocketColor',
+                    description='values used as coefficients for the mixing of individual color channels')
+                gnt.interface.new_socket('color_0',in_out='INPUT',socket_type='NodeSocketColor',
+                    description='the color obtained when `mixer=(0,0,0)`')
+                gnt.interface.new_socket('color_1',in_out='INPUT',socket_type='NodeSocketColor',
+                    description='the color obtained when `mixer=(1,1,1)`')
+                gnt.interface.new_socket('output',in_out='OUTPUT',socket_type='NodeSocketColor')
             #gnt.inputs.new('COLOR', 'blend_value')
             #gnt.inputs.new('COLOR', 'input_A')
             #gnt.inputs.new('COLOR', 'input_B')
@@ -90,6 +98,15 @@ def get_mixgroup(type):
 
             in_n = gnt.nodes.new('NodeGroupInput')
             out_n = gnt.nodes.new('NodeGroupOutput')  # creating real input and output nodes
+
+            if bpy.app.version >= (4,0,0):
+                gnt.interface.new_socket('mixer',in_out='INPUT',socket_type='NodeSocketFloat',
+                    description='values used as coefficients for the mixing')
+                gnt.interface.new_socket('color_0',in_out='INPUT',socket_type='NodeSocketFloat',
+                    description='the value obtained when `mixer=0`')
+                gnt.interface.new_socket('color_1',in_out='INPUT',socket_type='NodeSocketFloat',
+                    description='the value obtained when `mixer=1`')
+                gnt.interface.new_socket('output',in_out='OUTPUT',socket_type='NodeSocketFloat')
 
             inv_factor = gnt.nodes.new('ShaderNodeMath')
             inv_factor.operation = 'SUBTRACT'
@@ -879,7 +896,7 @@ def createMaterialSystem(matBase, mat3, tex1, texpath, extension, nt, params):
             texId = mat3.texStageIndexToTextureIndex[matBase.texStages[i]]
             if len(tex1.texHeaders) <= texId:
                 if params.PARANOID:
-                    raise ValueError(f"Bad TEX/MAT section: texture {texId:d} does not exist")
+                    raise ValueError("Bad TEX/MAT section: texture {0:d} does not exist".format(texId))
                 else:
                     material.textures[i] = Sampler()  # "missing" texture
                     log.warning("no known texture with  ID %d", texId)

@@ -219,7 +219,12 @@ class BModel:
 
         with common.active_object(modelObject):
             if not active_uv:
+                prev_mode = bpy.context.mode
+                bpy.ops.paint.texture_paint_toggle()
                 bpy.ops.paint.add_simple_uvs()
+                bpy.ops.paint.texture_paint_toggle()
+                if prev_mode == 'EDIT_MESH':
+                    bpy.ops.object.editmode_toggle()
                 active_uv = modelMesh.uv_layers[0]
 
             modelMesh.update()
@@ -249,9 +254,9 @@ class BModel:
                     mod = modelObject.modifiers.new('Armature', type='ARMATURE')
                     arm = bpy.data.armatures.new(modelObject.name+'_bones')
                     self.arm_obj = arm_obj = bpy.data.objects.new(modelObject.name+'_armature', arm)
-                    bpy.context.collection.objects.link(arm_obj)
                     modelObject.parent = arm_obj
                     mod.object = arm_obj
+                    bpy.context.collection.objects.link(arm_obj)
                     bpy.context.view_layer.update()
 
                 with common.active_object(arm_obj):

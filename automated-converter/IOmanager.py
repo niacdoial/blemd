@@ -3,8 +3,6 @@ import sys
 import os.path
 path=sys.argv[-1]  # path to the bmd file
 
-print("importing path", path, sys.argv)
-
 bpy.data.objects.remove(bpy.data.objects['Cube'])
 bpy.data.meshes.remove(bpy.data.meshes['Cube'])
 

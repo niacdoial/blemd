@@ -330,7 +330,7 @@ class Bck_out:
             local_rotation = local_matrix.to_quaternion()
             
             joint_anim = BckJointAnim()
-            fcurve_path = f'pose.bones["{ b.name }"]'
+            fcurve_path = 'pose.bones["{0}"]'.format(b.name)
             
             trans_fcurves = [fcu for fcu in action.fcurves if fcu.data_path.startswith(fcurve_path + ".location")]
             rot_fcurves = [fcu for fcu in action.fcurves if fcu.data_path.startswith(fcurve_path + ".rotation_euler")]
@@ -418,7 +418,7 @@ class Bck_out:
             elif f.array_index == 2:
                 z_track = f
             else:
-                print(f'Unknown fcurve array index "{ f.array_index }"!')
+                print('Unknown fcurve array index "{0}"!'.format(f.array_index))
                 return
         
         value, handle_left, handle_right = self.get_track_keyframe(x_track, y_track, z_track, frame)
@@ -485,7 +485,7 @@ class Bck_out:
             elif f.array_index == 2:
                 z_track = f
             else:
-                print(f'Unknown fcurve array index "{ f.array_index }"!')
+                print('Unknown fcurve array index "{0}"!'.format(f.array_index))
                 return
         
         value, handle_left, handle_right = self.get_track_keyframe(x_track, y_track, z_track, frame)
@@ -533,7 +533,7 @@ class Bck_out:
         #    euler = mathutils.Euler((k.co[1], 0., 0.), 'XYZ')
         #    euler.rotate(local_matrix.to_quaternion())
         #    
-        #    print(f'x rot: { euler[0]} ')
+        #    print('x rot: {0} '.format(euler[0]))
         #    bck_key.value = euler[0]
         #    anim.rotationsX.append(bck_key)
         
@@ -550,7 +550,7 @@ class Bck_out:
             elif f.array_index == 2:
                 z_track = f
             else:
-                print(f'Unknown fcurve array index "{ f.array_index }"!')
+                print('Unknown fcurve array index "{0}"!'.format(f.array_index))
                 return
         
         value, handle_left, handle_right = self.get_track_keyframe(x_track, y_track, z_track, frame, is_scale=True)
