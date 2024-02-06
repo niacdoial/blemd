@@ -850,7 +850,8 @@ class BModel:
                         action = PBones.apply_animation(self._bones, self.arm_obj, self.jnt.frames, bckFileName)
                         action.bck_loop_type = b.loopType.name
                     except Exception as err:
-                        log.error('animation file doesn\'t apply as expected (error is %s)', err)
+                        import traceback
+                        log.error('animation file doesn\'t apply as expected (error is:)\n%s', traceback.format_exception(err.__class__, err, err.__traceback__))
                         continue
                     finally:
                         for com in self._bones:
@@ -860,11 +861,16 @@ class BModel:
                     try:
                         track.strips.new(bckFileName+'_strip', startFrame, action)
                     except Exception as err:
+                        log.error(
+                            'out of space:  %d + %d, %s',
+                            startFrame, action.frame_range[1],
+                            repr((strip.frame_start, strip.frame_end) for strip in track.strips)
+                        )
                         # assume the previous action is out of range: move it.
                         corrupted_action_track = self.arm_obj.animation_data.nla_tracks.new()
                         corrupted_action_track.name = 'CORRUPTED_ACTION_'+str(animationCount)
                         corrupted_action = track.strips[-1].action
-                        corrupted_action_track.strips.new('action', track.strips[-1].frame_start,
+                        corrupted_action_track.strips.new('action', int(track.strips[-1].frame_start),
                                                           corrupted_action)
                         track.strips.remove(track.strips[-1])
                         track.strips.new(bckFileName + '_strip', startFrame, action)  # try again
@@ -874,7 +880,7 @@ class BModel:
                     try:
                         b.AnimateBoneFrames(startFrame, self._bones, 1, self.params.includeScaling)
                     except Exception as err:
-                        log.error('Animation file doesn\'t apply as expected (error is %s)', err)
+                        log.error('Animation file doesn\'t apply as expected (error is:)\n%s', traceback.format_exception(err.__class__, err, err.__traceback__))
                         continue
                 numberOfFrames = b.animationLength
                 if b.animationLength <= 0:
