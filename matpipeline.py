@@ -813,13 +813,34 @@ def makeTexCoords(material, texGen, i, matbase, mat3, data_placer):
         # try if texcoord scaling is where i think it is
         if matbase.texMtxInfos[i] != 0xffff:
             tmi = mat3.texMtxInfos[matbase.texMtxInfos[i]]
-            mapping = data_placer.add('ShaderNodeMapping', row=0)
-            mapping.label=('TexCoordMatrix %d'%i)
-            data_placer.nt.links.new(dst, mapping.inputs[0])
-            mapping.inputs[3].default_value[0] = tmi.scaleU
-            mapping.inputs[3].default_value[1] = tmi.scaleV
-            mapping.inputs[1].default_value[0] = (tmi.scaleCenterX*(1 - tmi.scaleU))
-            mapping.inputs[1].default_value[1] = (1 - tmi.scaleCenterY) * (1 - tmi.scaleV)
+            local_placer = NodePlacer(
+                material.nt, data_placer.add('NodeFrame', 'TexCoordMatrix %d'%i, i+2),
+                20, False, 2,
+            )
+            combine = local_placer.add('ShaderNodeCombineXYZ')
+            sep = local_placer.add('ShaderNodeSeparateXYZ')
+            mul_u = local_placer.add('ShaderNodeMath', row=0)
+            mul_v = local_placer.add('ShaderNodeMath', row=1)
+            add_u = local_placer.add('ShaderNodeMath', row=0)
+            add_v = local_placer.add('ShaderNodeMath', row=1)
+            local_placer.reappend(combine)
+            mul_u.operation = mul_v.operation = 'MULTIPLY'
+            add_u.operation = add_v.operation = 'ADD'
+
+            mul_u.inputs[1].default_value = tmi.scaleU
+            mul_v.inputs[1].default_value = tmi.scaleV
+            add_u.inputs[1].default_value = (tmi.scaleCenterX*(1 - tmi.scaleU))
+            add_v.inputs[1].default_value = (1 - tmi.scaleCenterY) * (1 - tmi.scaleV)
+
+            material.nt.links.new(sep.outputs[0], mul_u.inputs[0])
+            material.nt.links.new(sep.outputs[1], mul_v.inputs[0])
+            material.nt.links.new(mul_u.outputs[0], add_u.inputs[0])
+            material.nt.links.new(mul_v.outputs[0], add_v.inputs[0])
+            material.nt.links.new(add_u.outputs[0], combine.inputs[0])
+            material.nt.links.new(add_v.outputs[0], combine.inputs[1])
+
+            makelink(material.nt, dst, sep.inputs[0])
+            dst = combine.outputs[0]
     elif texGen.texGenType == 0xa:
         if (texGen.matrix != 0x3c):
             log.warning("writeTexGen() type 0xa: unexpected matrix %x", texGen.matrix)
@@ -868,11 +889,16 @@ def createMaterialSystem(matBase, mat3, tex1, texpath, extension, nt, params):
 
     # missing light enabeling, seems so.
     if mat3.colorChanInfos[matBase.chanControls[0]].matColorSource == 1:
-        node = data_placer.add('ShaderNodeVertexColor', row=0)
-        node.layer_name = 'v_color_0'  # XCX what about layer 2 (this is more complicated than expected)?
+        node = data_placer.add('ShaderNodeAttribute', row=0)
+        node.attribute_name = 'v_color_0'  # XCX what about layer 2 (this is more complicated than expected)?
         material.vertexcolorc.data = node.outputs[0]
-        material.vertexcolora.data = node.outputs[1]
-                
+        node = data_placer.add('ShaderNodeAttribute', row=1)
+        node.attribute_name = 'v_color_alpha_0'
+        temp = node.outputs[0]
+        node = data_placer.add('ShaderNodeSeparateRGB', row=1)
+        nt.links.new(temp, node.inputs[0])
+        material.vertexcolora.data = node.outputs[0]
+
     else:
         c = mat3.color1[matBase.color1[0]]
         material.vertexcolorc.data = Color((c.r/255, c.g/255, c.b/255))

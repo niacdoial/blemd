@@ -24,7 +24,7 @@ def LocalMatrix(jnt, i, use_scale):
 
     # looks wrong in certain circumstances...
     if use_scale:
-        return f.matrix @ sz @ sy @ sx  # this looks a bit better with mario's bottle_in animation
+        return f.matrix * sz * sy * sx  # this looks a bit better with mario's bottle_in animation
     else:
         return f.matrix  # this looks better with vf_064l.bdl (from zelda)
 
@@ -32,12 +32,12 @@ def LocalMatrix(jnt, i, use_scale):
 def FrameMatrix(f):
     t = Matrix.Translation(Vector((f.t.x, f.t.y, f.t.z)))
     r = Euler((f.rx, f.ry, f.rz), 'XYZ').to_matrix().to_4x4()
-    res = t@r
+    res = t*r
     return res
 
 
 def updateMatrix(frame, parentmatrix):
-    return parentmatrix@FrameMatrix(frame)
+    return parentmatrix * FrameMatrix(frame)
 
 def updateMatrixTable(evp, drw, jnt, currPacket, multiMatrixTable, matrixTable, isMatrixWeighted, use_scale):
     global dataholder
@@ -77,7 +77,7 @@ def updateMatrixTable(evp, drw, jnt, currPacket, multiMatrixTable, matrixTable, 
                     # -- (
                     sm1 = evp.matrices[mm.indices[r]]  # -- const Matrix44f
                     sm2 = LocalMatrix(jnt, mm.indices[r], use_scale)
-                    sm3 = sm2@sm1
+                    sm3 = sm2 * sm1
                     # )
                     # else
                     # --	sm3 = (LocalMatrix mm.indices[r] )

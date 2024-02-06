@@ -100,9 +100,9 @@ def get_pos_vct(p_bone, frame):
     y, dL, dR = p_bone.frames.get_pos(frame)
     y -= p_bone.jnt_frame.t
     return (
-        p_bone.inverted_static_rotmtx @ y,
-        p_bone.inverted_static_rotmtx @ dL,
-        p_bone.inverted_static_rotmtx @ dR,
+        p_bone.inverted_static_rotmtx * y,
+        p_bone.inverted_static_rotmtx * dL,
+        p_bone.inverted_static_rotmtx * dR,
     )
 
 def get_rot_vct(p_bone, frame):
@@ -342,9 +342,9 @@ class Pseudobone:
 
     def get_z(self):
         if common.GLOBALS.no_rot_conversion:
-            return rotation_part(self.matrix) @ Vector((0,0,1))
+            return rotation_part(self.matrix) * Vector((0,0,1))
         else:
-            return NtoB@rotation_part(self.matrix)@BtoN @ Vector((0,0,1))
+            return NtoB * rotation_part(self.matrix) * BtoN * Vector((0,0,1))
 
 
 
@@ -394,7 +394,7 @@ def apply_animation(bones, arm_obj, jntframes, name=None):
                 curve = arm_obj.animation_data.action.fcurves.find(data_path, index = array_index)
                 if curve is None:
                     curve = arm_obj.animation_data.action.fcurves.new(data_path, index = array_index)
-                curve.auto_smoothing = 'NONE'
+                #curve.auto_smoothing = 'NONE'
                 curve.update()
                 all_curves[name][datatype][array_index] = curve
 
@@ -413,7 +413,7 @@ def apply_animation(bones, arm_obj, jntframes, name=None):
             com.rotmatrix = com.parent.fget().rotmatrix
             com.parentrot = com.parent.fget().rotmatrix
         tempmat = Euler((refpos.rx, refpos.ry, refpos.rz), 'XYZ').to_matrix().to_4x4()
-        com.rotmatrix @= tempmat
+        com.rotmatrix *= tempmat
         cancel_ref_rot = tempmat.inverted()
         for frame in every_frame:
             # flip y and z when asked for

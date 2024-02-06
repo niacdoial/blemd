@@ -165,7 +165,7 @@ class JntFrame:
 
 
     def getFrameMatrix(self):
-        return Matrix.Translation(self.t) @ Euler((self.rx, self.ry, self.rz), 'XYZ').to_matrix().to_4x4()
+        return Matrix.Translation(self.t) * Euler((self.rx, self.ry, self.rz), 'XYZ').to_matrix().to_4x4()
     def getRotMatrix(self):
         return Euler((self.rx, self.ry, self.rz), 'XYZ').to_matrix().to_4x4()
     def getInvRotMatrix(self):

@@ -185,7 +185,7 @@ class BModel:
 
         modelMesh.update()
         modelObject = bpy.data.objects.new(common.getFilenameFile(self._bmdFilePath), modelMesh)
-        bpy.context.collection.objects.link(modelObject)
+        bpy.context.scene.objects.link(modelObject)
 
         # XCX: find a way to replace that too.
         try:
@@ -213,7 +213,7 @@ class BModel:
                 except Exception as err:
                     log.error('Couldn\'t create UV layer %d (error is %s)', uv, err)
         try:
-            active_uv = modelMesh.uv_layers[0]
+            active_uv = modelMesh.uv_textures[0]
         except Exception as err:
             pass  # it will be fixed later anyways
 
@@ -225,7 +225,7 @@ class BModel:
                 bpy.ops.paint.texture_paint_toggle()
                 if prev_mode == 'EDIT_MESH':
                     bpy.ops.object.editmode_toggle()
-                active_uv = modelMesh.uv_layers[0]
+                active_uv = modelMesh.uv_textures[0]
 
             modelMesh.update()
 
@@ -256,8 +256,8 @@ class BModel:
                     self.arm_obj = arm_obj = bpy.data.objects.new(modelObject.name+'_armature', arm)
                     modelObject.parent = arm_obj
                     mod.object = arm_obj
-                    bpy.context.collection.objects.link(arm_obj)
-                    bpy.context.view_layer.update()
+                    bpy.context.scene.objects.link(arm_obj)
+                    bpy.context.scene.update()
 
                 with common.active_object(arm_obj):
 
@@ -306,7 +306,7 @@ class BModel:
                         vg = modelObject.vertex_groups.new(name=com)
                         vg.add(self.DEBUGvgroups[com], 1, 'REPLACE')
 
-                    bpy.context.view_layer.update()
+                    bpy.context.scene.update()
                     bpy.ops.object.mode_set(mode='OBJECT')
 
             except Exception as err:
@@ -334,7 +334,7 @@ class BModel:
                                                      zip(*(iter(clnors),) * 3)
                                                     ))
             modelMesh.use_auto_smooth = True
-            #modelMesh.show_edge_sharp = True
+            modelMesh.show_edge_sharp = True
             # end not understood black box
 
             if self.params.validate_mesh:
@@ -483,7 +483,7 @@ class BModel:
                     while len(self.vertexMultiMatrixEntry) <= posIndex:
                         self.vertexMultiMatrixEntry.append(None)
                     self.vertexMultiMatrixEntry[posIndex] = multiMat
-                    newPos = mat@(self.vtx.positions[posIndex])
+                    newPos = mat*(self.vtx.positions[posIndex])
                     while len(self.model.vertices) <= posIndex:
                         self.model.vertices.append(None)
                     self.model.vertices[posIndex] = newPos.copy()
@@ -625,21 +625,21 @@ class BModel:
         if n.type == 0x10:
             # --joint
             f = self.jnt.frames[n.index]  # fixed
-            effP = parentMatrix @ f.getFrameMatrix()
+            effP = parentMatrix * f.getFrameMatrix()
             f.matrix = effP
 
-            fstartPoint = parentMatrix @ f.t
+            fstartPoint = parentMatrix * f.t
 
-            orientation = (Mat44.rotation_part(parentMatrix) @  # use rotation part of parent matrix
+            orientation = (Mat44.rotation_part(parentMatrix) *  # use rotation part of parent matrix
                             Euler((f.rx, f.ry, f.rz), 'XYZ').to_matrix().to_4x4())  # apply local rotation
             
             # the final blender bone orientation should be always "towards global Y"
             # this position might be achieved after Y-up -> Z-up conversion, if it happens.
             # define the pseudobone default orientation correctly (in Y-up space / BMD space)
             if self.params.no_rot_conversion:
-                orientation = orientation @Vector((0, self.params.boneThickness, 0))
+                orientation = orientation *Vector((0, self.params.boneThickness, 0))
             else:
-                orientation = orientation @Vector((0, 0, -self.params.boneThickness))
+                orientation = orientation *Vector((0, 0, -self.params.boneThickness))
 
             bone = PBones.Pseudobone(parentBone, f, effP,
                                      fstartPoint,
@@ -995,7 +995,7 @@ class BModel:
         # provide access to parameters to other modules in this plugin. (kinda hacky solution)
         common.GLOBALS = self.params
 
-
+        bpy.context.scene.render.engine = 'CYCLES'
         TexH.MODE = self.params.packTextures
         TexH.textures_reset()  # avoid use of potentially deleted data
 

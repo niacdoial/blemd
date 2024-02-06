@@ -50,12 +50,12 @@ def stdout_redirected(to=os.devnull):
 
 @contextmanager
 def active_object(obj):
-    act_bk = bpy.context.view_layer.objects.active
-    bpy.context.view_layer.objects.active = obj
+    act_bk = bpy.context.scene.objects.active
+    bpy.context.scene.objects.active = obj
     try:
         yield  # run some code
     finally:
-        bpy.context.view_layer.objects.active = act_bk
+        bpy.context.scene.objects.active = act_bk
 
 
 def MessageBox(string):

@@ -324,9 +324,9 @@ class Bck_out:
                 parent_mtx = b.bone.parent.matrix_local
 
             if False: #common.GLOBALS.no_rot_conversion:
-                local_matrix = parent_mtx.inverted() @ b.bone.matrix_local
+                local_matrix = parent_mtx.inverted() * b.bone.matrix_local
             else:
-                local_matrix = z_to_y_mtx @ parent_mtx.inverted() @ b.bone.matrix_local @ z_to_y_mtx.inverted()
+                local_matrix = z_to_y_mtx * parent_mtx.inverted() * b.bone.matrix_local * z_to_y_mtx.inverted()
             local_rotation = local_matrix.to_quaternion()
             
             joint_anim = BckJointAnim()
@@ -425,9 +425,9 @@ class Bck_out:
         if value is None:
             return
         
-        value = local_matrix @ mathutils.Vector(value)
-        handle_left = local_rotation @ mathutils.Vector(handle_left)
-        handle_right = local_rotation @ mathutils.Vector(handle_right)
+        value = local_matrix * mathutils.Vector(value)
+        handle_left = local_rotation * mathutils.Vector(handle_left)
+        handle_right = local_rotation * mathutils.Vector(handle_right)
         
         x_bck_key = BckKey()
         x_bck_key.time = frame
@@ -459,7 +459,7 @@ class Bck_out:
         #    bck_key.tangentR = (k.handle_right[1] * EPSILON) + k.co[1]
         #    
         #    vec = mathutils.Vector((k.co[1], 0., 0.))
-        #    vec = local_matrix @ vec
+        #    vec = local_matrix * vec
         #    
         #    bck_key.value = vec[0]
         #    anim.translationsX.append(bck_key)

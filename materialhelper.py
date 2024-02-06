@@ -21,7 +21,8 @@ def add_material(obj, mat):
 
 def add_err_material(obj):
     mat = bpy.data.materials.new("ERROR MATERIAL")
-    mat.diffuse_color = (0,0,1,1)  # WHY are those different types of objects?
+    mat.diffuse_color = mathutils.Color((0,0,1))
+    mat.diffuse_intensity = 1
     mat.specular_color = mathutils.Color((1,1,1))
     add_material(obj, mat)
     return mat
@@ -57,7 +58,7 @@ def build_material_legacy(mIndex, mat1, tex, texpath, ext):
             hasAlpha=True
         else:
             # make it easier to see invalid/missing textures
-            currMaterial.diffuse_color = (1,0,0,1)
+            currMaterial.diffuse_color = Color((1,0,0))
 
         if hasAlpha:
             # self._currMaterial.twoSided = True # -- anything with alpha is always two sided?

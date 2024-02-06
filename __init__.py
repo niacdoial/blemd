@@ -87,7 +87,7 @@ class ImportBmd(Operator, ImportHelper):
     # ImportHelper mixin class uses this
     filename_ext = ".bmd"
 
-    filter_glob: StringProperty(
+    filter_glob= StringProperty(
         default="*.bmd;*.bdl",
         options={'HIDDEN'},
         maxlen=255,  # Max internal buffer length, longer would be clamped.
@@ -96,13 +96,13 @@ class ImportBmd(Operator, ImportHelper):
     # List of operator properties, the attributes will be assigned
     # to the class instance from the operator settings before calling.
 
-    import_anims: BoolProperty(
+    import_anims= BoolProperty(
         name="Import animations",
         description="",
         default=True
     )
-    import_anims_type: EnumProperty(
 
+    import_anims_type= EnumProperty(
         name="Animation Mode",
         description="If you choose to import animations, you can choose to chain them or put them in individual actions",
         items=(('SEPARATE', "Separate", 'Animations will be imported into individual actions inside an NLA Track'),
@@ -111,39 +111,39 @@ class ImportBmd(Operator, ImportHelper):
         default='SEPARATE'
     )
 
-    use_nodes: BoolProperty(
+    use_nodes= BoolProperty(
         name="Use complete materials",
         description="Use complete GLSL materials converted into nodes."
                     "More precise, but impossible to export for now.",
         default=True
     )
 
-    frc_cr_bn: BoolProperty(
+    frc_cr_bn= BoolProperty(
         name="Force bone creation",
         description="",
         default=False
     )
 
-    nat_bn: BoolProperty(
+    nat_bn= BoolProperty(
         name="Use natural bone placement",
         description="Make any animation bone with a single child animation bone point towards it.\n(WARNING: discards animations)",
         default=False
     )
 
-    no_rot_cv: BoolProperty(
+    no_rot_cv= BoolProperty(
         name="Disable axis conversion",
         description="Disable converting the Y-up BMD space into the Z-up blender space. (Reinforced compatibility with other BMD import tools)",
         default=False
     )
 
-    val_msh: BoolProperty(
+    val_msh= BoolProperty(
         name="Validate mesh [!]",
         description="Use this ONLY if blender crashes otherwise.\nMesh WILL be very inaccurate for material mapping.\n"
         "If you are forced to use this option, start an issue on github and please include the console log.",
         default=False
     )
 
-    tx_pck: EnumProperty(
+    tx_pck= EnumProperty(
         name="Pack textures",
         description="Choose if textures should be inside the blender file or referenced by it",
         items=(('DONT', 'Reference external files', ''),
@@ -151,7 +151,7 @@ class ImportBmd(Operator, ImportHelper):
         default='DO'
     )
 
-    imtype: EnumProperty(
+    imtype= EnumProperty(
         name="Image format",
         description="The Format at which to store the image.\n"
                     "If an image is missing, try changing this setting",
@@ -160,13 +160,13 @@ class ImportBmd(Operator, ImportHelper):
         default='TGA'
     )
 
-    ic_sc = BoolProperty(
+    ic_sc = BoolProperty(  #?
         name="Include scaling",
         description="This will help make some models look right, bur has the opposite effect on others.",
         default=True
     )
 
-    boneThickness: IntProperty(
+    boneThickness= IntProperty(
         name="Bone length",
         description="the length of what represents bones in blender Only affects visibility. usually from 5 to 100.",
         min=1,
@@ -176,14 +176,14 @@ class ImportBmd(Operator, ImportHelper):
         default=10
     )
 
-    dvg: BoolProperty(
+    dvg= BoolProperty(
         name="DEBUG vertex groups",
         description="This is a debugging option.\n"
                     "Creates Vgroups to show the original BMD structure (warning: ram-intensive)",
         default=False
     )
 
-    paranoia: BoolProperty(
+    paranoia= BoolProperty(
         name="DEBUG crashes",
         description="This is a dubugging option.\n"
                     "Produces cleaner crashes",
@@ -245,8 +245,6 @@ class BMD_PT_import_options(bpy.types.Panel):
 
     def draw(self, context):
         layout = self.layout
-        layout.use_property_split = True
-        layout.use_property_decorate = False  # No animation.
 
         sfile = context.space_data
         operator = sfile.active_operator
@@ -267,7 +265,7 @@ class BMD_PT_import_animation(bpy.types.Panel):
         operator = sfile.active_operator
 
         return operator.bl_idname == "IMPORT_MESH_OT_bmd"
-        
+
     def draw_header(self, context):
         sfile = context.space_data
         operator = sfile.active_operator
@@ -277,8 +275,6 @@ class BMD_PT_import_animation(bpy.types.Panel):
 
     def draw(self, context):
         layout = self.layout
-        layout.use_property_split = True
-        layout.use_property_decorate = False  # No animation.
 
         sfile = context.space_data
         operator = sfile.active_operator
@@ -302,8 +298,6 @@ class BMD_PT_import_armature(bpy.types.Panel):
 
     def draw(self, context):
         layout = self.layout
-        layout.use_property_split = True
-        layout.use_property_decorate = False  # No animation.
 
         sfile = context.space_data
         operator = sfile.active_operator
@@ -328,8 +322,6 @@ class BMD_PT_import_texture(bpy.types.Panel):
 
     def draw(self, context):
         layout = self.layout
-        layout.use_property_split = True
-        layout.use_property_decorate = False  # No animation.
 
         sfile = context.space_data
         operator = sfile.active_operator
@@ -354,8 +346,6 @@ class BMD_PT_import_debug(bpy.types.Panel):
 
     def draw(self, context):
         layout = self.layout
-        layout.use_property_split = True
-        layout.use_property_decorate = False  # No animation.
 
         sfile = context.space_data
         operator = sfile.active_operator
@@ -431,69 +421,69 @@ class ExportBmd(Operator, ExportHelper):
     # ExportHelper mixin class uses this
     filename_ext = ".bmd"
 
-    filter_glob: StringProperty(
+    filter_glob= StringProperty(
         default="*.bmd",
         options={'HIDDEN'},
         maxlen=255,  # Max internal buffer length, longer would be clamped.
     )
-    export_format: EnumProperty(
 
+    export_format= EnumProperty(
         name="Format",
         description="Choose whether to export a BMD or BDL",
         items=(('BMD', "BMD", 'Export a BMD; used in e.g. Super Mario Sunshine, Twilight Princess'),
                ('BDL', "BDL", 'Export a BDL; used in e.g. The Wind Waker, Super Mario Galaxy')),
         default='BMD'
     )
-    use_selection: BoolProperty(
 
+    use_selection= BoolProperty(
         name='Selected Objects',
         description='Export selected objects only',
         default=False
     )
 
-    use_visible: BoolProperty(
+    use_visible= BoolProperty(
         name='Visible Objects',
         description='Export visible objects only',
         default=False
     )
 
-    use_active_scene: BoolProperty(
+    use_active_scene= BoolProperty(
         name='Active Scene',
         description='Export active scene only',
         default=False
     )
-    export_normals: BoolProperty(
 
+    export_normals= BoolProperty(
         name='Normals',
         description='Export vertex normals with meshes',
         default=True
     )
-    export_colors: BoolProperty(
 
+    export_colors= BoolProperty(
         name='Vertex Colors',
         description='Export vertex colors with meshes',
         default=True
     )
-    export_texcoords: BoolProperty(
 
+    export_texcoords= BoolProperty(
         name='UVs',
         description='Export UVs (texture coordinates) with meshes',
         default=True
     )
-    export_position_compression_enable: BoolProperty(
 
+    export_position_compression_enable= BoolProperty(
         name='Position attribute compression',
         description='Compress vertex position data',
         default=False
     )
-    export_normal_compression_enable: BoolProperty(
 
+    export_normal_compression_enable= BoolProperty(
         name='Normal attribute compression',
         description='Compress vertex normal data',
         default=True
     )
-    export_texcoord_compression_enable: BoolProperty(
 
+    export_texcoord_compression_enable= BoolProperty(
         name='Tex coord attribute compression',
         description='Compress vertex tex coord data',
         default=True
@@ -528,8 +518,6 @@ class BMD_PT_export_options_main(bpy.types.Panel):
 
     def draw(self, context):
         layout = self.layout
-        layout.use_property_split = True
-        layout.use_property_decorate = False  # No animation.
 
         sfile = context.space_data
         operator = sfile.active_operator
@@ -555,8 +543,6 @@ class BMD_PT_export_options_include(bpy.types.Panel):
 
     def draw(self, context):
         layout = self.layout
-        layout.use_property_split = True
-        layout.use_property_decorate = False  # No animation.
 
         sfile = context.space_data
         operator = sfile.active_operator
@@ -583,8 +569,6 @@ class BMD_PT_export_options_geometry_compression(bpy.types.Panel):
 
     def draw(self, context):
         layout = self.layout
-        layout.use_property_split = True
-        layout.use_property_decorate = False  # No animation.
 
         sfile = context.space_data
         operator = sfile.active_operator
@@ -603,13 +587,13 @@ class ExportBck(Operator, ExportHelper):
     # ExportHelper mixin class uses this
     filename_ext = ".bck"
 
-    filter_glob: StringProperty(
+    filter_glob= StringProperty(
         default="*.bck",
         options={'HIDDEN'},
         maxlen=255,  # Max internal buffer length, longer would be clamped.
     )
-    export_anims_mode: EnumProperty(
 
+    export_anims_mode= EnumProperty(
         name="Export Mode",
         description="Choose whether to export a single animation or multiple",
         items=(('SINGLE', "Single", 'Export a single selected animation'),
@@ -619,7 +603,7 @@ class ExportBck(Operator, ExportHelper):
     )
 
     # Options for exporting multiple anims at once
-    use_selection: BoolProperty(
+    use_selection= BoolProperty(
         name="Selected armature only",
         description="Export animations from ONLY the selected armature",
         default=True
@@ -667,8 +651,6 @@ class BCK_PT_export_options(bpy.types.Panel):
 
     def draw(self, context):
         layout = self.layout
-        layout.use_property_split = True
-        layout.use_property_decorate = False  # No animation.
 
         sfile = context.space_data
         operator = sfile.active_operator
@@ -686,7 +668,7 @@ class BCK_PT_export_options(bpy.types.Panel):
         act_row.prop(sce, "anim_export_actions")
 
 
-class CreateAnimationOperator(bpy.types.Operator):          
+class CreateAnimationOperator(bpy.types.Operator):
     """Set up a new animation for export"""
     bl_idname = "object.anim_create_operator"
     bl_label = "Create BCK Animation"
@@ -805,23 +787,20 @@ def register():
     )
     bpy.utils.register_class(ACTION_UL_animentry)
     bpy.utils.register_class(AnimationPropertyPanel)
-    
-    bpy.utils.register_class(TOPBAR_MT_file_export_nintendo)
-    
-    bpy.types.TOPBAR_MT_file_import.append(import_menu_func)
-    bpy.types.TOPBAR_MT_file_export.append(TOPBAR_MT_file_export_nintendo.menu_draw)
-    
+
+
+    bpy.types.INFO_MT_file_import.append(import_menu_func)
+    bpy.types.INFO_MT_file_export.append(TOPBAR_MT_file_export_nintendo.menu_draw)
+
     bpy.utils.register_class(CreateAnimationOperator)
 
 
 def unregister():
     bpy.utils.unregister_class(CreateAnimationOperator)
-    
-    bpy.utils.unregister_class(TOPBAR_MT_file_export_nintendo)
-    
-    bpy.types.TOPBAR_MT_file_export.remove(TOPBAR_MT_file_export_nintendo.menu_draw)
-    bpy.types.TOPBAR_MT_file_import.remove(import_menu_func)
-    
+
+    bpy.types.INFO_MT_file_import.remove(import_menu_func)
+    bpy.types.INFO_MT_file_export.remove(TOPBAR_MT_file_export_nintendo.menu_draw)
+
     bpy.utils.unregister_class(AnimationPropertyPanel)
     bpy.utils.unregister_class(ACTION_UL_animentry)
     del bpy.types.Action.bck_loop_type

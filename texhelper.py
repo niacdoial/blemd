@@ -129,7 +129,7 @@ def newUVlayer(mesh, representation, uv_id):
     """copy UV coordinates from layer `uv_id`, from `representation` to the actual blender mesh"""
 
     num = len(mesh.uv_layers)
-    mesh.uv_layers.new()
+    mesh.uv_textures.new()
     uvtex = mesh.uv_layers[num]
     uvtex.name = 'UV '+str(len(mesh.uv_layers)-1)
     # '-1' because count takes the new layer in account and index starts at 0
