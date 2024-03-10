@@ -93,10 +93,42 @@ def cubic_interpolator(t1, y1, d1, t2, y2, d2, t):
 # this (each contains translation and rotation):
 # origin_s*origin_d*bone_1_s*bone_1_d*....*bone_n_s*bone_n_d
 
+def robust_rotation(p_bone, y, ydL, ydR):
+    unrot_y =y.copy()
+    y.rotate(p_bone.inverted_static_rotquat)
+    ydL.rotate(p_bone.inverted_static_rotquat)
+    ydR.rotate(p_bone.inverted_static_rotquat)
+    
+    if common.GLOBALS.enforce_smallest_movement:
+        # we assume get_rot_vct Is called in order with regards to the keyframes,
+        # so, to enforce the 'smallest motion' rule, we only have to cache the previous keyframe
+        # (since a given rotation can be represented in different ways by an  Euler-XYZ object,
+        # we want to make sure that the rotate() call from earlier doesn't break the interpolation
+        # between keyframes, so we try to "make the rotations compatible",
+        # but this will make things worse if the rotations were not "compatible" in the bcf file to begin with)
+        if p_bone.prev_rotation_cache is None:
+            # on the first frame, the cache is unset: short-circuit this
+            p_bone.prev_rotation_cache = (unrot_y, y)
+            return y, ydL, ydR
+        prev_unrot_y, prev_y = p_bone.prev_rotation_cache
+        halfpoint_v1 = 0.5*(Vector(prev_unrot_y)+Vector(unrot_y))
+        halfpoint_v1.rotate(p_bone.inverted_static_rotquat)
+        halfpoint_v2 = 0.5*(Vector(prev_y)+Vector(y))
+        dist1 = (halfpoint_v2-halfpoint_v1).magnitude
+        y2 = Euler((math.pi+y.x, math.pi-y.y, math.pi+y.z),'XYZ')
+        halfpoint_v2 = 0.5*(Vector(prev_y)+Vector(y2))
+        dist2 = (halfpoint_v2-halfpoint_v1).magnitude
+        if dist1 > dist2:
+            y = y2
+            ydR = Euler((math.pi+ydL.x, math.pi-ydL.y, math.pi+ydL.z),'XYZ')
+            ydL = Euler((math.pi+ydR.x, math.pi-ydR.y, math.pi+ydR.z),'XYZ')
+        p_bone.prev_rotation_cache = (unrot_y, y)
+    return y, ydL, ydR
 
 def get_pos_vct(p_bone, frame):
     if p_bone.inverted_static_rotmtx is None:
         p_bone.inverted_static_rotmtx = p_bone.jnt_frame.getInvRotMatrix()
+        p_bone.inverted_static_rotquat = p_bone.inverted_static_rotmtx.to_quaternion()
     y, dL, dR = p_bone.frames.get_pos(frame)
     y -= p_bone.jnt_frame.t
     return (
@@ -109,14 +141,13 @@ def get_rot_vct(p_bone, frame):
     global EPSILON
     if p_bone.inverted_static_rotmtx is None:
         p_bone.inverted_static_rotmtx = p_bone.jnt_frame.getInvRotMatrix()
+        p_bone.inverted_static_rotquat = p_bone.inverted_static_rotmtx.to_quaternion()
 
     y, dL, dR = p_bone.frames.get_rot(frame)
     ydL = sum2(y, product(EPSILON, dL))
     ydR = sum2(y, product(EPSILON, dR))
 
-    y.rotate(p_bone.inverted_static_rotmtx.to_quaternion())
-    ydL.rotate(p_bone.inverted_static_rotmtx.to_quaternion())
-    ydR.rotate(p_bone.inverted_static_rotmtx.to_quaternion())
+    y, ydL, ydR = robust_rotation(p_bone, y, ydL, ydR)
 
     dL = product(1/EPSILON, subtract2(ydL, y))
     dR = product(1/EPSILON, subtract2(ydR, y))
@@ -265,6 +296,7 @@ class Pseudobone:
         self.inverted_static_rotmtx = None
         self.computed_d_matrices = {}
         self.computed_t_matrices = {}
+        self.prev_rotation_cache = None  # needed if we want to apply the 'smallest motion rule' between two keyframes
         # self.scale_kf = {}  # keyframes (values)
         # self.scale_tkf = {}  # keyframes (tangents)
         # self.rotation_kf = {}
@@ -415,6 +447,7 @@ def apply_animation(bones, arm_obj, jntframes, name=None):
         tempmat = Euler((refpos.rx, refpos.ry, refpos.rz), 'XYZ').to_matrix().to_4x4()
         com.rotmatrix @= tempmat
         cancel_ref_rot = tempmat.inverted()
+        com.prev_rotation_cache = None  # reset 'previous keyframe' cache for this bone, before each animation
         for frame in every_frame:
             # flip y and z when asked for
             if com.frames.times[frame][0]:

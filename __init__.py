@@ -109,13 +109,19 @@ class ImportBmd(Operator, ImportHelper):
         default=True
     )
     import_anims_type: EnumProperty(
-
         name="Animation Mode",
         description="If you choose to import animations, you can choose to chain them or put them in individual actions",
         items=(('SEPARATE', "Separate", 'Animations will be imported into individual actions inside an NLA Track'),
                ('CHAINED', "Chained", 'Animations will be imported one after another into a single action'),
                ),
         default='SEPARATE'
+    )
+    anim_rot_smallest: BoolProperty(
+        name="use 'smallest rotation' rule on animations",
+        description="Empirical rule to try and fix some animations that get broken upon import,"
+                    " by imposing the smallest change in rotation between keyframes."
+                    " This however is likely to break other animations",
+        default=False,
     )
 
     use_nodes: BoolProperty(
@@ -197,7 +203,7 @@ class ImportBmd(Operator, ImportHelper):
         default=False
     )
 
-    ALL_PARAMS = ['use_nodes', 'imtype', 'tx_pck', 'import_anims', 'import_anims_type',
+    ALL_PARAMS = ['use_nodes', 'imtype', 'tx_pck', 'import_anims', 'import_anims_type', 'anim_rot_smallest',
                   'nat_bn', 'ic_sc', 'frc_cr_bn', 'boneThickness', 'dvg', 'val_msh', 'paranoia', 'no_rot_cv']
 
     files: CollectionProperty(
@@ -300,6 +306,7 @@ class BMD_PT_import_animation(bpy.types.Panel):
 
         layout.enabled = operator.import_anims and not operator.nat_bn
         layout.prop(operator, 'import_anims_type')
+        layout.prop(operator, 'anim_rot_smallest')
 
 
 class BMD_PT_import_armature(bpy.types.Panel):
