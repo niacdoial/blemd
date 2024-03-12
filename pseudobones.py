@@ -94,7 +94,7 @@ def cubic_interpolator(t1, y1, d1, t2, y2, d2, t):
 # origin_s*origin_d*bone_1_s*bone_1_d*....*bone_n_s*bone_n_d
 
 def robust_rotation(p_bone, y, ydL, ydR):
-    unrot_y =y.copy()
+    #unrot_y =y.copy()
     y.rotate(p_bone.inverted_static_rotquat)
     ydL.rotate(p_bone.inverted_static_rotquat)
     ydR.rotate(p_bone.inverted_static_rotquat)
@@ -108,21 +108,17 @@ def robust_rotation(p_bone, y, ydL, ydR):
         # but this will make things worse if the rotations were not "compatible" in the bcf file to begin with)
         if p_bone.prev_rotation_cache is None:
             # on the first frame, the cache is unset: short-circuit this
-            p_bone.prev_rotation_cache = (unrot_y, y)
+            p_bone.prev_rotation_cache = y.copy()
             return y, ydL, ydR
-        prev_unrot_y, prev_y = p_bone.prev_rotation_cache
-        halfpoint_v1 = 0.5*(Vector(prev_unrot_y)+Vector(unrot_y))
-        halfpoint_v1.rotate(p_bone.inverted_static_rotquat)
-        halfpoint_v2 = 0.5*(Vector(prev_y)+Vector(y))
-        dist1 = (halfpoint_v2-halfpoint_v1).magnitude
+        prev_y = p_bone.prev_rotation_cache
         y2 = Euler((math.pi+y.x, math.pi-y.y, math.pi+y.z),'XYZ')
-        halfpoint_v2 = 0.5*(Vector(prev_y)+Vector(y2))
-        dist2 = (halfpoint_v2-halfpoint_v1).magnitude
+        dist1 = (Vector(prev_y)-Vector(y)).magnitude
+        dist2 = (Vector(prev_y)-Vector(y2)).magnitude
         if dist1 > dist2:
             y = y2
             ydR = Euler((math.pi+ydL.x, math.pi-ydL.y, math.pi+ydL.z),'XYZ')
             ydL = Euler((math.pi+ydR.x, math.pi-ydR.y, math.pi+ydR.z),'XYZ')
-        p_bone.prev_rotation_cache = (unrot_y, y)
+        p_bone.prev_rotation_cache = y.copy()
     return y, ydL, ydR
 
 def get_pos_vct(p_bone, frame):
