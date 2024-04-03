@@ -808,9 +808,9 @@ class BModel:
 
         if self.arm_obj.animation_data is None:
             self.arm_obj.animation_data_create()
-            if self.params.animationType == 'SEPARATE':  # add NLA track compilation
-                track = self.arm_obj.animation_data.nla_tracks.new()
-                track.name = self.arm_obj.name + '_track'
+        if self.params.animationType == 'SEPARATE':  # add NLA track compilation
+            track = self.arm_obj.animation_data.nla_tracks.new()
+            track.name = self.arm_obj.name + '_track'
 
         bckFiles = []
         for bckPath in self._bckPaths:
