@@ -7,8 +7,20 @@ basedir = os.path.dirname(input_path)
 
 
 #### here are some parameters that need to be changed manually
-one_file_per_action = False
 
+# export multiple fbx files, one per imported animation
+one_file_per_action = True
+
+# forcefully concatenate all animations into one large animation
+# not recommended, but might be necessary on earlier versions of blender, depending on how good the fbx exporter was
+force_fuse_animations = False
+
+if force_fuse_animations and one_file_per_action:
+    print("ERROR: you asked for two mutually exclusive options when editing IOmanager.py")
+    bpy.ops.wm.quit_blender()
+
+
+#### and now the code itself
 
 bpy.data.objects.remove(bpy.data.objects['Cube'])
 bpy.data.meshes.remove(bpy.data.meshes['Cube'])
@@ -31,7 +43,7 @@ except AttributeError:  # module not loaded: do it manually
         frc_cr_bn=False,
         import_anims=True,
         # I'm pretty sure nla tracks don't fully work when exporting to fbx
-        import_anims_type= ('SEPARATE' if one_file_per_action else 'CHAINED'),
+        import_anims_type= ('CHAINED' if force_fuse_animations else 'SEPARATE'),
         no_rot_cv=True,
         tx_pck='DO',
         ic_sc=True,
@@ -39,26 +51,26 @@ except AttributeError:  # module not loaded: do it manually
     )
     # actual model importing
 
-def do_export(override_name=None):
+def do_export(override_name=None, **kw):
     if override_name is not None:
         path = os.path.join(basedir, override_name + '.fbx')
     else:
         path = input_path[:-4]+'.fbx'
     # this line (below) is the export command. feel free to change it to whatever you want
-    bpy.ops.export_scene.fbx(filepath=path, axis_forward='-Z', axis_up='Y', path_mode='COPY', embed_textures=True)
+    bpy.ops.export_scene.fbx(filepath=path, axis_forward='-Z', axis_up='Y', path_mode='COPY', embed_textures=True, **kw)
 
 
 if one_file_per_action:
-    # note: this RELIES on "import_anims_type='CHAINED'" from earlier
-    animdata = bpy.data.objects[name + '_armature'].animation_data
-    #print([action.name for action in bpy.data.actions])
-    #actions = [action for action in bpy.data.actions if action.name.startswith(name)]
-    print(animdata, len(animdata.nla_tracks), animdata.use_nla)
-    #animdata.nla_tracks.update()
-    actions = [strip.action for strip in animdata.nla_tracks[0].strips]
+    # note: this RELIES on "import_anims_type='SEPARATE'" from earlier
+    armature = bpy.data.objects[name + '_armature']
+    actions = [strip.action for strip in armature.animation_data.nla_tracks[0].strips]
+    armature.animation_data_clear()
+    armature.animation_data_create()
+    armature.animation_data.use_nla = False
+    
     for action in actions:
-        animdata.action = action
-        do_export(override_name=action.name)
+        armature.animation_data.action = action
+        do_export(override_name=action.name, bake_anim_use_nla_strips=False, bake_anim_use_all_actions=False)
 else:
     do_export()
 
