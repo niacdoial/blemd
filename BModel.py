@@ -497,9 +497,20 @@ class BModel:
                     # GL_TRIANGLE_FAN
                 else:
                     if self.params.PARANOID:
-                        raise ValueError("unknown primitive type")
+                        raise ValueError(
+                            "Unknown primitive type {:#x}. Primitive has length {:d} and has points {!r}".format(
+                                currPrimitive.type,
+                                len(currPrimitive.points),
+                                [point.posIndex for point in currPrimitive.points],
+                        ))
                     else:
-                        log.warning('Unknown primitive %d', currPrimitive.type)
+                        log.error(
+                            "Unknown primitive type {:#x}. Primitive has length {:d} and has points {!r}",
+                            currPrimitive.type,
+                            len(currPrimitive.points),
+                            [point.posIndex for point in currPrimitive.points],
+                        )
+                        continue
                 for p0, p1, p2 in iterator:
                     posIndex0 = p0.posIndex
                     posIndex1 = p1.posIndex
