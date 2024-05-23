@@ -495,6 +495,14 @@ class BModel:
                 elif currPrimitive.type == 0xa0:
                     iterator = Vtx1.FanIterator(currPrimitive.points)
                     # GL_TRIANGLE_FAN
+                elif currPrimitive.type == 0x90:
+                    assert len(currPrimitive.points) %3 ==0
+                    iterator = Vtx1.SimpleIterator(currPrimitive.points)
+                    # GL_TRIANGLES ?
+                elif currPrimitive.type == 0x80:
+                    assert len(currPrimitive.points) %3 ==0
+                    iterator = Vtx1.SimpleQuadIterator(currPrimitive.points)
+                    # GL_QUADS ?
                 else:
                     if self.params.PARANOID:
                         raise ValueError(
@@ -1056,7 +1064,7 @@ class BModel:
 
     def __del__(self):
         if self._bones:
-            self._bones[0].pre_delete()  # fixes momory leak
+            self._bones[0].pre_delete()  # fixes memory leak
 
         MatH.MPL.MIX_GROUP_MTX = {}
         common.GLOBALS = None

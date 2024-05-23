@@ -415,6 +415,16 @@ def FanIterator(lst):
         for com in range(1, len(lst)-1):
             yield (lst[0], lst[com+1], lst[com])  # faces need to be described like this in order to have correct normals
 
+def SimpleIterator(lst):
+    log.warning('this might be a simple list of triangles but we don\'t yet know for sure')
+    for com in range(len(lst)//3):
+        yield (lst[3*com], lst[3*com+1], lst[3*com+2])
+def SimpleQuadIterator(lst):
+    log.warning('this might be a simple list of (assumed-coplanar) quads but we don\'t yet know for sure')
+    for com in range(len(lst)//4):
+        yield (lst[4*com], lst[4*com+1], lst[4*com+2])
+        yield (lst[4*com+2], lst[4*com+3], lst[4*com])
+
 
 def findFace(model, facelist, v0, v1, v2, exclude):
     for face in facelist:
