@@ -64,11 +64,11 @@ Note: If you are not your PC's admin and your PC's OS is Windows, you will need 
 Afterwards, extract the `.arc/.rarc/.szs` archives (at `/res/Object`, `/data` or `/ObjectData` in the game folder) with [SZS Tools](http://www.amnoid.de/gc/szstools.zip) (Full program with docs there!) or [Switch Toolbox](https://github.com/KillzXGaming/Switch-Toolbox)
 to run SZS Tools, you will need the 32 [bit Microsoft Visual C++ 2005 Redistributable Package (x86)](http://go.microsoft.com/fwlink/?linkid=65127). 
 Don't panic, quite a lot of PCs have it.
-If you're not using Windows, use [this](https://github.com/tpwrules/ARCTool) instead: 
-to run it, you will need the [Python 2](https://www.python.org/downloads/release/python-278/).
+If you're not using Windows, use [this](https://github.com/jamchamb/ARCTool) instead: 
+to run it, you will need [Python](https://www.python.org/downloads/).
 ```bash
 # Extract .arc/.rarc
-python2 ARCTool.py <.arc/.rarc> [-o OutputDirectoryName]
+python ARCTool.py <.arc/.rarc> [-o OutputDirectoryName]
 # If you didn't specify output name, it will extract to <original.(r)arc>.extracted/
 ```
 
@@ -95,7 +95,8 @@ root/
  | |animation.bck
  | |another animation.bck
  | |
-```,
+```
+,
 
 ```
 root/
