@@ -269,7 +269,7 @@ class BModel:
                         realbone = arm.edit_bones[bone.name.fget()]
                         if isinstance(bone.parent.fget(), PBones.Pseudobone):
                             realbone.parent = arm.edit_bones[bone.parent.fget().name.fget()]
-                        
+
                         realbone.head.xyz = bone.position.xyz
                         if self.params.naturalBones and len(bone.children)==1:
                             realbone.tail.xyz = bone.children[0].position.xyz
@@ -317,25 +317,31 @@ class BModel:
         ### deal with normals
 
         try:
-            modelMesh.create_normals_split()  # does this stabilize normals?
+            if bpy.app.version < (4,1,0):
+                # this might not be needed in some prior versions,
+                # but 4.1 is the one where some of the API was removed
+                modelMesh.create_normals_split()  # does this stabilize normals?
 
-            for face in modelMesh.polygons:
-                face.use_smooth = True  # loop normals have effect only if smooth shading
+                for face in modelMesh.polygons:
+                    face.use_smooth = True  # loop normals have effect only if smooth shading
 
-            # create custom data to write normals correctly?
-            modelMesh.update()
+                # create custom data to write normals correctly?
+                modelMesh.update()
+                modelMesh.polygons.foreach_set("use_smooth", [True] * len(modelMesh.polygons))
 
-            # begin not understood black box (where does this thing write to make normals stable?)
+            # what we do here is that we store all the vectors (n_points*3 floats)
+            # in a single "line" in memory, then create an iterator over that,
+            # that will be called over 3 places as if it were 3 different iterators
             clnors = self.model.toarray('normal')
 
-            modelMesh.polygons.foreach_set("use_smooth", [True] * len(modelMesh.polygons))
-
-            modelMesh.normals_split_custom_set(tuple(
-                                                     zip(*(iter(clnors),) * 3)
-                                                    ))
-            modelMesh.use_auto_smooth = True
-            #modelMesh.show_edge_sharp = True
-            # end not understood black box
+            modelMesh.normals_split_custom_set(
+                tuple(zip(*
+                    (iter(clnors),) * 3
+                ))
+            )
+            if bpy.app.version < (4,1,0):
+                xmodelMesh.use_auto_smooth = True
+                #modelMesh.show_edge_sharp = True
 
             if self.params.validate_mesh:
                 ll = len(modelMesh.loops)
@@ -348,7 +354,7 @@ class BModel:
             log.error('Normals weren\'t set (error is %s)', err)
         modelMesh.update()
 
-            
+
         return modelObject
 
     def LoadModel(self, filePath):
@@ -651,7 +657,7 @@ class BModel:
 
             orientation = (Mat44.rotation_part(parentMatrix) @  # use rotation part of parent matrix
                             Euler((f.rx, f.ry, f.rz), 'XYZ').to_matrix().to_4x4())  # apply local rotation
-            
+
             # the final blender bone orientation should be always "towards global Y"
             # this position might be achieved after Y-up -> Z-up conversion, if it happens.
             # define the pseudobone default orientation correctly (in Y-up space / BMD space)
@@ -943,7 +949,7 @@ class BModel:
                     self._bmdViewPathExe,
                 )
             except common.subprocess.CalledProcessError as err:
-                log.error('subprocess error: %s. Expect missing/glitchy textures', err) 
+                log.error('subprocess error: %s. Expect missing/glitchy textures', err)
             else:
                 log.debug("Finished extracting images")
 
@@ -1016,7 +1022,7 @@ class BModel:
         # boneThickness, dvg (DEBUGBG), val_msh (valudate_mesh), paranoia (PARANOID)
         # use_nodes, no_rot_cv (no_rot_conversion)
         self.params = common.Prog_params(filepath, **kw)
-        
+
         # provide access to parameters to other modules in this plugin. (kinda hacky solution)
         common.GLOBALS = self.params
 
